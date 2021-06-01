@@ -1,0 +1,1 @@
+cd ../../../; ./scripts/singleCyclePatternSearch.sh && cd testbenches/lz77/singleCyclePatternSearch && time iverilog -s singleCyclePatternSearchTestbench  -o testbench.vvp singleCyclePatternSearchTestbench.sv ../../../singleCyclePatternSearch.v ../../../wrappers/singleCyclePatternSearchWrapper.v -g2005-sv && time vvp testbench.vvp -fst

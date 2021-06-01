@@ -1,0 +1,42 @@
+[*]
+[*] GTKWave Analyzer v3.3.107 (w)1999-2020 BSI
+[*] Mon Mar  8 06:04:01 2021
+[*]
+[dumpfile] "/home/cjearls/ChiselProjects/codeword-generator/testbenches/lz77/singleCyclePatternSearch/traceOutput.fst"
+[dumpfile_mtime] "Mon Mar  8 06:03:06 2021"
+[dumpfile_size] 647038
+[savefile] "/home/cjearls/ChiselProjects/codeword-generator/testbenches/lz77/singleCyclePatternSearch/singleCyclePatternSearchDebug.gtkw"
+[timestart] 81363800
+[size] 1920 1006
+[pos] -27 -24
+*-16.692104 82003200 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 292
+[signals_width] 289
+[sst_expanded] 1
+[sst_vpaned_height] 297
+@28
+singleCyclePatternSearchTestbench.clock
+@420
+singleCyclePatternSearchTestbench.desiredLoop
+singleCyclePatternSearchTestbench.inputFile
+singleCyclePatternSearchTestbench.loopCount
+singleCyclePatternSearchTestbench.loopExitCount
+@25
+singleCyclePatternSearchTestbench.matchResultIndex[11:0]
+@28
+singleCyclePatternSearchTestbench.matchResultLength[2:0]
+singleCyclePatternSearchTestbench.matchResultReady
+singleCyclePatternSearchTestbench.matchResultValid
+singleCyclePatternSearchTestbench.patternDataLength[2:0]
+singleCyclePatternSearchTestbench.patternDataReady
+singleCyclePatternSearchTestbench.patternDataValid
+@420
+singleCyclePatternSearchTestbench.readFileResult
+@28
+singleCyclePatternSearchTestbench.reset
+singleCyclePatternSearchTestbench.writeDataReady
+singleCyclePatternSearchTestbench.writeDataValid
+@22
+singleCyclePatternSearchTestbench.writeData[7:0]
+[pattern_trace] 1
+[pattern_trace] 0
