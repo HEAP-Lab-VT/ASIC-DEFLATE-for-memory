@@ -1,0 +1,8 @@
+characterBits, 8
+charactersToCompress, 4096
+camCharacters, 4096
+camMaxPatternLength, 16
+camHistoryAvailable, true
+maxPatternLength, 266
+escapeCharacter, 103
+decompressorMaxCharactersOut, 8
