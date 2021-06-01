@@ -18,10 +18,13 @@ Once the software requirements are installed, the scripts in the ```scripts/``` 
 
  ```scripts/``` also includes other utilities for convenience. Scripts that start with "verilator" generate the Verilog for a design and compile the design with Verilator to make an executable compressor and decompressor combo. This can be used for checking correctness of compression or for checking compression ratios of the hardware.
 
-***TODO:*** add instructions for compiling Verilator and running Icarus Verilog testbenches
+It is sometimes useful to have a trace of all of the signals in a design. For this, the ```testbenches/``` directory contains testbenches for several of the designs. Running ```compileAndRun<design name>.sh``` will compile the design and run it with the ```testbenchInputFile.txt``` as an input. In the ```<design name>Testbench.sv``` file, the desiredLoop variable can be used to select which 4 KB page of the testbenchInputFile is used as a test input. A value of 0 here selects the first 4 KB page in the file, and each time th value is incremented, it reads in an additional 4 KB of data before beginning the compression and decompression.
 
 ## Troubleshooting
 If for some reason the repo is not recognizing any Chisel classes or types, run "sbt update" in the from the root of the project. This will update SBT's currently downloaded dependencies. This has fixed the issue in the past.
 
 ## Resources
 If you need help with Chisel, great places to look are the Chisel Cheat Sheet (https://inst.eecs.berkeley.edu/~cs250/sp17/handouts/chisel-cheatsheet3.pdf) and the Chisel Cookbook (https://www.chisel-lang.org/chisel3/docs/cookbooks/cookbook.html)
+
+## Contact Information
+If you have questions about the design, how to use it, or need access to the design under a different license, feel free to contact me at cjearls@vt.edu.
