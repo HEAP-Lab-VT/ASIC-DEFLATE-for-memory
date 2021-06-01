@@ -155,9 +155,10 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
           encodingCharactersProcessed := encodingCharactersProcessed + (encodingCharacters - encodingCharactersProcessed)
           charactersInHistory := charactersInHistory + (encodingCharacters - encodingCharactersProcessed)
         }
+        val oldDataIndex = encodingIndex + encodingCharactersProcessed
         for (index <- 0 until params.decompressorMaxCharactersOut) {
           // This 0.U needs to be added there because Chisel is getting a stack overflow when trying to do some kind of constant propagation.
-          byteHistory(charactersInHistory + index.U) := io.out.bits.characters(index)
+          byteHistory(charactersInHistory + index.U) := byteHistory(oldDataIndex + index.U) + 0.U
         }
       }
 
