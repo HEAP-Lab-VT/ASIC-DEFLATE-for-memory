@@ -50,9 +50,14 @@ libraryDependencies ++= Seq("chisel3","chisel-iotesters").map {
 
 libraryDependencies += "edu.berkeley.cs" %% "chisel-testers2" % "0.1-SNAPSHOT"
 
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.9" % "test"
+
 scalacOptions ++= scalacOptionsVersion(scalaVersion.value)
 
 javacOptions ++= javacOptionsVersion(scalaVersion.value)
 
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
+// ignore broken glue logic caused by change of lz77 decompressor interface
+// todo: fix the broken glue logic
+unmanagedSources / excludeFilter := HiddenFileFilter || "lz77And*"
