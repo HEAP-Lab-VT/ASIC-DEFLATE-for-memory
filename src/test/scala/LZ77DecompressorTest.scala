@@ -1,7 +1,7 @@
 package lz77
 
-import lz77Decompressor.lz77Decompressor
-import lz77Parameters.lz77Parameters
+import lz77Decompressor._
+import lz77Parameters._
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._
