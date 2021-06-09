@@ -15,7 +15,8 @@ import java.io._
 
 class LZ77DecompressorTestUncompressable(
     lz77: lz77Decompressor,
-    params: lz77Parameters)
+    params: lz77Parameters,
+    data: Seq[Int])
     extends PeekPokeTester[lz77Decompressor](lz77) {
   
   // initialize inputs
@@ -25,7 +26,6 @@ class LZ77DecompressorTestUncompressable(
   poke(lz77.io.out.ready, 0)
   poke(lz77.io.in.finished, false)
   
-  val data = Seq(0, 1, 2, 3, 4, 5, 6, 7)
   var inidx = 0
   var outidx = 0
   poke(lz77.io.in.finished, false)
@@ -61,6 +61,7 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
   "LZ77DecompressorTestUncompressable" should "pass" in {
     val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
     chisel3.iotesters.Driver(() => new lz77Decompressor(params))
-      {lz77 => new LZ77DecompressorTestUncompressable(lz77, params)}
+      {lz77 => new LZ77DecompressorTestUncompressable(lz77, params,
+        Seq(0, 1, 2, 3, 4, 5, 6, 7))} should be (true)
   }
 }
