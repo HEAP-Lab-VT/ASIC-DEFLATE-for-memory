@@ -61,3 +61,6 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.fu
 // ignore broken glue logic caused by change of lz77 decompressor interface
 // todo: fix the broken glue logic
 unmanagedSources / excludeFilter := HiddenFileFilter || "lz77And*"
+
+// workaround for sbt bug that causes a hang when killing test execution
+Global / cancelable := false
