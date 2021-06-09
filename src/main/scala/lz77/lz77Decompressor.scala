@@ -61,7 +61,9 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   io.out.finished := false.B
   
   // This register is likely the most complicated part of the design, as params.decompressorMaxCharactersOut will determine how many read and write ports it requires.
-  val byteHistory = Reg(Vec(params.camCharacters, UInt(params.characterBits.W)))
+  // must use Mem instead of Reg-Vec to avoid FIRRTL interpreter stack overflow
+  // val byteHistory = Reg(Vec(params.camCharacters, UInt(params.characterBits.W)))
+  val byteHistory = Mem(params.camCharacters, UInt(params.characterBits.W))
   // This keeps track of how many characters have been output by the design.
   val charactersInHistory = RegInit(UInt(params.characterCountBits.W), 0.U)
   
