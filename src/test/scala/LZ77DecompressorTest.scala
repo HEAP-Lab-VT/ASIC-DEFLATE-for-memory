@@ -30,14 +30,15 @@ class LZ77DecompressorTestUncompressable(
   var outidx = 0
   poke(lz77.io.in.finished, false)
   
-  var iteration = 0
-  while(peek(lz77.io.out.finished) == 0 && iteration < 10000) {
+  var timeout = 10000
+  while(peek(lz77.io.out.finished) == 0) {
     if(inidx < data.length) {
       poke(lz77.io.in.bits(0), data(inidx))
       poke(lz77.io.in.valid, 1)
       poke(lz77.io.out.ready, 1)
     }
     else {
+      println("exhausted input")
       poke(lz77.io.in.finished, true)
     }
     if(peek(lz77.io.out.valid) > 0) {
@@ -50,10 +51,14 @@ class LZ77DecompressorTestUncompressable(
     }
     
     step(1)
-    iteration = iteration + 1
+    timeout = timeout - 1
+    if(timeout <= 0)
+      fail
   }
-  if(outidx != data.length)
+  if(outidx != data.length) {
+    println(s"outidx was ${outidx}; Expected ${data.length}")
     fail
+  }
 }
 
 
