@@ -52,14 +52,13 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         UInt(params.characterBits.W)))
     val out = DecoupledStream(params.decompressorMaxCharactersOut,
         UInt(params.characterBits.W))
-    val finished = Output(Bool())
   })
 
   // This initializes the outputs of the decompressor.
   io.in.ready := 0.U
   io.out.valid := 0.U
   io.out.bits := DontCare
-  io.finished := false.B
+  io.out.finished := false.B
 
   // This register is likely the most complicated part of the design, as params.decompressorMaxCharactersOut will determine how many read and write ports it requires.
   val byteHistory = Reg(Vec(params.camCharacters, UInt(params.characterBits.W)))
@@ -89,7 +88,10 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
 
   switch(state) {
     is(waitingForInput) {
-      when(io.in.bits(0) =/= params.escapeCharacter.U ||
+      when(io.in.finished) {
+        io.out.finished := true.B
+        state := finished
+      }.elsewhen(io.in.bits(0) =/= params.escapeCharacter.U ||
           io.in.bits(1) === params.escapeCharacter.U) {
         // indicates which characters are escape characters
         val isesc = io.in.bits.map(_ === params.escapeCharacter.U)
@@ -149,8 +151,6 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
           }
         }
       }
-      
-      io.out.finished := io.in.finished
     }
     
     is(copyingDataFromHistory) {
@@ -175,7 +175,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
     }
     
     is(finished) {
-      io.finished := true.B
+      io.out.finished := true.B
     }
   }
 }
