@@ -18,6 +18,13 @@ class LZ77DecompressorTestUncompressable(
     params: lz77Parameters)
     extends PeekPokeTester[lz77Decompressor](lz77) {
   
+  // initialize inputs
+  for(index <- 0 until lz77.io.in.bits.length)
+    poke(lz77.io.in.bits(index), 0)
+  poke(lz77.io.in.valid, 0)
+  poke(lz77.io.out.ready, 0)
+  poke(lz77.io.in.finished, false)
+  
   val data = Seq(0, 1, 2, 3, 4, 5, 6, 7)
   var inidx = 0
   var outidx = 0
