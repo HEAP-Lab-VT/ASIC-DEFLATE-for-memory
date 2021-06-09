@@ -133,7 +133,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         }.otherwise {
           io.in.ready := out_to_in_index(io.out.ready).min(litcount)
         }
-        io.out.valid := litcount - pops(litcount) >> 1
+        io.out.valid := litcount - (pops(litcount) >> 1)
       }.otherwise {
         // The input is not an ordinary character, it's an encoding.
         state := copyingDataFromHistory
