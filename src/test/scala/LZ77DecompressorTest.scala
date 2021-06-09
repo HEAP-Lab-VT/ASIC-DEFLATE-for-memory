@@ -38,11 +38,9 @@ class LZ77DecompressorTestUncompressable(
       poke(lz77.io.out.ready, 1)
     }
     else {
-      println("exhausted input")
       poke(lz77.io.in.finished, true)
     }
     if(peek(lz77.io.out.valid) > 0) {
-      println(peek(lz77.io.out.bits(0)).toString)
       expect(lz77.io.out.bits(0), data(outidx))
       outidx = outidx + 1
     }

@@ -29,7 +29,6 @@ class LZ77Test(
     while(peek(lz77.io.finished) == 0)
       step(1)
     expect(lz77.io.out.asUInt, dataint)
-    println("pass")
     reset()
   }
 }
