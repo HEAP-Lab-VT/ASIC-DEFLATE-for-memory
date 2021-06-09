@@ -8,7 +8,7 @@ import lz77.util._
 import singleCyclePatternSearch._
 
 class lz77Decompressor(params: lz77Parameters) extends Module {
-
+  
   // This function is used to determine the length of an incoming encoding.
   def getEncodingLength(encoding: UInt): UInt = {
     val extraPatternLengthCharacters = Wire(Vec(params.additionalPatternLengthCharacters, UInt(params.characterBits.W)))
@@ -36,7 +36,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
 
     outputWire
   }
-
+  
   // This function is used to determine the encoding index from an incoming encoding.
   def getEncodingIndex(encoding: UInt): UInt = {
     val encodingIndex = Wire(UInt(params.camAddressBits.W))
@@ -45,7 +45,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
 
     encodingIndex
   }
-
+  
   val io = IO(new Bundle {
     // todo: add parameter for max chars in and don't use maxEncodingCharacterWidths here
     val in = Flipped(DecoupledStream(params.maxEncodingCharacterWidths,
@@ -53,23 +53,23 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
     val out = DecoupledStream(params.decompressorMaxCharactersOut,
         UInt(params.characterBits.W))
   })
-
+  
   // This initializes the outputs of the decompressor.
   io.in.ready := 0.U
   io.out.valid := 0.U
   io.out.bits := DontCare
   io.out.finished := false.B
-
+  
   // This register is likely the most complicated part of the design, as params.decompressorMaxCharactersOut will determine how many read and write ports it requires.
   val byteHistory = Reg(Vec(params.camCharacters, UInt(params.characterBits.W)))
   // This keeps track of how many characters have been output by the design.
   val charactersInHistory = RegInit(UInt(params.characterCountBits.W), 0.U)
-
+  
   // This keeps track of the information from the encoding for the state machine's processing.
   val encodingCharacters = Reg(UInt(params.patternLengthBits.W))
   val encodingCharactersProcessed = Reg(UInt(params.patternLengthBits.W))
   val encodingIndex = Reg(UInt(params.camAddressBits.W))
-
+  
   // This handles the state machine logic and storage
   val numberOfStates = 3
   val waitingForInput :: copyingDataFromHistory :: finished :: Nil =
@@ -85,7 +85,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
     when(index.U < newHistoryCount) {
       byteHistory(charactersInHistory + index.U) := io.out.bits(index)
     }
-
+  
   switch(state) {
     is(waitingForInput) {
       when(io.in.finished) {
@@ -97,8 +97,8 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         val isesc = io.in.bits.map(_ === params.escapeCharacter.U)
         
         // the number of escapes preceeding the indexed character
-        val pops = VecInit((0 to io.in.bits.length)
-          .map(i => PopCount(isesc.take(i))))
+        val pops = WireDefault(VecInit((0 to io.in.bits.length)
+          .map(i => PopCount(isesc.take(i)))))
         
         // Find the first possible non-literal
         // The first non-literal has three conditions:
@@ -117,6 +117,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         // for a given out-index, what is the corresponding in-index
         val out_to_in_index = Wire(Vec(io.out.bits.length + 1,
           UInt(log2Ceil(io.in.bits.length + 2).W)))
+        out_to_in_index := DontCare
         pops.map(_ >> 1).zipWithIndex
           .foreach{case (o, i) => out_to_in_index(i.U - o) := i.U}
         
