@@ -40,9 +40,9 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   // This function is used to determine the encoding index from an incoming encoding.
   def getEncodingIndex(encoding: UInt): UInt = {
     val encodingIndex = Wire(UInt(params.camAddressBits.W))
-
+    
     encodingIndex := encoding >> (params.additionalPatternLengthCharacters * params.characterBits + params.minEncodingSequenceLengthBits)
-
+    
     encodingIndex
   }
   
@@ -136,9 +136,12 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         state := copyingDataFromHistory
         encodingCharactersProcessed := 0.U
         
-        val encodingLength = getEncodingLength(io.in.bits.asUInt)
+        var allInputCharacters = io.in.bits(0)
+        for (index <- 1 until params.maxEncodingCharacterWidths)
+          allInputCharacters = Cat(allInputCharacters, io.in.bits(index))
+        val encodingLength = getEncodingLength(allInputCharacters)
         encodingCharacters := encodingLength
-        encodingIndex := getEncodingIndex(io.in.bits.asUInt)
+        encodingIndex := getEncodingIndex(allInputCharacters)
         when(encodingLength < params.maxCharactersInMinEncoding.U) {
           io.in.ready := params.minCharactersToEncode.U
         }.elsewhen(encodingLength === params.maxCharactersInMinEncoding.U) {
