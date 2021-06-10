@@ -44,7 +44,9 @@ class LZ77TestImagick extends AnyFlatSpec with Matchers {
   "LZ77TestImagick" should "pass" in {
     val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
     val datastream = new FileInputStream("dumps/parseddumpfiles/imagickparsed")
-    chisel3.iotesters.Driver(() => new lz77CompressorDecompressor(params))
+    chisel3.iotesters.Driver(
+    // chisel3.iotesters.Driver.execute(Array("--generate-vcd-output", "on"),
+      () => new lz77CompressorDecompressor(params))
       {lz77 => new LZ77Test(lz77, params, datastream)} should be (true)
   }
 }
