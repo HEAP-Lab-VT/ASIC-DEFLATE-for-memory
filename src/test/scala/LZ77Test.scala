@@ -23,13 +23,19 @@ class LZ77Test(
     (params.charactersToCompress * params.characterBits + 7) / 8)
   val remainder =
     dataarray.length * 8 - params.charactersToCompress * params.characterBits
-  while(datastream.read(dataarray) != -1) {
+  var it = 0
+  while(datastream.read(dataarray) != -1 && it < 1) {
     val dataint = BigInt(dataarray)
     poke(lz77.io.in.asUInt, dataint)
-    while(peek(lz77.io.finished) == 0)
+    var it2 = 0
+    while(peek(lz77.io.finished) == 0 && it2 < 100) {
       step(1)
+      println(s"${it}, ${it2}")
+      it2 = it2 + 1
+    }
     expect(lz77.io.out.asUInt, dataint)
     reset()
+    it = it + 1
   }
 }
 
