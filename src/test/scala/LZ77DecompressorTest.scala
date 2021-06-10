@@ -28,31 +28,35 @@ class LZ77DecompressorTestUncompressable(
   
   var inidx = 0
   var outidx = 0
-  poke(lz77.io.in.finished, false)
   
   var timeout = 10000
-  while(peek(lz77.io.out.finished) == 0) {
-    if(inidx < data.length) {
-      poke(lz77.io.in.bits(0), data(inidx))
-      poke(lz77.io.in.valid, 1)
-      poke(lz77.io.out.ready, 1)
-    }
-    else {
-      poke(lz77.io.in.finished, true)
-    }
-    if(peek(lz77.io.out.valid) > 0) {
-      expect(lz77.io.out.bits(0), data(outidx))
-      outidx = outidx + 1
-    }
-    if(peek(lz77.io.in.ready) > 0) {
-      inidx = inidx + 1
+  while(peek(lz77.io.out.finished) == 0 && timeout > 0) {
+    poke(lz77.io.in.valid, 0)
+    poke(lz77.io.out.ready, 0)
+    poke(lz77.io.in.finished, true)
+    for(i <- 0 until (lz77.io.in.bits.length min (data.length - inidx))) {
+      poke(lz77.io.in.bits(i), data(inidx + i))
+      poke(lz77.io.in.valid, i + 1)
+      poke(lz77.io.in.finished, false)
     }
     
+    poke(lz77.io.out.ready, lz77.io.out.bits.length)
+    
+    inidx += (peek(lz77.io.in.ready) min (peek(lz77.io.in.valid))).intValue
+    
+    for(i <- 0 until (peek(lz77.io.out.ready) min (peek(lz77.io.out.valid))).intValue) {
+      if(outidx + i < data.length)
+        expect(lz77.io.out.bits(i), data(outidx + i))
+      else
+        fail
+    }
+    
+    outidx += (peek(lz77.io.out.ready) min (peek(lz77.io.out.valid))).intValue
+    
     step(1)
-    timeout = timeout - 1
-    if(timeout <= 0)
-      fail
+    timeout -= 1
   }
+  
   if(outidx != data.length) {
     println(s"outidx was ${outidx}; Expected ${data.length}")
     fail
@@ -65,6 +69,6 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
     val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
     chisel3.iotesters.Driver(() => new lz77Decompressor(params))
       {lz77 => new LZ77DecompressorTestUncompressable(lz77, params,
-        Seq(0, 1, 2, 3, 4, 5, 6, 7))} should be (true)
+        Seq.fill(1000)(23))} should be (true)
   }
 }
