@@ -98,7 +98,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         // indicates which characters are escape characters
         val isesc = io.in.bits.map(_ === params.escapeCharacter.U)
         
-        // the number of escapes up to the indexed character
+        // the number of escapes preceeding the indexed character
         val pops = WireDefault(VecInit((0 to io.in.bits.length)
           .map(i => PopCount(isesc.take(i)))))
         
@@ -117,18 +117,19 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
           .map{case (a, b) => a && b}
           :+ true.B)
         
-        // forward literals to output
-        io.in.bits.zip(pops.map(_ >> 1)).zipWithIndex
-          .foreach{case ((i, p), idx) => io.out.bits(idx.U - p) := i}
+        // for a given out-index, what is the corresponding in-index
+        val out_to_in_index = Wire(Vec(io.out.bits.length + 1,
+          UInt(log2Ceil(io.in.bits.length + 2).W)))
+        out_to_in_index.foreach(_ := (io.in.bits.length+1).U)
+        pops.map(_ >> 1).zipWithIndex
+          .foreach{case (o, i) => out_to_in_index(i.U - o) := i.U}
         
-        // escapes in output up to the indexed character
-        val outpops = WireDefault(VecInit((0 to io.out.bits.length)
-          .map{i => io.out.bits.take(i)}
-          .map(_.map(_ === params.escapeCharacter.U))
-          .map(e => PopCount(e))))
+        // forward literals to output
+        io.out.bits.zip(out_to_in_index)
+          .foreach{case (o, i) => o := io.in.bits(i)}
         
         // assert ready and valid signals
-        io.in.ready := (io.out.ready + outpops(io.out.ready)).min(litcount)
+        io.in.ready := out_to_in_index(io.out.ready).min(litcount)
         io.out.valid := litcount - (pops(litcount) >> 1)
       }.otherwise {
         // The input is not an ordinary character, it's an encoding.
