@@ -98,7 +98,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         // indicates which characters are escape characters
         val isesc = io.in.bits.map(_ === params.escapeCharacter.U)
         
-        // the number of escapes preceeding the indexed character
+        // the number of escapes up to the indexed character
         val pops = WireDefault(VecInit((0 to io.in.bits.length)
           .map(i => PopCount(isesc.take(i)))))
         
@@ -111,28 +111,24 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         val litcount = PriorityEncoder(isesc
           .zip(isesc.tail :+ false.B)
           .zipWithIndex
-          .map{case ((c, n), i) => c && (!n || (i + 1).U === io.in.valid) || i.U === io.in.valid}
+          .map{case ((c, n), i) => c && (!n || (i + 1).U === io.in.valid) ||
+            i.U === io.in.valid}
           .zip(pops.map(!_(0)))
           .map{case (a, b) => a && b}
           :+ true.B)
         
-        // for a given out-index, what is the corresponding in-index
-        val out_to_in_index = Wire(Vec(io.out.bits.length + 1,
-          UInt(log2Ceil(io.in.bits.length + 2).W)))
-        out_to_in_index := DontCare
-        pops.map(_ >> 1).zipWithIndex
-          .foreach{case (o, i) => out_to_in_index(i.U - o) := i.U}
-        
         // forward literals to output
-        io.out.bits.zip(out_to_in_index)
-          .foreach{case (o, i) => o := io.in.bits(i)}
+        io.in.bits.zip(pops.map(_ >> 1)).zipWithIndex
+          .foreach{case ((i, p), idx) => io.out.bits(idx.U - p) := i}
+        
+        // escapes in output up to the indexed character
+        val outpops = WireDefault(VecInit((0 to io.out.bits.length)
+          .map{i => io.out.bits.take(i)}
+          .map(_.map(_ === params.escapeCharacter.U))
+          .map(e => PopCount(e))))
         
         // assert ready and valid signals
-        when(io.in.valid === 0.U) {
-          io.in.ready := io.in.bits.length.U
-        }.otherwise {
-          io.in.ready := out_to_in_index(io.out.ready).min(litcount)
-        }
+        io.in.ready := (io.out.ready + outpops(io.out.ready)).min(litcount)
         io.out.valid := litcount - (pops(litcount) >> 1)
       }.otherwise {
         // The input is not an ordinary character, it's an encoding.
