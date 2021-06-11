@@ -85,73 +85,72 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
   }
   
   "compressed" should "pass" in {
-    for(testidx <- 0 until 1) {
-      val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
-      var expect = Seq.fill(0){(scala.math.random() * 256).toInt}
-      var input = expect.flatMap(d =>
-        if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
-      while(expect.length < 100) breakable {
-        if(scala.math.random() >= .3) {
-          val char = (scala.math.random() * 256).toInt
-          expect :+= char
+    val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+    var expect = Seq.fill(0){(scala.math.random() * 256).toInt}
+    var input = expect.flatMap(d =>
+      if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
+    while(expect.length <
+        params.charactersToCompress - params.maxPatternLength) breakable {
+      if(scala.math.random() >= .1) {
+        val char = (scala.math.random() * 256).toInt
+        expect :+= char
+        input :+= char
+        if(char == params.escapeCharacter)
           input :+= char
-          if(char == params.escapeCharacter)
-            input :+= char
+      }
+      else {
+        val length = (scala.math.random() *
+          (params.maxPatternLength - params.minCharactersToEncode)).toInt +
+          params.minCharactersToEncode min 8
+        if(length > expect.length) break // continue
+        val index = (scala.math.random() * (expect.length - length)).toInt
+        expect ++= expect.slice(index, index + length)
+        
+        var encoding : BigInt = 0
+        encoding <<= params.characterBits
+        encoding |= params.escapeCharacter
+        encoding <<= 1
+        encoding |= ~params.escapeCharacter >> (params.characterBits - 1) & 1
+        encoding <<= params.camAddressBits
+        encoding |= index
+        
+        encoding <<= params.minEncodingSequenceLengthBits
+        if(length <= params.maxCharactersInMinEncoding) {
+          encoding |= length - params.minCharactersToEncode
         }
         else {
-          val length = (scala.math.random() *
-            (params.maxPatternLength - params.minCharactersToEncode)).toInt +
-            params.minCharactersToEncode min 8
-          if(length > expect.length) break // continue
-          val index = (scala.math.random() * (expect.length - length)).toInt
-          expect ++= expect.slice(index, index + length)
-          
-          var encoding : BigInt = 0
-          encoding <<= params.characterBits
-          encoding |= params.escapeCharacter
-          encoding <<= 1
-          encoding |= ~params.escapeCharacter >> (params.characterBits - 1) & 1
-          encoding <<= params.camAddressBits
-          encoding |= index
-          
-          encoding <<= params.minEncodingSequenceLengthBits
-          if(length <= params.maxCharactersInMinEncoding) {
-            encoding |= length - params.minCharactersToEncode
+          encoding |= (1 << params.minEncodingSequenceLengthBits) - 1
+          var remaining = length - params.maxCharactersInMinEncoding - 1
+          while(remaining > params.extraCharacterLengthIncrease) {
+            encoding <<= params.characterBits
+            encoding |= params.maxCharacterValue
+            remaining -= params.extraCharacterLengthIncrease
           }
-          else {
-            encoding |= (1 << params.minEncodingSequenceLengthBits) - 1
-            var remaining = length - params.maxCharactersInMinEncoding - 1
-            while(remaining > params.extraCharacterLengthIncrease) {
-              encoding <<= params.characterBits
-              encoding |= params.maxCharacterValue
-              remaining -= params.extraCharacterLengthIncrease
-            }
-            if(length != params.maxPatternLength) {
-              encoding <<= params.characterBits
-              encoding |= remaining
-            }
-          }
-          
-          val encodinglength =
-            if(length <= params.maxCharactersInMinEncoding)
-              params.minEncodingWidth / params.characterBits
-            else if(length == params.maxPatternLength)
-              params.maxEncodingCharacterWidths
-            else
-              (params.minEncodingWidth / params.characterBits) + 1 +
-                ((length - params.maxCharactersInMinEncoding) /
-                  params.maxCharacterValue)
-          
-          for(i <- 0 until encodinglength reverse) {
-            input :+= (encoding >> (i * params.characterBits) &
-              params.maxCharacterValue).toInt
+          if(length != params.maxPatternLength) {
+            encoding <<= params.characterBits
+            encoding |= remaining
           }
         }
+        
+        val encodinglength =
+          if(length <= params.maxCharactersInMinEncoding)
+            params.minEncodingWidth / params.characterBits
+          else if(length == params.maxPatternLength)
+            params.maxEncodingCharacterWidths
+          else
+            (params.minEncodingWidth / params.characterBits) + 1 +
+              ((length - params.maxCharactersInMinEncoding) /
+                params.maxCharacterValue)
+        
+        for(i <- 0 until encodinglength reverse) {
+          input :+= (encoding >> (i * params.characterBits) &
+            params.maxCharacterValue).toInt
+        }
       }
-      
-      chisel3.iotesters.Driver(() => new lz77Decompressor(params)){lz77 =>
-        new LZ77DecompressorTester(lz77, params, input, expect)
-      } should be (true)
     }
+    
+    chisel3.iotesters.Driver(() => new lz77Decompressor(params)){lz77 =>
+      new LZ77DecompressorTester(lz77, params, input, expect)
+    } should be (true)
   }
 }
