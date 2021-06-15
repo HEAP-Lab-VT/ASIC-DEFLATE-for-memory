@@ -41,13 +41,18 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   // the current length of sequences in the continuation
   val continueLength = RegInit(0.U(log2Ceil(params.maxPatternLength).W))
   
-  // This handles the write data logic.
-  when(camBytes < params.camCharacters.U) {
-    when(io.writeData.valid) {
-      byteHistory(camBytes) := io.writeData.bits
-      camBytes := camBytes + 1.U
+  // This handles the write data logic
+  for(index <- 0 until io.charsIn.bits.length)
+    when(index.U < io.charsIn.ready) {
+      byteHistory(
+        if(camSizePow2) (camIndex + index.U)(params.camAddressBits - 1, 0)
+        else (camIndex +& index.U) % params.camCharacters
+      ) := io.charsIn.bits(index)
     }
-  }
+  if(camSizePow2) camIndex := camIndex + io.charsIn.ready
+  else camIndex := (camIndex +& io.charsIn.ready) % params.camCharacters
+  camFirstPass := camFirstPass
+    && (io.charsIn.ready < params.camCharacters - camIndex)
   
   // merges byteHistory with searchPattern for easy matching
   val history = Wire(Vec(params.camCharacters + params.camMaxPatternLength,
