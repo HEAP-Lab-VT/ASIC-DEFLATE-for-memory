@@ -115,8 +115,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   io.charsIn.ready := io.literalCount + io.matchLength
   io.matchCAMAddress := matchCAMAddress
   
-  when(io.matchLength === io.charsIn.valid - io.literalCount
-      && io.literalCount =/= io.charsIn.valid) {
+  when(io.matchLength === io.charsIn.valid - io.literalCount) {
     continueLength := continueLength + matchLength
     continue := matchOptions.map(_ === matchLength)
   } otherwise {
