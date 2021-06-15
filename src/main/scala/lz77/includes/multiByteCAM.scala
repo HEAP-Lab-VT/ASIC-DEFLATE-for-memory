@@ -10,20 +10,16 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     // This input allows values to be written into the CAM.
     // val writeData = Input(
     //   Vec(params.compressorMaxCharacters, UInt(params.characterBits.W)))
-    val writeDataLength = Input(UInt(params.compressorMaxCharactersBits.W))
+    // val writeDataLength = Input(UInt(params.compressorMaxCharactersBits.W))
     
     // This input allows for search values to be requested from the CAM.
-    val searchPattern =
-      Input(Vec(params.camMaxPatternLength, UInt(params.characterBits.W)))
-    val searchPatternLength = Input(UInt(params.camCharacterSequenceLengthBits.W))
+    val charsIn = Flipped(
+      DecoupledStream(params.camMaxCharsIn, UInt(params.characterBits.W)))
     
-    val continueCAMIndex = Input(UInt(params.camAddressBits.W))
-    val continueExistingLength = Input(UInt(log2Ceil(params.minCharactersToEncode).W))
-    
-    // This output is the vector of whether each byte in the cam is a match or not.
-    val matchPatternIndex = Output(UInt(params.camCharacterSequenceLengthBits.W))
-    val matchCAMIndex = Output(UInt(params.camAddressBits.W))
-    val matchLength = Output(UInt(params.camCharacterSequenceLengthBits.W))
+    // Output a match and the number of literals preceeding the match
+    val matchCAMAddress = Output(UInt(params.camAddressBits.W))
+    val matchLength = Output(UInt(patternLengthBits.W))
+    val literalCount = Output(UInt(params.camMaxCharsInBits.W))
     
     // This output is only used when the multiByteCAM is being used by the lz77Compressor.
     // val camHistory =
@@ -34,8 +30,16 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   // This stores the byte history of the CAM.
   val byteHistory = Mem(params.camCharacters, UInt(params.characterBits.W))
-  // This stores the number of bytes currently stored in the CAM.
-  val camBytes = RegInit(UInt(params.camCharacterCountBits.W), 0.U)
+  // This is true iff the camIndex has not yet rolled over
+  val camFirstPass = RegInit(true.B)
+  // This stores the cam index where the next character will be stored
+  val camIndex = RegInit(UInt(params.camAddressBits.W), 0.U)
+  
+  // CAM indexes eligible for continuation
+  val continues =
+    RegInit(VecInit(Seq.fill(params.camCharacters, false.B)))
+  // the current length of sequences in the continuation
+  val continueLength = RegInit(0.U(log2Ceil(params.maxPatternLength).W))
   
   // This handles the write data logic.
   when(camBytes < params.camCharacters.U) {
@@ -45,69 +49,75 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     }
   }
   
-  // merges byteHistory with searchPattern
-  val history = Wire(Vec(params.camCharacters, UInt(params.characterBits.W)))
-  for(i <- 0 until params.camCharacters) history(i) := byteHistory(i)
+  // merges byteHistory with searchPattern for easy matching
+  val history = Wire(Vec(params.camCharacters + params.camMaxPatternLength,
+    UInt(params.characterBits.W)))
+  for(i <- 0 until params.camCharacters)
+    history(i) := byteHistory(
+      if(params.camSizePow2)
+        camIndex +% i.U
+      else
+        Mux(camIndex >= (params.camCharacters - i).U,
+          camIndex -% (params.camCharacters - i).U,
+          camIndex +% i.U))
   for(i <- 0 until params.camMaxPatternLength)
-    when(i.U < io.searchPatternLength) {
-      history(i.U + camBytes) := io.searchPattern(i)
-    }
+    history(i + params.camCharacters) := io.charsIn.bits(i)
   
-  io.matchPatternIndex := params.camMaxPatternLength.U
-  for(patternIndex <- 0 until params.camMaxPatternLength reverse) {
-    for(camIndex <- 0 until params.camCharacters) {
-      when(
-        io.searchPattern.drop(patternIndex)
-          .zip(history.drop(camIndex))
-          .take(params.minCharactersToEncode)
-          .map{case (sp, bh) => sp === bh}
-          .zipWithIndex
-          .map{case (m, i) =>
-            m || (i + patternIndex).U >= io.searchPatternLength}
-          .reduce(_ && _)
-        &&
-        (camIndex - patternIndex).U < byteHistory
-      ) {
-        io.matchPatternIndex := index.U
+  // find the length of every possible match
+  val matchLengths = io.charsIn.bits
+    .zipWithIndex
+    .map{case (c, i) => Mux(i.U < io.charsIn.valid,
+      history.drop(i).take(params.camCharacters).map(_ === c), false.B)}
+    .foldRight(Seq.fill(1, params.camCharacters)(0.U)))
+      {(equals, counts) =>
+        equals.zip(counts(0).map(_ +& 1.U))
+          .map{case (e, c) => Mux(e, c, 0.U)}
+        +: counts
       }
-    }
-  }
   
-  when(io.continueExistingLength =/= 0.U &&
-    io.searchPattern
-      .zip(0 until params.minCharactersToEncode
-        .map(_.U + io.continueCAMIndex)
-        .map(i => byteHistory(i)))
-      .map{case (sp, bh) => sp === bh}
+  // find where the match should start in the pattern
+  // and rank CAM indexes based on match length
+  val matchOptions = Wire(Vec(params.camCharacters,
+    UInt(params.camMaxCharsInBits.W)))
+  when(continueLength === 0.U) {
+    // start a match from scratch
+    io.literalCount := PriorityEncoder(matchLengths
       .zipWithIndex
-      .map{case (m, i) =>
-        m || (params.minCharactersToEncode - i).U <= io.continueExistingLength}
-      .reduce(_ && _)
-  ) {
-    io.matchPatternIndex := 0.U
+      .map{case (c, i) => (c, params.minCharactersToEncode.U
+        min (io.charsIn.valid - i.U))}
+      .map{case (c, t) => c
+        .map(_ >= t)
+        .reduce(_ || _)))
+    
+    matchOptions := matchLengths(io.literalCount)
+  } otherwise {
+    // there is a match to continue
+    io.literalCount := 0.U
+    matchOptions := matchLengths(0)
+      .zip(continues)
+      .map(a => Mux(a._2, a._1, 0.U))
   }
   
+  // compute match length and CAM address
+  val (matchLength, matchCAMAddress) = matchOptions.zipWithIndex
+    .fold((0.U, 0.U)){case (o, i), (l, a) => (o max l, Mux(o > l, i.U, a))}
   
-  // for (index <- 0 until params.camMaxPatternLength) {
-  //   if (index == 0) {
-  //     matchVecWire(index) := cam.io.matches(index)
-  //   } else {
-  //     matchVecWire(index) := (matchVecWire(index - 1).asUInt & (cam.io
-  //       .matches(index)
-  //       .asUInt >> index)).asBools
-  //   }
-  // 
-  //   val testWire = Wire(Vec(params.camCharacters, Bool()))
-  //   testWire := Reverse(matchVecWire(index).asUInt).asBools
-  //   matchedIndices(index) := (params.camCharacters - 1).U - testWire
-  //     .lastIndexWhere((matchBool: Bool) => { matchBool === true.B })
-  //   // When there is still a match available, and the match isn't past the current compressor index, continue and update the necessary wires.
-  //   when(
-  //     matchVecWire(index).asUInt.orR && (matchedIndices(index) + index.U) < io.patternData.currentCompressorIndex
-  //   ) {
-  //     matchLength := (index + 1).U
-  //   }
-  // }
+  // assert outputs
+  io.matchLength :=
+    Mux(matchLength >= params.minCharactersToEncode.U || continueLength === 0.U,
+      matchLength,
+      0.U)
+  io.charsIn.ready := io.literalCount + io.matchLength
+  io.matchCAMAddress := matchCAMAddress
+  
+  when(io.matchLength === io.charsIn.valid - io.literalCount
+      && io.literalCount =/= io.charsIn.valid) {
+    continueLength := continueLength + matchLength
+    continue := matchOptions.map(_ === matchLength)
+  } otherwise {
+    continueLength := 0.U
+    continue := DontCare
+  }
 }
 
 object multiByteCAM extends App {

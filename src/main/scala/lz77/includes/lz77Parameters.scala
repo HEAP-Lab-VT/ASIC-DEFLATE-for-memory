@@ -53,6 +53,8 @@ class lz77Parameters(
   var camAddressBits = log2Ceil(camCharacters)
   // This is the number of bits required to represent the number of characters in a sequence.
   var camCharacterSequenceLengthBits = log2Ceil(camMaxPatternLength + 1)
+  // This is a true when the CAM size is a power of 2
+  var camSizePow2 = camCharacters == 1 << log2Ceil(camCharacters)
 
   // This is the number of bits in the shortest possible sequence of characters encoded.
   //                     escape codeword    escape confirmation bit   cam address bits  <- only thing remaining is bits to show the length of the character sequence.
@@ -90,6 +92,8 @@ class lz77Parameters(
   
   
   var compressorMaxCharactersBits = log2Ceil(compressorMaxCharacters + 1)
+  var camMaxCharsIn = compressorMaxCharacters + minCharactersToEncode - 1
+  var camMaxCharsInBits = log2Ceil(camMaxCharsIn + 1)
   // todo: assert `compressorMaxCharacters <= camMaxPatternLength`
 }
 
