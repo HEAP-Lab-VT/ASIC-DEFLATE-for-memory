@@ -107,18 +107,35 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   val (matchLength, matchCAMAddress) = matchOptions.zipWithIndex
     .fold((0.U, 0.U)){case (o, i), (l, a) => (o max l, Mux(o > l, i.U, a))}
   
-  // assert outputs
-  io.matchLength :=
-    Mux(matchLength >= params.minCharactersToEncode.U || continueLength === 0.U,
+  
+  // assert continue iff match reaches end and either match length is encodable or continue is already asserted
+  // if the match is zero-length at the end, it does not matter whether continue is asserted because it will assert a zero continueLength
+  // assert standard matchLength if match is sufficient length and continue is not asserted on previous or next
+  // assert continue matchLength if continue is asserted previously but not next
+  // assert 0 matchLength if continue is asserted next
+  // do not assert matchLength iff continue is asserted next
+  // ready is literalCount + match length if length is sufficient or continue is asserted previous
+  // ready is literalCount otherwise
+  
+  // assert outputs and continue data
+  io.charsIn.ready := io.literalCount +
+    Mux(matchLength >= params.minCharactersToEncode.U || continueLength =/= 0.U,
       matchLength,
       0.U)
-  io.charsIn.ready := io.literalCount + io.matchLength
   io.matchCAMAddress := matchCAMAddress
   
-  when(io.matchLength === io.charsIn.valid - io.literalCount) {
+  when(matchLength + io.literalCount === io.charsIn.valid
+      && (matchLength >= params.minCharactersToEncode.U
+        || continueLength =/= 0.U)) {
+    // match continues to next cycle
+    io.matchLength := 0.U
+    io.matchCAMAddress := DontCare
     continueLength := continueLength + matchLength
     continue := matchOptions.map(_ === matchLength)
   } otherwise {
+    // match terminates this cycle (don't continue)
+    io.matchLength := continueLength + matchLength
+    io.matchCAMAddress := matchCAMAddress
     continueLength := 0.U
     continue := DontCare
   }
