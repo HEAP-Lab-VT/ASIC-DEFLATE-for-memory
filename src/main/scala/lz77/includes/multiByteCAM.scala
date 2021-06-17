@@ -62,7 +62,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   
   // merge byteHistory with searchPattern for easy matching
-  val history = Wire(Vec(params.camCharacters + params.camMaxPatternLength,
+  val history = Wire(Vec(params.camCharacters + params.camMaxCharsIn,
     UInt(params.characterBits.W)))
   for(i <- 0 until params.camCharacters)
     history(i) := byteHistory(
@@ -72,7 +72,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
         Mux(camIndex >= (params.camCharacters - i).U,
           camIndex -% (params.camCharacters - i).U,
           camIndex +% i.U))
-  for(i <- 0 until params.camMaxPatternLength)
+  for(i <- 0 until params.camMaxCharsIn)
     history(i + params.camCharacters) := io.charsIn.bits(i)
   
   
