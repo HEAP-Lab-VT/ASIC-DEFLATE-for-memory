@@ -31,6 +31,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     //   else None
   })
   
+  
   // This stores the byte history of the CAM.
   val byteHistory = Mem(params.camCharacters, UInt(params.characterBits.W))
   // This is true iff the camIndex has not yet rolled over
@@ -38,13 +39,15 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   // This stores the cam index where the next character will be stored
   val camIndex = RegInit(UInt(params.camAddressBits.W), 0.U)
   
+  
   // CAM indexes eligible for continuation
   val continues =
     RegInit(VecInit(Seq.fill(params.camCharacters, false.B)))
   // the current length of sequences in the continuation
   val continueLength = RegInit(0.U(log2Ceil(params.maxPatternLength).W))
   
-  // This handles the write data logic
+  
+  // write data to history
   for(index <- 0 until io.charsIn.bits.length)
     when(index.U < io.charsIn.ready) {
       byteHistory(
@@ -57,7 +60,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   camFirstPass := camFirstPass
     && (io.charsIn.ready < params.camCharacters - camIndex)
   
-  // merges byteHistory with searchPattern for easy matching
+  
+  // merge byteHistory with searchPattern for easy matching
   val history = Wire(Vec(params.camCharacters + params.camMaxPatternLength,
     UInt(params.characterBits.W)))
   for(i <- 0 until params.camCharacters)
@@ -71,6 +75,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   for(i <- 0 until params.camMaxPatternLength)
     history(i + params.camCharacters) := io.charsIn.bits(i)
   
+  
   // find the length of every possible match
   val matchLengths = io.charsIn.bits
     .zipWithIndex
@@ -82,6 +87,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
           .map{case (e, c) => Mux(e, c, 0.U)}
         +: counts
       }
+  
   
   // find where the match should start in the pattern
   // and rank CAM indexes based on match length
@@ -107,9 +113,11 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       .map(a => Mux(a._2, a._1, 0.U))
   }
   
-  // compute match length and CAM address
+  
+  // compute best match length and CAM address
   val (matchLength, matchCAMAddress) = matchOptions.zipWithIndex
     .fold((0.U, 0.U)){case (o, i), (l, a) => (o max l, Mux(o > l, i.U, a))}
+  
   
   // notes on output assertion
   // ===============================
@@ -148,6 +156,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   // 1 1 0 | A, D, E
   // 1 1 1 | A, D, E
   
+  
   // assert outputs and continue data
   when(io.charsIn.finished) {
     // handle finished state
@@ -161,7 +170,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       continue := DontCare
       io.charsIn.ready := DontCare
     } otherwise {
-      // output match before finishing
+      // output continued match before finishing
       io.finished := false.B
       io.literalCount := 0.U
       io.matchLength := continueLength
