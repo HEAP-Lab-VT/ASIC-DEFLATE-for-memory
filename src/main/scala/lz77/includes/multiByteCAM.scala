@@ -109,44 +109,48 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   val (matchLength, matchCAMAddress) = matchOptions.zipWithIndex
     .fold((0.U, 0.U)){case (o, i), (l, a) => (o max l, Mux(o > l, i.U, a))}
   
-  
+  // notes on output assertion
+  // ===============================
+  // behavior:
   // assert continue iff match reaches end and either match length is encodable or continue is already asserted
   // if the match is zero-length at the end, it does not matter whether continue is asserted because it will assert a zero continueLength
   // assert standard matchLength if match is sufficient length and continue is not asserted on previous or next
   // assert continue matchLength if continue is asserted previously but not next
-  // assert 0 matchLength if continue is asserted next
-  // do not assert matchLength iff continue is asserted next
+  // assert 0 matchLength if continue is asserted next or match is insufficient length
   // ready is literalCount + match length if length is sufficient or continue is asserted previous
   // ready is literalCount otherwise
+  //
+  // variables:
+  // a: match reaches end
+  // b: match length is sufficient
+  // c: continue is asserted previous
+  // d: continue is asserted next
+  // 
+  // possible results:
+  // A,d: assert continue next
+  // B: matchLength is match length
+  // C: matchLength is match length + continue length
+  // D: matchLength is 0
+  // E: ready is literalCount + match length
+  // F: ready is literalCount
+  // 
+  // truth table:
+  // a b c | assert
+  // ------+----------
+  // 0 0 0 | D, F
+  // 0 0 1 | C, E
+  // 0 1 0 | B or C, E
+  // 0 1 1 | C, E
+  // 1 0 0 | D, F
+  // 1 0 1 | A, D, E
+  // 1 1 0 | A, D, E
+  // 1 1 1 | A, D, E
   
   // assert outputs and continue data
-  io.charsIn.ready := io.literalCount +
-    Mux(matchLength >= params.minCharactersToEncode.U || continueLength =/= 0.U,
-      matchLength,
-      0.U)
-  io.matchCAMAddress := matchCAMAddress
-  
-  when(matchLength + io.literalCount === io.charsIn.valid
-      && (matchLength >= params.minCharactersToEncode.U
-        || continueLength =/= 0.U)) {
-    // match continues to next cycle
-    io.matchLength := 0.U
-    io.matchCAMAddress := DontCare
-    continueLength := continueLength + matchLength
-    continue := matchOptions.map(_ === matchLength)
-  } otherwise {
-    // match terminates this cycle (don't continue)
-    io.matchLength := continueLength + matchLength
-    io.matchCAMAddress := matchCAMAddress
-    continueLength := 0.U
-    continue := DontCare
-  }
-  io.finished := false.B
-  
-  
-  // handle finished state
   when(io.charsIn.finished) {
+    // handle finished state
     when(continueLength === 0.U) {
+      // finish immediately
       io.finished := true.B
       io.literalCount := DontCare
       io.matchLength := DontCare
@@ -155,6 +159,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       continue := DontCare
       io.charsIn.ready := DontCare
     } otherwise {
+      // output match before finishing
       io.finished := false.B
       io.literalCount := 0.U
       io.matchLength := continueLength
@@ -163,6 +168,32 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       continue := DontCare
       io.charsIn.ready := DontCare
     }
+  } elsewhen(matchLength >= params.minCharactersToEncode.U
+      || continueLength =/= 0.U) {
+    io.charsIn.ready := io.literalCount + matchLength
+    
+    when(matchLength + io.literalCount === io.charsIn.valid) {
+      // match continues
+      io.matchLength := 0.U
+      io.matchCAMAddress := DontCare
+      continueLength := continueLength + matchLength
+      continue := matchOptions.map(_ === matchLength)
+    } otherwise {
+      // match terminates this cycle (don't continue)
+      io.matchLength := continueLength + matchLength
+      io.matchCAMAddress := matchCAMAddress
+      continueLength := 0.U
+      continue := DontCare
+    }
+    io.finished := false.B
+  } otherwise {
+    // no match
+    io.charsIn.ready := io.literalCount
+    io.matchLength := 0.U
+    io.matchCAMAddress := DontCare
+    continueLength := 0.U
+    continue := DontCare
+    io.finished := false.B
   }
 }
 
