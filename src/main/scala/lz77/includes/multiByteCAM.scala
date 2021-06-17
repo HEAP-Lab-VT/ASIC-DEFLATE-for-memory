@@ -96,13 +96,12 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   when(continueLength === 0.U) {
     // start a match from scratch
     io.literalCount := PriorityEncoder(matchLengths
-        .zipWithIndex
-        .map{case (c, i) => (c, params.minCharactersToEncode.U
-          min (io.charsIn.valid - i.U))}
-        .map{case (c, t) => c
-          .map(_ >= t)
-          .reduce(_ || _)}
-      ) min io.maxLiteralCount
+      .zipWithIndex
+      .map{case (c, i) => (c, params.minCharactersToEncode.U
+        min (io.charsIn.valid - i.U))}
+      .map{case (c, t) => c
+        .map(_ >= t)
+        .reduce(_ || _)})
     
     matchOptions := matchLengths(io.literalCount)
   } otherwise {
@@ -179,6 +178,14 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       continueLength := 0.U
       continue := DontCare
     }
+  } elsewhen(io.literalCount > io.maxLiteralCount) {
+    // too many literals preceeding the match, do not consume the match
+    io.finished := false.B
+    io.charsIn.ready := io.maxLiteralCount
+    io.matchLength := 0.U
+    io.matchCAMAddress := DontCare
+    continueLength := 0.U
+    continue := DontCare
   } elsewhen(matchLength < params.minCharactersToEncode.U
       && continueLength === 0.U) {
     // no match
@@ -200,7 +207,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       continue := matchOptions.map(_ === matchLength)
     }
   } otherwise {
-    // match terminates this cycle
+    // match terminates in this cycle
     io.finished := false.B
     io.charsIn.ready := io.literalCount + matchLength
     io.matchLength := continueLength + matchLength
