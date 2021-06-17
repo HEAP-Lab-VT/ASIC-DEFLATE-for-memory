@@ -163,48 +163,50 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     when(continueLength === 0.U) {
       // finish immediately
       io.finished := true.B
+      io.charsIn.ready := DontCare
       io.literalCount := DontCare
       io.matchLength := DontCare
       io.matchCAMAddress := DontCare
       continueLength := 0.U
       continue := DontCare
-      io.charsIn.ready := DontCare
     } otherwise {
       // output continued match before finishing
       io.finished := false.B
+      io.charsIn.ready := DontCare
       io.literalCount := 0.U
       io.matchLength := continueLength
       io.matchCAMAddress := PriorityEncoder(continue)
       continueLength := 0.U
       continue := DontCare
-      io.charsIn.ready := DontCare
     }
-  } elsewhen(matchLength >= params.minCharactersToEncode.U
-      || continueLength =/= 0.U) {
-    io.charsIn.ready := io.literalCount + matchLength
-    
-    when(matchLength + io.literalCount === io.charsIn.valid) {
-      // match continues
-      io.matchLength := 0.U
-      io.matchCAMAddress := DontCare
-      continueLength := continueLength + matchLength
-      continue := matchOptions.map(_ === matchLength)
-    } otherwise {
-      // match terminates this cycle (don't continue)
-      io.matchLength := continueLength + matchLength
-      io.matchCAMAddress := matchCAMAddress
-      continueLength := 0.U
-      continue := DontCare
-    }
-    io.finished := false.B
-  } otherwise {
+  } elsewhen(matchLength < params.minCharactersToEncode.U
+      && continueLength === 0.U) {
     // no match
+    io.finished := false.B
     io.charsIn.ready := io.literalCount
     io.matchLength := 0.U
     io.matchCAMAddress := DontCare
     continueLength := 0.U
     continue := DontCare
+  } elsewhen(matchLength + io.literalCount === io.charsIn.valid) {
+    // match continues to next cycle
+    io.charsIn.ready := io.literalCount + matchLength
     io.finished := false.B
+    io.matchLength := 0.U
+    io.matchCAMAddress := DontCare
+    continueLength := continueLength + matchLength
+    // make sure at least on character was processed before modifying continue
+    when(io.charsIn.valid =/= 0) {
+      continue := matchOptions.map(_ === matchLength)
+    }
+  } otherwise {
+    // match terminates this cycle
+    io.finished := false.B
+    io.charsIn.ready := io.literalCount + matchLength
+    io.matchLength := continueLength + matchLength
+    io.matchCAMAddress := matchCAMAddress
+    continueLength := 0.U
+    continue := DontCare
   }
 }
 
