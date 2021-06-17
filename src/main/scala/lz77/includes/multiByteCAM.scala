@@ -15,6 +15,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     // This input allows for search values to be requested from the CAM.
     val charsIn = Flipped(
       DecoupledStream(params.camMaxCharsIn, UInt(params.characterBits.W)))
+    val maxLiteralCount = Input(UInt(params.camMaxCharsInBits.W))
     
     // Output a match and the number of literals preceeding the match
     val matchCAMAddress = Output(UInt(params.camAddressBits.W))
@@ -89,12 +90,13 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   when(continueLength === 0.U) {
     // start a match from scratch
     io.literalCount := PriorityEncoder(matchLengths
-      .zipWithIndex
-      .map{case (c, i) => (c, params.minCharactersToEncode.U
-        min (io.charsIn.valid - i.U))}
-      .map{case (c, t) => c
-        .map(_ >= t)
-        .reduce(_ || _)))
+        .zipWithIndex
+        .map{case (c, i) => (c, params.minCharactersToEncode.U
+          min (io.charsIn.valid - i.U))}
+        .map{case (c, t) => c
+          .map(_ >= t)
+          .reduce(_ || _)}
+      ) min io.maxLiteralCount
     
     matchOptions := matchLengths(io.literalCount)
   } otherwise {
