@@ -21,6 +21,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     val matchLength = Output(UInt(patternLengthBits.W))
     val literalCount = Output(UInt(params.camMaxCharsInBits.W))
     
+    val finished = Output(Bool())
+    
     // This output is only used when the multiByteCAM is being used by the lz77Compressor.
     // val camHistory =
     //   if (params.camHistoryAvailable)
@@ -138,6 +140,29 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     io.matchCAMAddress := matchCAMAddress
     continueLength := 0.U
     continue := DontCare
+  }
+  io.finished := false.B
+  
+  
+  // handle finished state
+  when(io.charsIn.finished) {
+    when(continueLength === 0.U) {
+      io.finished := true.B
+      io.literalCount := DontCare
+      io.matchLength := DontCare
+      io.matchCAMAddress := DontCare
+      continueLength := 0.U
+      continue := DontCare
+      io.charsIn.ready := DontCare
+    } otherwise {
+      io.finished := false.B
+      io.literalCount := 0.U
+      io.matchLength := continueLength
+      io.matchCAMAddress := PriorityEncoder(continue)
+      continueLength := 0.U
+      continue := DontCare
+      io.charsIn.ready := DontCare
+    }
   }
 }
 
