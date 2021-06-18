@@ -12,7 +12,8 @@ class lz77Parameters(
     maxPatternLengthParam: Int,
     escapeCharacterParam: Int,
     decompressorMaxCharactersOutParam: Int,
-    compressorMaxCharactersParam: Int
+    compressorMaxCharactersParam: Int,
+    compressorMaxCharactersOutParam: Int
 ) {
   // Defined parameters
 
@@ -35,6 +36,8 @@ class lz77Parameters(
   val decompressorMaxCharactersOut =  decompressorMaxCharactersOutParam
   // This is the number of simultaneous characters that the compressor can process in one clock cycle.
   val compressorMaxCharacters = compressorMaxCharactersParam
+  // This is the number of simultaneous characters that the compressor can output in one clock cycle.
+  val compressorMaxCharactersOut = compressorMaxCharactersOutParam
 
   // Derived parameters
 
@@ -92,9 +95,10 @@ class lz77Parameters(
   
   
   var compressorMaxCharactersBits = log2Ceil(compressorMaxCharacters + 1)
-  var camMaxCharsIn = compressorMaxCharacters + minCharactersToEncode - 1
+  var camMaxCharsIn = compressorMaxCharacters
   var camMaxCharsInBits = log2Ceil(camMaxCharsIn + 1)
   // todo: assert `compressorMaxCharacters <= camMaxPatternLength`
+  // todo: assert `compressorMaxCharacters >= minCharactersToEncode`
 }
 
 
