@@ -42,7 +42,7 @@ resolvers ++= Seq(
 // Provide a managed dependency on X if -DXVersion="" is supplied on the command line.
 val defaultVersions = Map(
   "chisel3" -> "3.4.+",
-  "chisel-iotesters" -> "1.3.+"
+  "chisel-iotesters" -> "1.5.+"
   )
 
 libraryDependencies ++= Seq("chisel3","chisel-iotesters").map {
@@ -50,9 +50,17 @@ libraryDependencies ++= Seq("chisel3","chisel-iotesters").map {
 
 libraryDependencies += "edu.berkeley.cs" %% "chisel-testers2" % "0.1-SNAPSHOT"
 
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.9" % "test"
+
 scalacOptions ++= scalacOptionsVersion(scalaVersion.value)
 
 javacOptions ++= javacOptionsVersion(scalaVersion.value)
 
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
 
+// ignore broken glue logic caused by change of lz77 decompressor interface
+// todo: fix the broken glue logic
+unmanagedSources / excludeFilter := HiddenFileFilter || "lz77And*"
+
+// workaround for sbt bug that causes a hang when killing test execution
+Global / cancelable := false

@@ -31,8 +31,10 @@ class lz77CompressorDecompressor(params: lz77Parameters) extends Module {
   compressor.io.in.valid := false.B
   compressor.io.in.bits := DontCare
   val decompressor = Module(new lz77Decompressor(params))
-  decompressor.io.in := DontCare
-  decompressor.io.in.valid := false.B
+  decompressor.io.in.bits := DontCare
+  decompressor.io.in.valid := 0.U
+  decompressor.io.in.finished := false.B
+  decompressor.io.out.ready := DontCare
 
   // These are used to keep track of the number of characters at different stages in the compression and decompression pipelines.
   val compressorInputCounter = RegInit(UInt(params.characterCountBits.W), 0.U)
@@ -57,14 +59,23 @@ class lz77CompressorDecompressor(params: lz77Parameters) extends Module {
     }
   }.otherwise {
     // Handling the decompressor inputs
-    decompressor.io.in.valid := true.B
-    for (index <- 0 until params.maxEncodingCharacterWidths) {
-      decompressor.io.in.characters(index) := compressorOutput(
-        decompressorInputCounter + index.U
-      )
-    }
-    when(decompressor.io.in.ready) {
-      decompressorInputCounter := decompressorInputCounter + decompressor.io.in.charactersRead
+    when(decompressorInputCounter === params.charactersToCompress.U) {
+      decompressor.io.in.finished := true.B
+      decompressor.io.in.valid := DontCare
+      decompressor.io.in.bits := DontCare
+    }.otherwise {
+      decompressor.io.in.valid :=
+        (compressorOutputCounter - decompressorInputCounter) min
+          (params.maxEncodingCharacterWidths.U)
+      for(index <- 0 until params.maxEncodingCharacterWidths) {
+        when(index.U < decompressor.io.in.valid) {
+          decompressor.io.in.bits(index) := compressorOutput(
+            decompressorInputCounter + index.U)
+        }
+      }
+      decompressorInputCounter := decompressorInputCounter +
+        (decompressor.io.in.ready min decompressor.io.in.valid)
+      decompressor.io.in.finished := false.B
     }
   }
 
@@ -81,15 +92,15 @@ class lz77CompressorDecompressor(params: lz77Parameters) extends Module {
   }
 
   // Handling the decompressor outputs
-  decompressor.io.out.ready := true.B
-  when(decompressor.io.out.valid) {
+  when(!decompressor.io.out.finished) {
+    decompressor.io.out.ready := params.decompressorMaxCharactersOut.U
     for (index <- 0 until params.decompressorMaxCharactersOut) {
-      when(index.U < decompressor.io.out.bits.length) {
-        decompressorOutput(decompressorOutputCounter + index.U) := decompressor.io.out.bits
-          .characters(index)
+      when(index.U < decompressor.io.out.valid) {
+        decompressorOutput(decompressorOutputCounter + index.U) := decompressor.io.out.bits(index)
       }
     }
-    decompressorOutputCounter := decompressorOutputCounter + decompressor.io.out.bits.length
+    decompressorOutputCounter :=
+      decompressorOutputCounter + decompressor.io.out.valid
   }
 
   // If counting compressor and decompressor cycles is enabled, then this sets up the hardware necessary to count them.
@@ -100,7 +111,7 @@ class lz77CompressorDecompressor(params: lz77Parameters) extends Module {
     when(!compressor.io.finished && compressor.io.in.valid){
       compressorCycles := compressorCycles + 1.U
     }
-    when(compressor.io.finished && !decompressor.io.finished){
+    when(compressor.io.finished && !decompressor.io.out.finished){
       decompressorCycles := decompressorCycles + 1.U
     }
 
@@ -109,7 +120,7 @@ class lz77CompressorDecompressor(params: lz77Parameters) extends Module {
   }
 
   io.out := decompressorOutput
-  io.finished := compressor.io.finished && decompressor.io.finished
+  io.finished := compressor.io.finished && decompressor.io.out.finished
   io.matchingBytes := io.in
     .zip(io.out)
     .map({ case (inByte, outByte) => inByte === outByte })
