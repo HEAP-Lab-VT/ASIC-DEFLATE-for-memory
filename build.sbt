@@ -26,7 +26,7 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-name := "codewordGenerator"
+name := "hardware compressor"
 
 version := "3.2.0"
 
