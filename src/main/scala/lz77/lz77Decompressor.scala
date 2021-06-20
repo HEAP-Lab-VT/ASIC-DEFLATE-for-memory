@@ -3,9 +3,7 @@ package lz77Decompressor
 import chisel3._
 import chisel3.util._
 import lz77Parameters._
-import lz77InputsAndOutputs._
 import lz77.util._
-import singleCyclePatternSearch._
 
 class lz77Decompressor(params: lz77Parameters) extends Module {
   
@@ -65,12 +63,43 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   // val byteHistory = Reg(Vec(params.camCharacters, UInt(params.characterBits.W)))
   val byteHistory = Mem(params.camCharacters, UInt(params.characterBits.W))
   // This keeps track of how many characters have been output by the design.
-  val charactersInHistory = RegInit(UInt(params.characterCountBits.W), 0.U)
+  val byteHistoryIndex = RegInit(UInt(params.camAddressBits.W), 0.U)
+  
+  // convert history to easily readable format
+  val history = Wire(Vec(params.camCharacters + params.decompressorMaxCharactersOut,
+    UInt(params.characterBits.W)))
+  for(i <- 0 until params.camCharacters)
+    history(i) := byteHistory(
+      if(params.camSizePow2)
+        byteHistoryIndex +% i.U
+      else
+        Mux(byteHistoryIndex >= (params.camCharacters - i).U,
+          byteHistoryIndex -% (params.camCharacters - i).U,
+          byteHistoryIndex +% i.U))
+  for(i <- 0 until params.decompressorMaxCharactersOut)
+    history(i + params.camCharacters) := io.out.bits(i)
+  
+  // push chars to history
+  val newHistoryCount = io.out.valid min io.out.ready
+  byteHistoryIndex :=
+    if(params.camSizePow2) byteHistoryIndex + newHistoryCount
+    else (byteHistoryIndex +& newHistoryCount) % params.camAddressBits.U
+  for(index <- 0 until io.out.bits.length)
+    when(index.U < newHistoryCount) {
+      byteHistory(
+        if(params.camSizePow2)
+          (byteHistoryIndex + index.U)(params.camAddressBits - 1, 0)
+        else
+          (byteHistoryIndex + index.U) % params.camAddressBits.U
+      ) := io.out.bits(index)
+    }
+  
   
   // This keeps track of the information from the encoding for the state machine's processing.
-  val encodingCharacters = Reg(UInt(params.patternLengthBits.W))
-  val encodingCharactersProcessed = Reg(UInt(params.patternLengthBits.W))
-  val encodingIndex = Reg(UInt(params.camAddressBits.W))
+  val matchLength = Reg(UInt(log2Ceil(params.extraCharacterLengthIncrease
+    max (params.maxCharactersInMinEncoding + 2)).W))
+  val matchAddress = Reg(UInt(params.camAddressBits.W))
+  val matchContinue = Reg(Bool())
   
   // This handles the state machine logic and storage
   val numberOfStates = 3
@@ -79,14 +108,6 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
       numberOfStates
     )
   val state = RegInit(UInt(log2Ceil(numberOfStates).W), waitingForInput)
-  
-  // push chars to history
-  val newHistoryCount = io.out.valid min io.out.ready
-  charactersInHistory := charactersInHistory + newHistoryCount
-  for(index <- 0 until io.out.bits.length)
-    when(index.U < newHistoryCount) {
-      byteHistory(charactersInHistory + index.U) := io.out.bits(index)
-    }
   
   switch(state) {
     is(waitingForInput) {
@@ -131,49 +152,105 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         // assert ready and valid signals
         io.in.ready := out_to_in_index(io.out.ready).min(litcount)
         io.out.valid := litcount - (pops(litcount) >> 1)
-      }.otherwise {
+      } elsewhen(io.in.valid < params.minCharactersToEncode.U) {
+        // this might be an encoding, but not enough valid input to process it
+        // todo: buffer input in this case
+        io.in.ready := 0.U
+        io.out.valid := 0.U
+      } otherwise {
         // The input is not an ordinary character, it's an encoding.
         state := copyingDataFromHistory
-        encodingCharactersProcessed := 0.U
         
-        var allInputCharacters = io.in.bits(0)
-        for (index <- 1 until params.maxEncodingCharacterWidths)
-          allInputCharacters = Cat(allInputCharacters, io.in.bits(index))
-        val encodingLength = getEncodingLength(allInputCharacters)
-        encodingCharacters := encodingLength
-        encodingIndex := getEncodingIndex(allInputCharacters)
-        when(encodingLength < params.maxCharactersInMinEncoding.U) {
-          io.in.ready := params.minCharactersToEncode.U
-        }.elsewhen(encodingLength === params.maxCharactersInMinEncoding.U) {
-          io.in.ready := params.minCharactersToEncode.U +& 1.U
-        }.otherwise {
-          when(encodingLength === params.maxPatternLength.U) {
-            io.in.ready := params.maxEncodingCharacterWidths.U
-          }.otherwise {
-            io.in.ready := 1.U +& params.minCharactersToEncode.U +& ((encodingLength - params.maxCharactersInMinEncoding.U) / params.maxCharacterValue.U)
-          }
-        }
+        val allInputCharacters = io.in.bits
+          .take(params.minCharactersToEncode)
+          .reduce(_ ## _)
+        
+        matchAddress := allInputCharacters(
+          params.minEncodingWidth - params.characterBits - 2,
+          params.minEncodingSequenceLengthBits)
+        matchLength := params.minCharactersToEncode.U +& allInputCharacters(
+          params.minEncodingSequenceLengthBits - 1,
+          0)
+        matchContinue := allInputCharacters(
+          params.minEncodingSequenceLengthBits - 1,
+          0).andR
+        
+        io.in.ready := minCharactersToEncode.U
+        io.out.valid := 0.U
+        
+        // todo: process part of the encoding this cycle
       }
     }
     
     is(copyingDataFromHistory) {
-      io.in.ready := 0.U
-      io.out.valid := (encodingCharacters - encodingCharactersProcessed) min
-        (params.decompressorMaxCharactersOut.U)
-      for (index <- 0 until params.decompressorMaxCharactersOut) {
-        // I'm pretty sure it's not possible for us to be reading data that is also being overwritten by the current cycle of decompression, but this is
-        // where it would be handled if it were possible.
+      // processing an encoding
+      
+      for(index <- 0 until io.out.bits.length)
         io.out.bits(index) :=
-          byteHistory(encodingIndex + encodingCharactersProcessed + index.U)
-      }
+          history.drop(index).take(params.camCharacters)(matchAddress)
       
-      val newEncodingCharactersProcessed =
-        encodingCharactersProcessed + newHistoryCount
-      
-      encodingCharactersProcessed := newEncodingCharactersProcessed
-      
-      when(newEncodingCharactersProcessed === encodingCharacters) {
-        state := waitingForInput
+      when(matchContinue) {
+        // the current character is part of an encoding length
+        
+        // the maximum input characters to consume w/ these params
+        val maxInChars = io.in.bits.length min (io.out.bits.length / params.extraCharacterLengthIncrease + 1)
+        // valid out chars up to (but not including) current index
+        var whole = matchLength
+          +& (maxInChars * params.extraCharacterLengthIncrease).U
+        // set defaults for valid, ready, and length
+        io.out.valid := whole
+        io.in.ready := maxInChars
+        matchLength := 0.U
+        when(io.out.ready < whole) {
+          matchLength := whole - io.out.ready
+        }
+        for(index <- 0 until maxInChars reverse) {
+          // update whole for current index
+          whole = matchLength
+            +& (index * params.extraCharacterLengthIncrease).U
+          when(!io.in.bits(index).andR) {
+            // current character is incomplete
+            // consume current, and de-assert continue
+            var outvalid = whole +& io.in.bits(index)
+            io.out.valid := outvalid
+            io.in.ready := (index + 1).U
+            matchLength := outvalid - io.out.ready
+            matchContinue := false.B
+            when(io.out.ready >= outvalid) {
+              // encoding completely pushed
+              // finish processing encoding
+              state := waitingForInput
+              matchLength := DontCare
+              matchContinue := DontCare
+            }
+          }
+          when(index.U === io.in.valid) {
+            // this marks the beginning of valid data
+            // reset to defaults because previous assertions are invalid
+            io.out.valid := whole
+            matchLength := 0.U
+            matchContinue := true.B
+            state := copyingDataFromHistory
+          }
+          when(io.out.ready < whole) {
+            // receiver is not ready for this block
+            // mark where push ends on next block
+            io.in.ready := index.U
+            matchLength := whole - io.out.ready
+            matchContinue := true.B
+            state := copyingDataFromHistory
+          }
+        }
+      } otherwise {
+        // the encoding is already consumed, push remaining matchLength
+        io.out.valid := matchLength
+        io.in.ready := 0.U
+        matchLength := matchLength - io.out.ready
+        when(io.out.ready >= matchLength) {
+          state := waitingForInput
+          matchLength := DontCare
+          matchContinue := DontCare
+        }
       }
     }
     

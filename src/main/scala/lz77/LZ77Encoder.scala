@@ -28,7 +28,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   when(io.matchLength =/= 0.U) {
     remainingLength := io.matchLength + (params.minEncodingWidth / params.characterBits * params.extraCharacterLengthIncrease - params.maxCharactersInMinEncoding).U
     
-    val minEncodingUInt = params.escapeCharacter.U ## params.escapeCharacter.U.apply(params.characterBits - 1) ## io.matchCAMAddress ## (((io.matchLength min params.maxCharactersInMinEncoding.U) - params.minCharactersToEncode.U)(params.minEncodingSequenceLengthBits - 1, 0))
+    val minEncodingUInt = params.escapeCharacter.U ## params.escapeCharacter.U.apply(params.characterBits - 1) ## io.matchCAMAddress ## ((io.matchLength - params.minCharactersToEncode.U) min (1 << params.minEncodingSequenceLengthBits - 1).U - )(params.minEncodingSequenceLengthBits - 1, 0))
     minEncoding := (0 until (minEncodingWidth / characterBits) reverse).map{i => minEncodingUInt((i + 1) * params.characterBits - 1, i * params.characterBits)}
     minEncodingIndex := 0.U
   }

@@ -91,7 +91,7 @@ class lz77Parameters(
   // This is the number of additional pattern characters that can be described with one additional character to the encoding
   var extraCharacterLengthIncrease = (1 << characterBits) - 1
   // This is the number of characters that can be in a pattern of the minimum encoding length
-  var maxCharactersInMinEncoding = minCharactersToEncode + ((1 << minEncodingSequenceLengthBits) - 1)
+  var maxCharactersInMinEncoding = minCharactersToEncode + (1 << minEncodingSequenceLengthBits) - 2
   
   
   var compressorMaxCharactersBits = log2Ceil(compressorMaxCharacters + 1)
@@ -99,6 +99,9 @@ class lz77Parameters(
   var camMaxCharsInBits = log2Ceil(camMaxCharsIn + 1)
   // todo: assert `compressorMaxCharacters <= camMaxPatternLength`
   // todo: assert `compressorMaxCharacters >= minCharactersToEncode`
+  // todo: make `decompressorMaxCharsIn`
+  // todo: assert `decompressorMaxCharsIn >= minCharactersToEncode`
+  //    OR upgrade decompressor to buffer input when there's not enough
 }
 
 
