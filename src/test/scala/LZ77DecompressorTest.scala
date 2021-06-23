@@ -73,25 +73,18 @@ class LZ77DecompressorTester(
 
 
 class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
-  "uncompressed" should "pass" in {
-    val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
-    val expect = Seq.fill(1000){(scala.math.random() * 256).toInt}
-    val input =
-      expect.flatMap(d => if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
-    
-    chisel3.iotesters.Driver(() => new lz77Decompressor(params)){lz77 =>
-      new LZ77DecompressorTester(lz77, params, input, expect)
-    } should be (true)
-  }
   
-  "compressed" should "pass" in {
-    val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+  def generateCompressed(
+      params: lz77Parameters,
+      len: Int = 4096,
+      overlap: Boolean = true
+  ): Tuple2[Seq[Int], Seq[Int]] = {
     var expect = Seq.fill(0){(scala.math.random() * 256).toInt}
     var input = expect.flatMap(d =>
       if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
-    while(expect.length <
-        params.charactersToCompress - params.maxPatternLength) breakable {
-      if(scala.math.random() >= .1) {
+    while(expect.length < len) breakable {
+      if(scala.math.random() >= .5 ||
+          expect.length + params.minCharactersToEncode >= len) {
         val char = (scala.math.random() * 256).toInt
         expect :+= char
         input :+= char
@@ -99,12 +92,13 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
           input :+= char
       }
       else {
-        val length = (scala.math.random() *
-          (params.maxPatternLength - params.minCharactersToEncode)).toInt +
-          params.minCharactersToEncode min 8
-        if(length > expect.length) break // continue
-        val index = (scala.math.random() * (expect.length - length)).toInt
-        expect ++= expect.slice(index, index + length)
+        val index = params.camCharacters - 1 - (scala.math.random() *
+          (expect.length min params.camCharacters)).toInt
+        var length = params.minCharactersToEncode
+        val p = scala.math.random() * .3 + .7
+        while(scala.math.random() < p && length < len - expect.length)
+          length += 1
+        if(index + length > params.camCharacters && !overlap) break // continue
         
         var encoding : BigInt = 0
         encoding <<= params.characterBits
@@ -121,14 +115,10 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
         else {
           encoding |= (1 << params.minEncodingSequenceLengthBits) - 1
           var remaining = length - params.maxCharactersInMinEncoding - 1
-          while(remaining > params.extraCharacterLengthIncrease) {
+          while(remaining >= 0) {
             encoding <<= params.characterBits
-            encoding |= params.maxCharacterValue
+            encoding |= params.maxCharacterValue min remaining
             remaining -= params.extraCharacterLengthIncrease
-          }
-          if(length != params.maxPatternLength) {
-            encoding <<= params.characterBits
-            encoding |= remaining
           }
         }
         
@@ -146,10 +136,53 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
           input :+= (encoding >> (i * params.characterBits) &
             params.maxCharacterValue).toInt
         }
+        expect ++= Iterator.continually(
+          (Seq.fill(params.camCharacters)(0) ++ expect)
+          .takeRight(params.camCharacters)
+          .drop(index))
+          .flatten
+          .take(length)
       }
     }
     
+    (input, expect)
+  }
+  
+  "LZ77 decompressor" should "passthrough uncompressed data" in {
+    val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+    val expect = Seq.fill(1000){(scala.math.random() * 256).toInt}
+    val input =
+      expect.flatMap(d => if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
+    
     chisel3.iotesters.Driver(() => new lz77Decompressor(params)){lz77 =>
+      new LZ77DecompressorTester(lz77, params, input, expect)
+    } should be (true)
+  }
+  
+  "LZ77 decompressor" should "decompress compressed data (no overlap)" in {
+    val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+    var (input, expect) = generateCompressed(params, 10000, false)
+    
+    // println(s"input: ${input.map(_.toString).reduce(_ + " " + _)}")
+    // println(s"expect: ${expect.map(_.toString).reduce(_ + " " + _)}")
+    
+    chisel3.iotesters.Driver.execute(Array(),
+      () => new lz77Decompressor(params))
+    {lz77 =>
+      new LZ77DecompressorTester(lz77, params, input, expect)
+    } should be (true)
+  }
+  
+  "LZ77 decompressor" should "decompress compressed data (yes overlap)" in {
+    val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+    var (input, expect) = generateCompressed(params, 10000, true)
+    
+    // println(s"input: ${input.map(_.toString).reduce(_ + " " + _)}")
+    // println(s"expect: ${expect.map(_.toString).reduce(_ + " " + _)}")
+    
+    chisel3.iotesters.Driver.execute(Array(),
+      () => new lz77Decompressor(params))
+    {lz77 =>
       new LZ77DecompressorTester(lz77, params, input, expect)
     } should be (true)
   }

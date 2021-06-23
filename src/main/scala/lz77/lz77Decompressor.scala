@@ -214,7 +214,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         }
       } otherwise {
         // the encoding is already consumed, push remaining matchLength
-        io.out.valid := matchLength
+        io.out.valid := matchLength min io.out.bits.length.U
         io.in.ready := 0.U
         matchLength := matchLength - io.out.ready
         when(io.out.ready >= matchLength) {
