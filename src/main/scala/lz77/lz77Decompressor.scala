@@ -149,12 +149,16 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
       // processing an encoding
       
       for(index <- 0 until io.out.bits.length)
-        when(matchAddress + index.U + byteHistoryIndex < params.camCharacters.U) {
-          io.out.bits(index) := byteHistory(matchAddress + index.U + byteHistoryIndex)
-        }.elsewhen(matchAddress + index.U < params.camCharacters.U) {
-          io.out.bits(index) := byteHistory(matchAddress + index.U + byteHistoryIndex - params.camCharacters.U)
+        when(matchAddress < (params.camCharacters - index).U) {
+          io.out.bits(index) := byteHistory(matchAddress + byteHistoryIndex + (
+            if(params.camSizePow2) index.U(params.camAddressBits.W)
+            else Mux((params.camCharacters - index).U - matchAddress >
+              byteHistoryIndex, index.U, (params.camCharacters - index).U)))
         } otherwise {
-          // io.out.bits(index) := io.out.bits(matchAddress + index.U - params.camCharacters.U)
+          if(index > 0)
+            io.out.bits(index) :=
+              VecInit(io.out.bits.take(index))(matchAddress -
+                (params.camCharacters - index).U)
         }
         
         // io.out.bits(index) := VecInit(history.drop(index).take(params.camCharacters))(matchAddress)
