@@ -160,8 +160,6 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
               VecInit(io.out.bits.take(index))(matchAddress -
                 (params.camCharacters - index).U)
         }
-        
-        // io.out.bits(index) := VecInit(history.drop(index).take(params.camCharacters))(matchAddress)
       
       when(matchContinue) {
         // the current character is part of an encoding length
