@@ -7,12 +7,15 @@ import multiByteCAM._
 import lz77.util._
 
 class lz77Compressor(params: lz77Parameters) extends Module {
-  val io = IO(new Bundle {
-    val in = Flipped(DecoupledStream(params.compressorMaxCharacters,
-      UInt(params.characterBits.W)))
-    val out = DecoupledStream(params.compressorMaxCharactersOut,
-      UInt(params.characterBits.W))
-  })
+  // val io = IO(new Bundle {
+  //   val in = Flipped(DecoupledStream(params.compressorMaxCharacters,
+  //     UInt(params.characterBits.W)))
+  //   val out = DecoupledStream(params.compressorMaxCharactersOut,
+  //     UInt(params.characterBits.W))
+  // })
+  val io = IO(new StreamBundle(
+    params.compressorMaxCharacters, UInt(params.characterBits.W)),
+    params.compressorMaxCharactersOut, UInt(params.characterBits.W)))
   
   val cam = Module(new multiByteCAM(params))
   val encoder = Module(new LZ77Encoder(params))

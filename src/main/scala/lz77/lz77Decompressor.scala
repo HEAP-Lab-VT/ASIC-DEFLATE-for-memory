@@ -7,13 +7,17 @@ import lz77.util._
 
 class lz77Decompressor(params: lz77Parameters) extends Module {
   
-  val io = IO(new Bundle {
-    // todo: add parameter for max chars in and don't use maxEncodingCharacterWidths here
-    val in = Flipped(DecoupledStream(params.maxEncodingCharacterWidths,
-        UInt(params.characterBits.W)))
-    val out = DecoupledStream(params.decompressorMaxCharactersOut,
-        UInt(params.characterBits.W))
-  })
+  // val io = IO(new Bundle {
+  // // todo: add parameter for max chars in and don't use maxEncodingCharacterWidths here
+  // val in = Flipped(DecoupledStream(params.maxEncodingCharacterWidths,
+  //     UInt(params.characterBits.W)))
+  // val out = DecoupledStream(params.decompressorMaxCharactersOut,
+  //     UInt(params.characterBits.W))
+  // })
+  
+  val io = IO(new StreamBundle(
+    params.maxEncodingCharacterWidths, UInt(params.characterBits.W),
+    params.decompressorMaxCharactersOut, UInt(params.characterBits.W)))
   
   // This initializes the outputs of the decompressor.
   io.in.ready := 0.U
