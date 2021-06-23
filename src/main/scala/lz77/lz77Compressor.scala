@@ -4,13 +4,14 @@ import chisel3._
 import chisel3.util._
 import lz77Parameters._
 import multiByteCAM._
+import lz77.util._
 
 class lz77Compressor(params: lz77Parameters) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(DecoupledStream(params.compressorMaxCharacters,
       UInt(params.characterBits.W)))
     val out = DecoupledStream(params.compressorMaxCharactersOut,
-      UInt(params.characterBits.W)))
+      UInt(params.characterBits.W))
   })
   
   val cam = Module(new multiByteCAM(params))
@@ -35,7 +36,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
         PopCount(
           cam.io.charsIn.bits
           .take(index)
-          .map(_ === params.escapeCharacter)
+          .map(_ === params.escapeCharacter.U)
         ) <= io.out.ready
         && index.U <= cam.io.charsIn.valid) {
       cam.io.maxLiteralCount := index.U
@@ -58,24 +59,18 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   for(index <- 0 until params.compressorMaxCharactersOut)
     when(index.U < camLitCount) {
       io.out.bits(index) := cam.io.charsIn.bits(index)
-    } elsewhen(index.U - camLitCount < encoder.out.valid && !encoder.out.finished) {
-      io.out.bits(index) := encoder.out.bits(index.U - camLitCount)
+    }.elsewhen(index.U - camLitCount < encoder.io.out.valid && !encoder.io.out.finished) {
+      io.out.bits(index) := encoder.io.out.bits(index.U - camLitCount)
     }
   
   // calculate valid and finished
-  io.out.valid := (camLitCount +& encoder.out.valid) min params.compressorMaxCharactersOut.U
-  io.out.finished := cam.io.finished && encoder.out.finished
+  io.out.valid := (camLitCount +& encoder.io.out.valid) min params.compressorMaxCharactersOut.U
+  io.out.finished := cam.io.finished && encoder.io.out.finished
 }
 
 object lz77Compressor extends App {
   val settingsGetter = new getLZ77FromCSV()
   val lz77Config = settingsGetter.getLZ77FromCSV("configFiles/lz77.csv")
-  if (!lz77Config.camHistoryAvailable) {
-    println(
-      "Error, cam history must be available for lz77Compressor to work properly"
-    )
-    sys.exit(1)
-  }
   chisel3.Driver
     .execute(Array[String](), () => new lz77Compressor(lz77Config))
 }

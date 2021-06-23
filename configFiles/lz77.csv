@@ -6,3 +6,5 @@ camHistoryAvailable, true
 maxPatternLength, 266
 escapeCharacter, 103
 decompressorMaxCharactersOut, 8
+compressorMaxCharacters, 8
+compressorMaxCharactersOut, 8

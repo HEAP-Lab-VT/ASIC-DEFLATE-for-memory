@@ -3,6 +3,7 @@ package multiByteCAM
 import chisel3._
 import chisel3.util._
 import lz77Parameters._
+import lz77.util._
 
 class multiByteCAM(params: lz77Parameters) extends Module {
   
@@ -19,7 +20,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     
     // Output a match and the number of literals preceeding the match
     val matchCAMAddress = Output(UInt(params.camAddressBits.W))
-    val matchLength = Output(UInt(patternLengthBits.W))
+    val matchLength = Output(UInt(params.patternLengthBits.W))
     val literalCount = Output(UInt(params.camMaxCharsInBits.W))
     
     val finished = Output(Bool())
@@ -42,7 +43,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   // CAM indexes eligible for continuation
   val continues =
-    RegInit(VecInit(Seq.fill(params.camCharacters, false.B)))
+    RegInit(VecInit(Seq.fill(params.camCharacters)(false.B)))
   // the current length of sequences in the continuation
   val continueLength = RegInit(0.U(log2Ceil(params.maxPatternLength).W))
   
@@ -51,14 +52,16 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   for(index <- 0 until io.charsIn.bits.length)
     when(index.U < io.charsIn.ready) {
       byteHistory(
-        if(camSizePow2) (camIndex + index.U)(params.camAddressBits - 1, 0)
-        else (camIndex +& index.U) % params.camCharacters
+        if(params.camSizePow2)
+          (camIndex + index.U)(params.camAddressBits - 1, 0)
+        else
+          (camIndex +& index.U) % params.camCharacters.U
       ) := io.charsIn.bits(index)
     }
-  if(camSizePow2) camIndex := camIndex + io.charsIn.ready
-  else camIndex := (camIndex +& io.charsIn.ready) % params.camCharacters
-  camFirstPass := camFirstPass
-    && (io.charsIn.ready < params.camCharacters - camIndex)
+  if(params.camSizePow2) camIndex := camIndex + io.charsIn.ready
+  else camIndex := (camIndex +& io.charsIn.ready) % params.camCharacters.U
+  camFirstPass := camFirstPass &&
+    (io.charsIn.ready < params.camCharacters.U - camIndex)
   
   
   // merge byteHistory with searchPattern for easy matching
@@ -79,13 +82,12 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   // find the length of every possible match
   val matchLengths = io.charsIn.bits
     .zipWithIndex
-    .map{case (c, i) => Mux(i.U < io.charsIn.valid,
-      history.drop(i).take(params.camCharacters).map(_ === c), false.B)}
-    .foldRight(Seq.fill(1, params.camCharacters)(0.U)))
+    .map{case (c, i) => history.drop(i).take(params.camCharacters)
+      .map(_ === c && i.U < io.charsIn.valid)}
+    .foldRight(Seq(VecInit(Seq.fill(params.camCharacters)(0.U))))
       {(equals, counts) =>
-        equals.zip(counts(0).map(_ +& 1.U))
-          .map{case (e, c) => Mux(e, c, 0.U)}
-        +: counts
+        VecInit(equals.zip(counts(0).map(_ +& 1.U))
+          .map{case (e, c) => Mux(e, c, 0.U)}) +: counts
       }
   
   
@@ -103,7 +105,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
         .map(_ >= t)
         .reduce(_ || _)})
     
-    matchOptions := matchLengths(io.literalCount)
+    matchOptions := VecInit(matchLengths)(io.literalCount)
   } otherwise {
     // there is a match to continue
     io.literalCount := 0.U
@@ -115,7 +117,11 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   // compute best match length and CAM address
   val (matchLength, matchCAMAddress) = matchOptions.zipWithIndex
-    .fold((0.U, 0.U)){case (o, i), (l, a) => (o max l, Mux(o > l, i.U, a))}
+    .map{case (l, i) => (l, i.U)}
+    .fold((0.U, 0.U)){case ((cl, ci), (ll, li)) =>
+      (cl max cl, Mux(cl > cl, ci, li))}
+    // .fold((0.U, 0.U)){(c, l) =>
+    //   (c._1 max l._1, Mux(c._1 > l._1, c._2, l._2))}
   
   
   // notes on output assertion
@@ -167,26 +173,26 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       io.matchLength := DontCare
       io.matchCAMAddress := DontCare
       continueLength := 0.U
-      continue := DontCare
+      continues := DontCare
     } otherwise {
       // output continued match before finishing
       io.finished := false.B
       io.charsIn.ready := DontCare
       io.literalCount := 0.U
       io.matchLength := continueLength
-      io.matchCAMAddress := PriorityEncoder(continue)
+      io.matchCAMAddress := PriorityEncoder(continues)
       continueLength := 0.U
-      continue := DontCare
+      continues := DontCare
     }
-  } elsewhen(io.literalCount > io.maxLiteralCount) {
+  }.elsewhen(io.literalCount > io.maxLiteralCount) {
     // too many literals preceeding the match, do not consume the match
     io.finished := false.B
     io.charsIn.ready := io.maxLiteralCount
     io.matchLength := 0.U
     io.matchCAMAddress := DontCare
     continueLength := 0.U
-    continue := DontCare
-  } elsewhen(matchLength < params.minCharactersToEncode.U
+    continues := DontCare
+  }.elsewhen(matchLength < params.minCharactersToEncode.U
       && continueLength === 0.U) {
     // no match
     io.finished := false.B
@@ -194,8 +200,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     io.matchLength := 0.U
     io.matchCAMAddress := DontCare
     continueLength := 0.U
-    continue := DontCare
-  } elsewhen(matchLength + io.literalCount === io.charsIn.valid) {
+    continues := DontCare
+  }.elsewhen(matchLength + io.literalCount === io.charsIn.valid) {
     // match continues to next cycle
     io.charsIn.ready := io.literalCount + matchLength
     io.finished := false.B
@@ -203,8 +209,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     io.matchCAMAddress := DontCare
     continueLength := continueLength + matchLength
     // make sure at least on character was processed before modifying continue
-    when(io.charsIn.valid =/= 0) {
-      continue := matchOptions.map(_ === matchLength)
+    when(io.charsIn.valid =/= 0.U) {
+      continues := matchOptions.map(_ === matchLength)
     }
   } otherwise {
     // match terminates in this cycle
@@ -213,7 +219,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     io.matchLength := continueLength + matchLength
     io.matchCAMAddress := matchCAMAddress
     continueLength := 0.U
-    continue := DontCare
+    continues := DontCare
   }
 }
 

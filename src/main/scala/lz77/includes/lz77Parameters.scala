@@ -171,7 +171,9 @@ class getLZ77FromCSV() {
       camHistoryAvailableParam = boolMap("camHistoryAvailable"),
       maxPatternLengthParam = intMap("maxPatternLength"),
       escapeCharacterParam = intMap("escapeCharacter"),
-      decompressorMaxCharactersOutParam = intMap("decompressorMaxCharactersOut")
+      decompressorMaxCharactersOutParam = intMap("decompressorMaxCharactersOut"),
+      compressorMaxCharactersParam = intMap("compressorMaxCharacters"),
+      compressorMaxCharactersOutParam = intMap("compressorMaxCharactersOut"),
     )
 
     return lz77ParametersOutput

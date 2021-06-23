@@ -7,43 +7,6 @@ import lz77.util._
 
 class lz77Decompressor(params: lz77Parameters) extends Module {
   
-  // This function is used to determine the length of an incoming encoding.
-  def getEncodingLength(encoding: UInt): UInt = {
-    val extraPatternLengthCharacters = Wire(Vec(params.additionalPatternLengthCharacters, UInt(params.characterBits.W)))
-    val minimalPatternLength = Wire(UInt(params.minEncodingSequenceLengthBits.W))
-
-    // This stores the data in a format we can more easily process.
-    minimalPatternLength := encoding >> (params.characterBits * params.additionalPatternLengthCharacters)
-    for (index <- 0 until params.additionalPatternLengthCharacters) {
-      extraPatternLengthCharacters(index) := encoding >> (params.characterBits * (params.additionalPatternLengthCharacters - 1 - index))
-    }
-
-    val outputWire = Wire(UInt(params.patternLengthBits.W))
-    when(minimalPatternLength < Fill(params.minEncodingSequenceLengthBits, 1.U)) {
-      // The pattern isn't long enough to require multiple characters to encode the full length
-      outputWire := minimalPatternLength +& params.minCharactersToEncode.U
-    }.otherwise {
-      // The pattern is long enough to need extra characters to encode it, so keep reading characters until one isn't the max possible size.
-      val charactersToRead = 1.U +& PriorityEncoder(extraPatternLengthCharacters.map(_ =/= params.maxCharacterValue.U))
-      // Basically, if the index is less than the charactersToRead value, we bitwise AND it with 1's, and otherwise, we bitwise AND with 0's.
-      // Then, we add all those values up and get the total extra character length.
-      outputWire := minimalPatternLength +& params.minCharactersToEncode.U +& extraPatternLengthCharacters.zipWithIndex
-        .map({ case (value, index) => Fill(params.characterBits, index.U < charactersToRead) & value })
-        .reduce(_ +& _)
-    }
-
-    outputWire
-  }
-  
-  // This function is used to determine the encoding index from an incoming encoding.
-  def getEncodingIndex(encoding: UInt): UInt = {
-    val encodingIndex = Wire(UInt(params.camAddressBits.W))
-    
-    encodingIndex := encoding >> (params.additionalPatternLengthCharacters * params.characterBits + params.minEncodingSequenceLengthBits)
-    
-    encodingIndex
-  }
-  
   val io = IO(new Bundle {
     // todo: add parameter for max chars in and don't use maxEncodingCharacterWidths here
     val in = Flipped(DecoupledStream(params.maxEncodingCharacterWidths,
@@ -81,9 +44,9 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   
   // push chars to history
   val newHistoryCount = io.out.valid min io.out.ready
-  byteHistoryIndex :=
+  byteHistoryIndex := (
     if(params.camSizePow2) byteHistoryIndex + newHistoryCount
-    else (byteHistoryIndex +& newHistoryCount) % params.camAddressBits.U
+    else (byteHistoryIndex +& newHistoryCount) % params.camAddressBits.U)
   for(index <- 0 until io.out.bits.length)
     when(index.U < newHistoryCount) {
       byteHistory(
@@ -152,7 +115,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         // assert ready and valid signals
         io.in.ready := out_to_in_index(io.out.ready).min(litcount)
         io.out.valid := litcount - (pops(litcount) >> 1)
-      } elsewhen(io.in.valid < params.minCharactersToEncode.U) {
+      }.elsewhen(io.in.valid < params.minCharactersToEncode.U) {
         // this might be an encoding, but not enough valid input to process it
         // todo: buffer input in this case
         io.in.ready := 0.U
@@ -175,7 +138,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
           params.minEncodingSequenceLengthBits - 1,
           0).andR
         
-        io.in.ready := minCharactersToEncode.U
+        io.in.ready := params.minCharactersToEncode.U
         io.out.valid := 0.U
         
         // todo: process part of the encoding this cycle
@@ -186,33 +149,41 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
       // processing an encoding
       
       for(index <- 0 until io.out.bits.length)
-        io.out.bits(index) :=
-          history.drop(index).take(params.camCharacters)(matchAddress)
+        when(matchAddress + index.U + byteHistoryIndex < params.camCharacters.U) {
+          io.out.bits(index) := byteHistory(matchAddress + index.U + byteHistoryIndex)
+        }.elsewhen(matchAddress + index.U < params.camCharacters.U) {
+          io.out.bits(index) := byteHistory(matchAddress + index.U + byteHistoryIndex - params.camCharacters.U)
+        } otherwise {
+          // io.out.bits(index) := io.out.bits(matchAddress + index.U - params.camCharacters.U)
+        }
+        
+        // io.out.bits(index) := VecInit(history.drop(index).take(params.camCharacters))(matchAddress)
       
       when(matchContinue) {
         // the current character is part of an encoding length
         
         // the maximum input characters to consume w/ these params
-        val maxInChars = io.in.bits.length min (io.out.bits.length / params.extraCharacterLengthIncrease + 1)
+        val maxInChars = io.in.bits.length min
+          (io.out.bits.length / params.extraCharacterLengthIncrease + 1)
         // valid out chars up to (but not including) current index
-        var whole = matchLength
-          +& (maxInChars * params.extraCharacterLengthIncrease).U
+        var whole = matchLength +&
+          (maxInChars * params.extraCharacterLengthIncrease).U
         // set defaults for valid, ready, and length
-        io.out.valid := whole
-        io.in.ready := maxInChars
+        io.out.valid := whole min io.out.bits.length.U
+        io.in.ready := maxInChars.U
         matchLength := 0.U
         when(io.out.ready < whole) {
           matchLength := whole - io.out.ready
         }
         for(index <- 0 until maxInChars reverse) {
           // update whole for current index
-          whole = matchLength
-            +& (index * params.extraCharacterLengthIncrease).U
+          whole = matchLength +&
+            (index * params.extraCharacterLengthIncrease).U
           when(!io.in.bits(index).andR) {
             // current character is incomplete
             // consume current, and de-assert continue
             var outvalid = whole +& io.in.bits(index)
-            io.out.valid := outvalid
+            io.out.valid := outvalid min io.out.bits.length.U
             io.in.ready := (index + 1).U
             matchLength := outvalid - io.out.ready
             matchContinue := false.B
@@ -227,7 +198,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
           when(index.U === io.in.valid) {
             // this marks the beginning of valid data
             // reset to defaults because previous assertions are invalid
-            io.out.valid := whole
+            io.out.valid := whole min io.out.bits.length.U
             matchLength := 0.U
             matchContinue := true.B
             state := copyingDataFromHistory

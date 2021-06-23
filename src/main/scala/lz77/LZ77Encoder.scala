@@ -28,8 +28,8 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   when(io.matchLength =/= 0.U) {
     remainingLength := io.matchLength + (params.minEncodingWidth / params.characterBits * params.extraCharacterLengthIncrease - params.maxCharactersInMinEncoding).U
     
-    val minEncodingUInt = params.escapeCharacter.U ## params.escapeCharacter.U.apply(params.characterBits - 1) ## io.matchCAMAddress ## ((io.matchLength - params.minCharactersToEncode.U) min (1 << params.minEncodingSequenceLengthBits - 1).U - )(params.minEncodingSequenceLengthBits - 1, 0))
-    minEncoding := (0 until (minEncodingWidth / characterBits) reverse).map{i => minEncodingUInt((i + 1) * params.characterBits - 1, i * params.characterBits)}
+    val minEncodingUInt = params.escapeCharacter.U ## params.escapeCharacter.U.apply(params.characterBits - 1) ## io.matchCAMAddress ## ((io.matchLength - params.minCharactersToEncode.U) min (1 << params.minEncodingSequenceLengthBits - 1).U)(params.minEncodingSequenceLengthBits - 1, 0)
+    minEncoding := (0 until (params.minEncodingWidth / params.characterBits) reverse).map{i => minEncodingUInt((i + 1) * params.characterBits - 1, i * params.characterBits)}
     minEncodingIndex := 0.U
   }
   
@@ -37,26 +37,26 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   io.out.bits := DontCare
   for(index <- 0 until params.compressorMaxCharactersOut) {
     val output = io.out.bits(index)
-    when(minEncodingIndex < (minEncodingWidth / characterBits - index).U) {
-      output := minEncodingChars(minEncodingIndex + index.U)
+    when(minEncodingIndex < (params.minEncodingWidth / params.characterBits - index).U) {
+      output := minEncoding(minEncodingIndex + index.U)
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {
         remainingLengthReg := remainingLength - (index * params.extraCharacterLengthIncrease).U
-        minEncodingIndexReg := minEncodingIndex + index + 1
+        minEncodingIndexReg := minEncodingIndex + (index + 1).U
       }
-    } elsewhen(remainingLength > ((index + 1) * params.extraCharacterLengthIncrease).U) {
+    }.elsewhen(remainingLength > ((index + 1) * params.extraCharacterLengthIncrease).U) {
       output := params.maxCharacterValue.U
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {
         remainingLengthReg := remainingLength - (index * params.extraCharacterLengthIncrease).U
-        minEncodingIndexReg := (minEncodingWidth / characterBits).U
+        minEncodingIndexReg := (params.minEncodingWidth / params.characterBits).U
       }
-    } elsewhen(remainingLength > (index * params.extraCharacterLengthIncrease).U) {
+    }.elsewhen(remainingLength > (index * params.extraCharacterLengthIncrease).U) {
       output := remainingLength - (index * params.extraCharacterLengthIncrease + 1).U
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {
-        remainingLengthReg := 0
-        minEncodingIndexReg := (minEncodingWidth / characterBits).U
+        remainingLengthReg := 0.U
+        minEncodingIndexReg := (params.minEncodingWidth / params.characterBits).U
       }
     } otherwise {
       // output := DontCare
