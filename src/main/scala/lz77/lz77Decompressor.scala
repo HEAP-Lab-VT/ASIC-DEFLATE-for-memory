@@ -32,20 +32,6 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   // This keeps track of how many characters have been output by the design.
   val byteHistoryIndex = RegInit(UInt(params.camAddressBits.W), 0.U)
   
-  // convert history to easily readable format
-  val history = Wire(Vec(params.camCharacters + params.decompressorMaxCharactersOut,
-    UInt(params.characterBits.W)))
-  for(i <- 0 until params.camCharacters)
-    history(i) := byteHistory(
-      if(params.camSizePow2)
-        byteHistoryIndex +% i.U
-      else
-        Mux(byteHistoryIndex >= (params.camCharacters - i).U,
-          byteHistoryIndex -% (params.camCharacters - i).U,
-          byteHistoryIndex +% i.U))
-  for(i <- 0 until params.decompressorMaxCharactersOut)
-    history(i + params.camCharacters) := io.out.bits(i)
-  
   // push chars to history
   val newHistoryCount = io.out.valid min io.out.ready
   byteHistoryIndex := (
