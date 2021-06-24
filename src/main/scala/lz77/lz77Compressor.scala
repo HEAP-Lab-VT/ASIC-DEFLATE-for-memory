@@ -14,7 +14,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   //     UInt(params.characterBits.W))
   // })
   val io = IO(new StreamBundle(
-    params.compressorMaxCharacters, UInt(params.characterBits.W)),
+    params.compressorMaxCharacters, UInt(params.characterBits.W),
     params.compressorMaxCharactersOut, UInt(params.characterBits.W)))
   
   val cam = Module(new multiByteCAM(params))
