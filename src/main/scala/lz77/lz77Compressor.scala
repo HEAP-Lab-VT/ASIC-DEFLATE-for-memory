@@ -72,8 +72,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
 }
 
 object lz77Compressor extends App {
-  val settingsGetter = new getLZ77FromCSV()
-  val lz77Config = settingsGetter.getLZ77FromCSV("configFiles/lz77.csv")
-  chisel3.Driver
-    .execute(Array[String](), () => new lz77Compressor(lz77Config))
+  val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+  new chisel3.stage.ChiselStage()
+    .emitVerilog(new lz77Compressor(params), Array[String]())
 }

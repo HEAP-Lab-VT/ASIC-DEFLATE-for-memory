@@ -238,14 +238,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
 }
 
 object lz77Decompressor extends App {
-  val settingsGetter = new getLZ77FromCSV()
-  val lz77Config = settingsGetter.getLZ77FromCSV("configFiles/lz77.csv")
-  if (!lz77Config.camHistoryAvailable) {
-    println(
-      "Error, cam history must be available for lz77Decompressor to work properly"
-    )
-    sys.exit(1)
-  }
-  chisel3.Driver
-    .execute(Array[String](), () => new lz77Decompressor(lz77Config))
+  val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+  new chisel3.stage.ChiselStage()
+    .emitVerilog(new lz77Decompressor(params), Array[String]())
 }
