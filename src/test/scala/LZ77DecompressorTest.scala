@@ -112,7 +112,7 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
   
   "LZ77 decompressor" should "decompress compressed data (yes overlap)" in {
     val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
-    var (input, expect) = generateCompressed(params, 10000, true)
+    var (expect, input) = LZ77Golden.generateData(10000, params, true)
     
     chisel3.iotesters.Driver.execute(Array(),
       () => new lz77Decompressor(params))
