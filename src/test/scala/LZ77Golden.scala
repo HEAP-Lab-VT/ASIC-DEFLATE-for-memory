@@ -11,7 +11,7 @@ object LZ77Golden {
     encoding |= params.escapeCharacter
     encoding <<= 1
     encoding |= ~params.escapeCharacter >> (params.characterBits - 1) & 1
-    encoding <<= address
+    encoding <<= params.camAddressBits
     encoding |= address
     
     encoding <<= params.minEncodingSequenceLengthBits
@@ -83,7 +83,7 @@ object LZ77Golden {
       params: lz77Parameters,
       overlap: Boolean = true
   ): Tuple2[Seq[Int], Seq[Int]] = {
-    var uncompressed = Seq.fill(0){(scala.math.random() * 256).toInt}
+    var uncompressed = Seq.empty[Int]
     var compressed = uncompressed.flatMap(d =>
       if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
     while(uncompressed.length < len) breakable {
