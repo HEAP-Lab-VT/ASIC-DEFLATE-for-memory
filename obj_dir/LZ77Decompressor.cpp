@@ -1,9 +1,5 @@
 #include "Vlz77Decompressor.h"
 #include "verilated.h"
-#include <sys/stat.h>
-#include <fstream>
-#include <iostream>
-#include <time.h>
 #include <stdio.h>
 #define TIMEOUT_ENABLE true
 #define TIMEOUT_CYCLES 20000
@@ -38,7 +34,8 @@ int main(int argc, char **argv, char **env)
 	decompressor->eval();
 	decompressor->reset = 0;
 	
-	while(true) {
+	int cycles = 0;
+	while(!TIMEOUT_ENABLE || cycles < TIMEOUT_CYCLES) {
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
 		decompressor->io_out_finished = bytesRead == 0;
@@ -84,6 +81,8 @@ int main(int argc, char **argv, char **env)
 		decompressor->eval();
 		decompressor->clock = 1;
 		decompressor->eval();
+		
+		cycles++;
 	}
 	
 	if(inf != stdin)
@@ -92,5 +91,8 @@ int main(int argc, char **argv, char **env)
 		fclose(outf);
 	
 	delete decompressor;
+	
+	fprintf(stderr, "decompressor cycles: %d\n", cycles);
+	
 	exit(0);
 }
