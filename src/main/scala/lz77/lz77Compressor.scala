@@ -34,7 +34,8 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   }
   
   // limit literal count based on io.out.ready
-  for(index <- 0 to params.camMaxCharsIn)
+  cam.io.maxLiteralCount := 0.U
+  for(index <- 1 to params.camMaxCharsIn)
     when(index.U +
         PopCount(
           cam.io.charsIn.bits

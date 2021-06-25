@@ -7,7 +7,7 @@ import lz77Parameters._
 class LZ77Encoder(params: lz77Parameters) extends Module {
   val io = IO(new Bundle {
     val out = DecoupledStream(params.compressorMaxCharactersOut, UInt(params.characterBits.W))
-    val matchLength = Input(UInt(params.camCharacterSequenceLengthBits.W))
+    val matchLength = Input(UInt(params.patternLengthBits.W))
     val matchCAMAddress = Input(UInt(params.camAddressBits.W))
   })
   
@@ -28,7 +28,11 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   when(io.matchLength =/= 0.U) {
     remainingLength := io.matchLength + (params.minEncodingWidth / params.characterBits * params.extraCharacterLengthIncrease - params.maxCharactersInMinEncoding).U
     
-    val minEncodingUInt = params.escapeCharacter.U ## params.escapeCharacter.U.apply(params.characterBits - 1) ## io.matchCAMAddress ## ((io.matchLength - params.minCharactersToEncode.U) min (1 << params.minEncodingSequenceLengthBits - 1).U)(params.minEncodingSequenceLengthBits - 1, 0)
+    val escape = params.escapeCharacter.U(params.characterBits.W)
+    val escapeconfirmation = escape(params.characterBits - 1)
+    val address = io.matchCAMAddress
+    val length = ((io.matchLength - params.minCharactersToEncode.U) min (1 << params.minEncodingSequenceLengthBits - 1).U)(params.minEncodingSequenceLengthBits - 1, 0)
+    val minEncodingUInt = escape ## escapeconfirmation ## address ## length
     minEncoding := (0 until (params.minEncodingWidth / params.characterBits) reverse).map{i => minEncodingUInt((i + 1) * params.characterBits - 1, i * params.characterBits)}
     minEncodingIndex := 0.U
   }
@@ -37,7 +41,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   io.out.bits := DontCare
   for(index <- 0 until params.compressorMaxCharactersOut) {
     val output = io.out.bits(index)
-    when(minEncodingIndex < (params.minEncodingWidth / params.characterBits - index).U) {
+    when(minEncodingIndex + index.U < (params.minEncodingWidth / params.characterBits).U) {
       output := minEncoding(minEncodingIndex + index.U)
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {

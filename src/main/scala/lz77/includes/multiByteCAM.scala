@@ -82,12 +82,18 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   // find the length of every possible match
   val matchLengths = io.charsIn.bits
     .zipWithIndex
-    .map{case (c, i) => history.drop(i).take(params.camCharacters)
-      .map(_ === c && i.U < io.charsIn.valid)}
+    .map{case (c, i) =>
+      history
+        .drop(i)
+        .take(params.camCharacters)
+        .map(_ === c && i.U < io.charsIn.valid)}
     .foldRight(Seq(VecInit(Seq.fill(params.camCharacters)(0.U))))
       {(equals, counts) =>
-        VecInit(equals.zip(counts(0).map(_ +& 1.U))
-          .map{case (e, c) => Mux(e, c, 0.U)}) +: counts
+        VecInit(equals
+          .zip(counts(0).map(_ + 1.U(params.camCharacterSequenceLengthBits)))
+          .map{case (e, c) =>
+            Mux(e, c, 0.U(params.camCharacterSequenceLengthBits))}) +:
+        counts
       }
   
   
