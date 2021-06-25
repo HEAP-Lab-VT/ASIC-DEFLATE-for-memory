@@ -67,8 +67,6 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
         val encodinglength =
           if(length <= params.maxCharactersInMinEncoding)
             params.minEncodingWidth / params.characterBits
-          else if(length == params.maxPatternLength)
-            params.maxEncodingCharacterWidths
           else
             (params.minEncodingWidth / params.characterBits) + 1 +
               ((length - params.maxCharactersInMinEncoding) /
