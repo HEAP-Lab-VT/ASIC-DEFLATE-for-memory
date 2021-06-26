@@ -13,7 +13,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   
   val remainingLengthReg = RegInit(0.U(params.camCharacterSequenceLengthBits.W))
   val minEncodingReg = Reg(Vec(params.minEncodingWidth / params.characterBits, UInt(params.characterBits.W)))
-  val minEncodingIndexReg = RegInit(log2Ceil(params.minEncodingWidth / params.characterBits + 1).U)
+  val minEncodingIndexReg = RegInit((params.minEncodingWidth / params.characterBits).U(log2Ceil(params.minEncodingWidth / params.characterBits + 1).W))
   
   val remainingLength = WireDefault(remainingLengthReg)
   val minEncoding = WireDefault(minEncodingReg)
@@ -46,7 +46,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {
         remainingLengthReg := remainingLength - (index * params.extraCharacterLengthIncrease).U
-        minEncodingIndexReg := minEncodingIndex + (index + 1).U
+        minEncodingIndexReg := minEncodingIndex + io.out.ready
       }
     }.elsewhen(remainingLength > ((index + 1) * params.extraCharacterLengthIncrease).U) {
       output := params.maxCharacterValue.U
@@ -65,7 +65,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
     } otherwise {
       // output := DontCare
       // when(index.U < io.out.ready) {
-      //   remainingLengthReg := 0
+      //   remainingLengthReg := 0.U
       //   minEncodingIndexReg := (minEncodingWidth / characterBits).U
       // }
     }
