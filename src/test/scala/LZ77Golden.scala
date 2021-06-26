@@ -67,6 +67,8 @@ object LZ77Golden {
       }
       else {
         compressed :+= curData(0)
+        if(curData(0) == params.escapeCharacter)
+          compressed :+= curData(0)s
       }
       
       // update cam
