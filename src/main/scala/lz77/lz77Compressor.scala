@@ -7,12 +7,7 @@ import multiByteCAM._
 import lz77.util._
 
 class lz77Compressor(params: lz77Parameters) extends Module {
-  // val io = IO(new Bundle {
-  //   val in = Flipped(DecoupledStream(params.compressorMaxCharacters,
-  //     UInt(params.characterBits.W)))
-  //   val out = DecoupledStream(params.compressorMaxCharactersOut,
-  //     UInt(params.characterBits.W))
-  // })
+  
   val io = IO(new StreamBundle(
     params.compressorMaxCharacters, UInt(params.characterBits.W),
     params.compressorMaxCharactersOut, UInt(params.characterBits.W)))
@@ -47,7 +42,8 @@ class lz77Compressor(params: lz77Parameters) extends Module {
     }
   
   // assert ready signal to encoder
-  encoder.io.out.ready := Mux(io.out.ready > camLitCount, io.out.ready - camLitCount, 0.U)
+  encoder.io.out.ready :=
+    Mux(io.out.ready > camLitCount, io.out.ready - camLitCount, 0.U)
   
   // connect CAM to encoder
   when(!cam.io.finished) {
@@ -60,15 +56,30 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   
   // output characters from CAM and encoder
   io.out.bits := DontCare
+  for(index <- 0 until params.compressorMaxCharacters) {
+    val outindex = index.U +
+      (PopCount(cam.io.charsIn.bits.take(index)
+        .map(_ === params.escapeCharacter.U)) >> 1)
+    when(outindex < io.out.bits.length.U) {
+      io.out.bits(outindex) := cam.io.charsIn.bits(index)
+      when(cam.io.charsIn.bits(index) === params.escapeCharacter.U &&
+          outindex + 1.U < io.out.bits.length.U) {
+        io.out.bits(outindex + 1.U) := params.escapeCharacter.U
+      }
+    }
+  }
+  
+  val outLitCount = camLitCount + (
+    PopCount(cam.io.charsIn.bits.zipWithIndex
+      .map(c => c._1 === params.escapeCharacter.U && c._2 < camLitCount)) >> 1)
   for(index <- 0 until params.compressorMaxCharactersOut)
-    when(index.U < camLitCount) {
-      io.out.bits(index) := cam.io.charsIn.bits(index)
-    }.elsewhen(index.U - camLitCount < encoder.io.out.valid && !encoder.io.out.finished) {
-      io.out.bits(index) := encoder.io.out.bits(index.U - camLitCount)
+    when(outLitCount < (io.out.bits.length - index).U) {
+      io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)
     }
   
   // calculate valid and finished
-  io.out.valid := (camLitCount +& encoder.io.out.valid) min params.compressorMaxCharactersOut.U
+  io.out.valid := (outLitCount +& encoder.io.out.valid) min
+    params.compressorMaxCharactersOut.U
   io.out.finished := cam.io.finished && encoder.io.out.finished
 }
 
