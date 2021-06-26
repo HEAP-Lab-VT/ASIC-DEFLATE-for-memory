@@ -7,8 +7,8 @@
 #define IN_VEC_SIZE 5
 #define OUT_VEC_SIZE 8
 
-static size_t min(size_t a, size_t b) {return a <= b ? a : b}
-static size_t max(size_t a, size_t b) {return a >= b ? a : b}
+static size_t min(size_t a, size_t b) {return a <= b ? a : b;}
+static size_t max(size_t a, size_t b) {return a >= b ? a : b;}
 
 int main(int argc, char **argv, char **env)
 {
@@ -56,7 +56,7 @@ int main(int argc, char **argv, char **env)
 			min(decompressor->io_in_valid, decompressor->io_in_ready);
 		inBufIdx -= c;
 		for(int i = 0; i < inBufIdx; i++)
-			inBuf[i] = inBuf[i + c]
+			inBuf[i] = inBuf[i + c];
 		
 		c = min(decompressor->io_out_valid, decompressor->io_out_ready);
 		char tmpBuf[OUT_VEC_SIZE];
@@ -68,14 +68,14 @@ int main(int argc, char **argv, char **env)
 		tmpBuf[5] = decompressor->io_out_bits_5;
 		tmpBuf[6] = decompressor->io_out_bits_6;
 		tmpBuf[7] = decompressor->io_out_bits_7;
-		for(int i = 0; i < c, i++)
-			outBuf[i + outBufIdx] = tmpBuf[i]
-		outBufIdx += c
+		for(int i = 0; i < c; i++)
+			outBuf[i + outBufIdx] = tmpBuf[i];
+		outBufIdx += c;
 		
-		c = fwrite(outBuf, 1, outBufIdx, outf)
-		for(int i = c; i < outBufIdx, i++)
-			outBuf[i + c] = outBuf[i]
-		outBufIdx -= c
+		c = fwrite(outBuf, 1, outBufIdx, outf);
+		for(int i = c; i < outBufIdx; i++)
+			outBuf[i + c] = outBuf[i];
+		outBufIdx -= c;
 		
 		decompressor->clock = 0;
 		decompressor->eval();
