@@ -7,8 +7,8 @@
 #define IN_VEC_SIZE 8
 #define OUT_VEC_SIZE 8
 
-static size_t min(size_t a, size_t b) {return a <= b ? a : b}
-static size_t max(size_t a, size_t b) {return a >= b ? a : b}
+static size_t min(size_t a, size_t b) {return a <= b ? a : b;}
+static size_t max(size_t a, size_t b) {return a >= b ? a : b;}
 
 int main(int argc, char **argv, char **env)
 {
@@ -59,7 +59,7 @@ int main(int argc, char **argv, char **env)
 			min(compressor->io_in_valid, compressor->io_in_ready);
 		inBufIdx -= c;
 		for(int i = 0; i < inBufIdx; i++)
-			inBuf[i] = inBuf[i + c]
+			inBuf[i] = inBuf[i + c];
 		
 		c = min(compressor->io_out_valid, compressor->io_out_ready);
 		char tmpBuf[OUT_VEC_SIZE];
@@ -71,14 +71,14 @@ int main(int argc, char **argv, char **env)
 		tmpBuf[5] = compressor->io_out_bits_5;
 		tmpBuf[6] = compressor->io_out_bits_6;
 		tmpBuf[7] = compressor->io_out_bits_7;
-		for(int i = 0; i < c, i++)
-			outBuf[i + outBufIdx] = tmpBuf[i]
-		outBufIdx += c
+		for(int i = 0; i < c; i++)
+			outBuf[i + outBufIdx] = tmpBuf[i];
+		outBufIdx += c;
 		
-		c = fwrite(outBuf, 1, outBufIdx, outf)
-		for(int i = c; i < outBufIdx, i++)
-			outBuf[i + c] = outBuf[i]
-		outBufIdx -= c
+		c = fwrite(outBuf, 1, outBufIdx, outf);
+		for(int i = c; i < outBufIdx; i++)
+			outBuf[i + c] = outBuf[i];
+		outBufIdx -= c;
 		
 		compressor->clock = 0;
 		compressor->eval();
