@@ -71,7 +71,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   
   val outLitCount = camLitCount + (
     PopCount(cam.io.charsIn.bits.zipWithIndex
-      .map(c => c._1 === params.escapeCharacter.U && c._2 < camLitCount)) >> 1)
+      .map(c => c._1 === params.escapeCharacter.U && c._2.U < camLitCount)) >> 1)
   for(index <- 0 until params.compressorMaxCharactersOut)
     when(outLitCount < (io.out.bits.length - index).U) {
       io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)
