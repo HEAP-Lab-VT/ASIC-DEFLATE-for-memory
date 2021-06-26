@@ -45,11 +45,11 @@ object LZ77Golden {
     var cam = Seq.empty[Int]
     var skip = 0
     
-    for(curData <- data.tails) {
+    for(curData <- data.tails.toSeq.init) {
       // find match
       val matched = cam
-        .tails
-        .drop(1)
+        .tails.toSeq
+        .init
         .map(_ ++ curData)
         .map(_.zip(curData))
         .map(_.takeWhile(e => e._1 == e._2))
