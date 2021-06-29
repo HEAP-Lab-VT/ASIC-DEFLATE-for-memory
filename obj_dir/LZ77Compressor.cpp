@@ -1,6 +1,10 @@
 #include "Vlz77Compressor.h"
 #include "verilated.h"
+#include "verilated_vcd_c.h"
 #include <stdio.h>
+
+#define TRACE_ENABLE true
+
 #define TIMEOUT_ENABLE true
 #define TIMEOUT_CYCLES 20000
 
@@ -14,6 +18,17 @@ int main(int argc, char **argv, char **env)
 {
 	Verilated::commandArgs(argc, argv);
 	Vlz77Compressor *compressor = new Vlz77Compressor;
+	
+#if TRACE_ENABLE
+	char trace_enable = argc > 3 && (argv[3][0] != '-' || argv[3][1] != '\0');
+	VerilatedVcdC* trace;
+	if(trace_enable) {
+		Verilated::traceEverOn(true);
+		trace = new VerilatedVcdC;
+		compressor->trace(trace, 99);
+		trace->open(argv[3]);
+	}
+#endif
 	
 	FILE *inf = stdin;
 	FILE *outf = stdout;
@@ -82,8 +97,20 @@ int main(int argc, char **argv, char **env)
 		
 		compressor->clock = 0;
 		compressor->eval();
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->dump(Verilated::time());
+			Verilated::timeInc(1);
+		}
+#endif
 		compressor->clock = 1;
 		compressor->eval();
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->dump(Verilated::time());
+			Verilated::timeInc(1);
+		}
+#endif
 		
 		cycles++;
 	}
@@ -92,6 +119,12 @@ int main(int argc, char **argv, char **env)
 		fclose(inf);
 	if(outf != stdout)
 		fclose(outf);
+	
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->close();
+		}
+#endif
 	
 	delete compressor;
 	
