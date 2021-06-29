@@ -54,7 +54,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
     encoder.io.matchCAMAddress := DontCare
   }
   
-  // output characters from CAM and encoder
+  // output literal
   io.out.bits := DontCare
   for(index <- 0 until params.compressorMaxCharacters) {
     val outindex = index.U +
@@ -69,6 +69,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
     }
   }
   
+  // output encoding
   val outLitCount = camLitCount + (
     PopCount(cam.io.charsIn.bits.zipWithIndex
       .map(c => c._1 === params.escapeCharacter.U && c._2.U < camLitCount)) >> 1)
@@ -86,5 +87,5 @@ class lz77Compressor(params: lz77Parameters) extends Module {
 object lz77Compressor extends App {
   val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
   new chisel3.stage.ChiselStage()
-    .emitVerilog(new lz77Compressor(params), Array[String]())
+    .emitVerilog(new lz77Compressor(params), args)
 }

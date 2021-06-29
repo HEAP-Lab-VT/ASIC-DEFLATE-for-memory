@@ -226,5 +226,5 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
 object lz77Decompressor extends App {
   val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
   new chisel3.stage.ChiselStage()
-    .emitVerilog(new lz77Decompressor(params), Array[String]())
+    .emitVerilog(new lz77Decompressor(params), args)
 }
