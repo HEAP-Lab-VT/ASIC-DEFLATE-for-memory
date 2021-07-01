@@ -46,7 +46,6 @@ int main(int argc, char **argv, char **env)
 	compressor->clock = 0;
 	compressor->eval();
 	compressor->clock = 1;
-	compressor->eval();
 	compressor->reset = 0;
 	
 	int cycles = 0;
@@ -95,7 +94,7 @@ int main(int argc, char **argv, char **env)
 			outBuf[i + c] = outBuf[i];
 		outBufIdx -= c;
 		
-		compressor->clock = 0;
+		compressor->clock = 1;
 		compressor->eval();
 #if TRACE_ENABLE
 		if(trace_enable) {
@@ -103,7 +102,7 @@ int main(int argc, char **argv, char **env)
 			Verilated::timeInc(1);
 		}
 #endif
-		compressor->clock = 1;
+		compressor->clock = 0;
 		compressor->eval();
 #if TRACE_ENABLE
 		if(trace_enable) {
