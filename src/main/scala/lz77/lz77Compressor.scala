@@ -19,7 +19,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   
   val moreLiterals = RegInit(false.B)
   
-  val inputBuffer = Reg(Vec(params.camMaxCharsIn, UInt(params.characterBits.W))
+  val inputBuffer = Reg(Vec(params.camMaxCharsIn, UInt(params.characterBits.W)))
   val inputBufferLength = RegInit(0.U(params.camMaxCharsInBits.W))
   
   when(encoder.io.out.finished || moreLiterals) {
