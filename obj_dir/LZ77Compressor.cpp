@@ -46,13 +46,18 @@ int main(int argc, char **argv, char **env)
 	compressor->clock = 0;
 	compressor->eval();
 	compressor->clock = 1;
+	compressor->eval();
 	compressor->reset = 0;
+	compressor->clock = 1;
+	compressor->eval();
+	compressor->clock = 0;
+	compressor->eval();
 	
 	int cycles = 0;
 	while(!TIMEOUT_ENABLE || cycles < TIMEOUT_CYCLES) {
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
-		compressor->io_out_finished = bytesRead == 0;
+		compressor->io_in_finished = bytesRead == 0;
 		inBufIdx += bytesRead;
 		compressor->io_in_bits_0 = inBuf[0];
 		compressor->io_in_bits_1 = inBuf[1];
