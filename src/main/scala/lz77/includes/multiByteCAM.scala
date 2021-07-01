@@ -74,8 +74,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
         .drop(i)
         .take(params.camCharacters)
         .map(_ === c && i.U < io.charsIn.valid)}
-    .foldRight
-      (Seq.fill(1, params.camCharacters)(0.U(params.camMaxCharsInBits.W)))
+    .foldRight(
+      Seq.fill(1, params.camCharacters)(0.U(params.camMaxCharsInBits.W)))
       {(equals, counts) =>
         equals
           .zip(counts(0).map(_ + 1.U(params.camMaxCharsInBits.W)))
@@ -90,21 +90,30 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   val matchRow = Wire(Vec(params.camCharacters, UInt(params.characterBits.W)))
   when(continueLength === 0.U) {
     // start a match from scratch
-    val row = PriorityMux(
-      matchLengths.zipWithIndex.map{case (lens, lit) => (
-        lens
-          .map(len =>
-            len >= params.minCharactersToEncode.U ||
-            len === io.in.valid - lit.U)
-          .reduce(_ || _),
-        new Bundle{val lengths = VecInit(lens); val literalCount = lit.U})})
     
-    io.literalCount := row.literalCount
-    matchRow := row.lengths
+    class Row extends Bundle {
+      val row = Vec(params.camCharacters, UInt(params.characterBits.W))
+      val lit = UInt(params.camMaxCharsInBits.W)
+    }
+    
+    val row = PriorityMux(
+      matchLengths.zipWithIndex.map{case (lens, lit) =>
+        val curRow = Wire(new Row)
+        curRow.row := VecInit(lens)
+        curRow.lit := lit.U
+        ( lens
+            .map(len =>
+              len >= params.minCharactersToEncode.U ||
+              len === io.charsIn.valid - lit.U)
+            .reduce(_ || _),
+          curRow)})
+    
+    io.literalCount := row.lit
+    matchRow := row.row
     
   } otherwise {
     // there is a match to continue
-    matchRow =: matchLengths(0)
+    matchRow := matchLengths(0)
       .zip(continues)
       .map(a => Mux(a._2, a._1, 0.U))
     
@@ -114,13 +123,13 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   val (matchLength, matchCAMAddress) = matchRow
     .zipWithIndex
     .map{case (len, add) => (len, add.U)}
-    .reduce{case ((len1, add1), (len2, add2)) =>
+    .reduce[(UInt, UInt)]{case ((len1, add1), (len2, add2)) =>
       val is1 = len1 >= len2
       ( Mux(is1, len1, len2),
         Mux(is1, add1, add2))
     }
   
-  io.finished := false
+  io.finished := false.B
   io.matchLength := 0.U
   io.matchCAMAddress := DontCare
   continueLength := 0.U
@@ -130,7 +139,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     when(matchLength + io.literalCount === io.charsIn.valid) {
       when(io.literalCount <= io.maxLiteralCount) {
         continueLength := continueLength + matchLength
-        continues := matchRow.map(_ === io.in.valid - io.literalCount)
+        continues := matchRow.map(_ === io.charsIn.valid - io.literalCount)
       }
     } otherwise {
       io.matchLength := continueLength + matchLength
