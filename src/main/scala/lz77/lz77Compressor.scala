@@ -17,15 +17,42 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   
   val camLitCount = Mux(cam.io.finished, 0.U, cam.io.literalCount)
   
-  when(encoder.io.out.finished) {
+  val moreLiterals = RegInit(false.B)
+  
+  val inputBuffer = Reg(Vec(params.camMaxCharsIn, UInt(params.characterBits.W))
+  val inputBufferLength = RegInit(0.U(params.camMaxCharsInBits.W))
+  
+  when(encoder.io.out.finished || moreLiterals) {
     // if encoder is not working, connect CAM
-    cam.io.charsIn <> io.in
+    io.in.ready := params.camMaxCharsIn.U - inputBufferLength
+    cam.io.charsIn.valid :=
+      (inputBufferLength + io.in.valid) min params.camMaxCharsIn.U
+    cam.io.charsIn.finished := false.B
+    for(i <- 0 until params.camMaxCharsIn)
+      cam.io.charsIn.bits(i) := Mux(i.U < inputBufferLength,
+        inputBuffer(i),
+        io.in.bits(i.U - inputBufferLength))
+    
+    inputBuffer := DontCare
+    for(i <- 0 until params.camMaxCharsIn)
+      when(i.U + cam.io.charsIn.ready < inputBufferLength) {
+        inputBuffer(i) := inputBuffer(i.U + cam.io.charsIn.ready)
+      }.elsewhen(i.U + cam.io.charsIn.ready - inputBufferLength < io.in.valid) {
+        inputBuffer(i) := io.in.bits(i.U + cam.io.charsIn.ready - inputBufferLength)
+      }
+    inputBufferLength := Mux(cam.io.charsIn.ready <= cam.io.charsIn.valid,
+      cam.io.charsIn.valid - cam.io.charsIn.ready, 0.U)
+    
+    when(io.in.finished) {
+      cam.io.charsIn.finished := inputBufferLength === 0.U
+      cam.io.charsIn.valid := inputBufferLength
+    }
   } otherwise {
     // if encoder is working, disconnect CAM
     io.in.ready := 0.U
     cam.io.charsIn.valid := 0.U
     cam.io.charsIn.bits := DontCare
-    cam.io.charsIn.finished := io.in.finished
+    cam.io.charsIn.finished := false.B
   }
   
   // limit literal count based on io.out.ready

@@ -23,7 +23,6 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   val minEncoding = WireDefault(minEncodingReg)
   val minEncodingIndex = WireDefault(remainingLengthType, minEncodingIndexReg)
   
-  io.out.finished := remainingLengthReg === 0.U
   
   when(io.matchLength =/= 0.U) {
     remainingLength := io.matchLength +& (params.minEncodingWidth / params.characterBits * params.extraCharacterLengthIncrease - params.maxCharactersInMinEncoding).U
@@ -41,6 +40,8 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
     minEncodingIndexReg := minEncodingIndex
   }
   
+  
+  io.out.finished := remainingLengthReg === 0.U
   io.out.valid := 0.U
   io.out.bits := DontCare
   for(index <- 0 until params.compressorMaxCharactersOut) {

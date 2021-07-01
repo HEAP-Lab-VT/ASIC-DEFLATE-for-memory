@@ -8,14 +8,8 @@ import lz77.util._
 class multiByteCAM(params: lz77Parameters) extends Module {
   
   val io = IO(new Bundle {
-    // This input allows values to be written into the CAM.
-    // val writeData = Input(
-    //   Vec(params.compressorMaxCharacters, UInt(params.characterBits.W)))
-    // val writeDataLength = Input(UInt(params.compressorMaxCharactersBits.W))
-    
-    // This input allows for search values to be requested from the CAM.
-    val charsIn = Flipped(
-      DecoupledStream(params.camMaxCharsIn, UInt(params.characterBits.W)))
+    val charsIn = Flipped(DecoupledStream(
+      params.camMaxCharsIn, UInt(params.characterBits.W)))
     val maxLiteralCount = Input(UInt(params.camMaxCharsInBits.W))
     
     // Output a match and the number of literals preceeding the match
@@ -24,12 +18,6 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     val literalCount = Output(UInt(params.camMaxCharsInBits.W))
     
     val finished = Output(Bool())
-    
-    // This output is only used when the multiByteCAM is being used by the lz77Compressor.
-    // val camHistory =
-    //   if (params.camHistoryAvailable)
-    //     Some(Output(Vec(params.camCharacters, UInt(params.characterBits.W))))
-    //   else None
   })
   
   
@@ -64,19 +52,18 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     (io.charsIn.ready < params.camCharacters.U - camIndex)
   
   
-  // merge byteHistory with searchPattern for easy matching
-  val history = Wire(Vec(params.camCharacters + params.camMaxCharsIn,
-    UInt(params.characterBits.W)))
-  for(i <- 0 until params.camCharacters)
-    history(i) := byteHistory(
-      if(params.camSizePow2)
-        camIndex +% i.U
-      else
-        Mux(camIndex >= (params.camCharacters - i).U,
-          camIndex -% (params.camCharacters - i).U,
-          camIndex +% i.U))
-  for(i <- 0 until params.camMaxCharsIn)
-    history(i + params.camCharacters) := io.charsIn.bits(i)
+  // merge byteHistory and searchPattern for easy matching
+  val history =
+    (0 until params.camCharacters)
+      .map{i => byteHistory(
+        if(params.camSizePow2)
+          i.U +% camIndex
+        else
+          Mux(camIndex < (params.camCharacters - i).U,
+            camIndex +% i.U,
+            camIndex -% (params.camCharacters - i).U)
+      )} ++
+      io.charsIn.bits
   
   
   // find the length of every possible match
@@ -87,90 +74,82 @@ class multiByteCAM(params: lz77Parameters) extends Module {
         .drop(i)
         .take(params.camCharacters)
         .map(_ === c && i.U < io.charsIn.valid)}
-    .foldRight(Seq(VecInit(Seq.fill(params.camCharacters)(0.U))))
+    .foldRight
+      (Seq.fill(1, params.camCharacters)(0.U(params.camMaxCharsInBits.W)))
       {(equals, counts) =>
-        VecInit(equals
-          .zip(counts(0).map(_ + 1.U(params.camCharacterSequenceLengthBits)))
+        equals
+          .zip(counts(0).map(_ + 1.U(params.camMaxCharsInBits.W)))
           .map{case (e, c) =>
-            Mux(e, c, 0.U(params.camCharacterSequenceLengthBits))}) +:
+            Mux(e, c, 0.U(params.camMaxCharsInBits.W))} +:
         counts
       }
   
   
   // find where the match should start in the pattern
   // and rank CAM indexes based on match length
-  val matchOptions = Wire(Vec(params.camCharacters,
-    UInt(params.camMaxCharsInBits.W)))
+  val matchRow = Wire(Vec(params.camCharacters, UInt(params.characterBits.W)))
   when(continueLength === 0.U) {
     // start a match from scratch
-    io.literalCount := PriorityEncoder(matchLengths
-      .zipWithIndex
-      .map{case (c, i) => (c, params.minCharactersToEncode.U
-        min (io.charsIn.valid - i.U))}
-      .map{case (c, t) => c
-        .map(_ >= t)
-        .reduce(_ || _)})
+    val row = PriorityMux(
+      matchLengths.zipWithIndex.map{case (lens, lit) => (
+        lens
+          .map(len =>
+            len >= params.minCharactersToEncode.U ||
+            len === io.in.valid - lit.U)
+          .reduce(_ || _),
+        new Bundle{val lengths = VecInit(lens); val literalCount = lit.U})})
     
-    matchOptions := VecInit(matchLengths)(io.literalCount)
+    io.literalCount := row.literalCount
+    matchRow := row.lengths
+    
   } otherwise {
     // there is a match to continue
-    io.literalCount := 0.U
-    matchOptions := matchLengths(0)
+    matchRow =: matchLengths(0)
       .zip(continues)
       .map(a => Mux(a._2, a._1, 0.U))
+    
+    io.literalCount := 0.U
   }
   
+  val (matchLength, matchCAMAddress) = matchRow
+    .zipWithIndex
+    .map{case (len, add) => (len, add.U)}
+    .reduce{case ((len1, add1), (len2, add2)) =>
+      val is1 = len1 >= len2
+      ( Mux(is1, len1, len2),
+        Mux(is1, add1, add2))
+    }
   
-  // compute best match length and CAM address
-  val (matchLength, matchCAMAddress) = matchOptions.zipWithIndex
-    .map{case (l, i) => (l, i.U)}
-    .fold((0.U, 0.U)){case ((cl, ci), (ll, li)) =>
-      (cl max cl, Mux(cl > cl, ci, li))}
-    // .fold((0.U, 0.U)){(c, l) =>
-    //   (c._1 max l._1, Mux(c._1 > l._1, c._2, l._2))}
+  io.finished := false
+  io.matchLength := 0.U
+  io.matchCAMAddress := DontCare
+  continueLength := 0.U
+  continues := DontCare
   
+  when(matchLength >= params.minCharactersToEncode.U) {
+    when(matchLength + io.literalCount === io.charsIn.valid) {
+      when(io.literalCount <= io.maxLiteralCount) {
+        continueLength := continueLength + matchLength
+        continues := matchRow.map(_ === io.in.valid - io.literalCount)
+      }
+    } otherwise {
+      io.matchLength := continueLength + matchLength
+      io.matchCAMAddress := matchCAMAddress
+    }
+  }
   
-  // notes on output assertion
-  // ===============================
-  // behavior:
-  // assert continue iff match reaches end and either match length is encodable or continue is already asserted
-  // if the match is zero-length at the end, it does not matter whether continue is asserted because it will assert a zero continueLength
-  // assert standard matchLength if match is sufficient length and continue is not asserted on previous or next
-  // assert continue matchLength if continue is asserted previously but not next
-  // assert 0 matchLength if continue is asserted next or match is insufficient length
-  // ready is literalCount + match length if length is sufficient or continue is asserted previous
-  // ready is literalCount otherwise
-  //
-  // variables:
-  // a: match reaches end
-  // b: match length is sufficient
-  // c: continue is asserted previous
-  // d: continue is asserted next
-  // 
-  // possible results:
-  // A,d: assert continue next
-  // B: matchLength is match length
-  // C: matchLength is match length + continue length
-  // D: matchLength is 0
-  // E: ready is literalCount + match length
-  // F: ready is literalCount
-  // 
-  // truth table:
-  // a b c | assert
-  // ------+----------
-  // 0 0 0 | D, F
-  // 0 0 1 | C, E
-  // 0 1 0 | B or C, E
-  // 0 1 1 | C, E
-  // 1 0 0 | D, F
-  // 1 0 1 | A, D, E
-  // 1 1 0 | A, D, E
-  // 1 1 1 | A, D, E
+  when(io.literalCount <= io.maxLiteralCount) {
+    when(matchLength >= params.minCharactersToEncode.U) {
+      io.charsIn.ready := io.literalCount + matchLength
+    } otherwise {
+      io.charsIn.ready := io.literalCount
+    }
+  } otherwise {
+    io.charsIn.ready := io.maxLiteralCount
+  }
   
-  
-  // assert outputs and continue data
+  // handle finished state
   when(io.charsIn.finished) {
-    // handle finished state
     when(continueLength === 0.U) {
       // finish immediately
       io.finished := true.B
@@ -190,42 +169,6 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       continueLength := 0.U
       continues := DontCare
     }
-  }.elsewhen(io.literalCount > io.maxLiteralCount) {
-    // too many literals preceeding the match, do not consume the match
-    io.finished := false.B
-    io.charsIn.ready := io.maxLiteralCount
-    io.matchLength := 0.U
-    io.matchCAMAddress := DontCare
-    continueLength := 0.U
-    continues := DontCare
-  }.elsewhen(matchLength < params.minCharactersToEncode.U
-      && continueLength === 0.U) {
-    // no match
-    io.finished := false.B
-    io.charsIn.ready := io.literalCount
-    io.matchLength := 0.U
-    io.matchCAMAddress := DontCare
-    continueLength := 0.U
-    continues := DontCare
-  }.elsewhen(matchLength + io.literalCount === io.charsIn.valid) {
-    // match continues to next cycle
-    io.charsIn.ready := io.literalCount + matchLength
-    io.finished := false.B
-    io.matchLength := 0.U
-    io.matchCAMAddress := DontCare
-    continueLength := continueLength + matchLength
-    // make sure at least on character was processed before modifying continue
-    when(io.charsIn.valid =/= 0.U) {
-      continues := matchOptions.map(_ === matchLength)
-    }
-  } otherwise {
-    // match terminates in this cycle
-    io.finished := false.B
-    io.charsIn.ready := io.literalCount + matchLength
-    io.matchLength := continueLength + matchLength
-    io.matchCAMAddress := matchCAMAddress
-    continueLength := 0.U
-    continues := DontCare
   }
 }
 
