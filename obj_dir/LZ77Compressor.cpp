@@ -48,13 +48,12 @@ int main(int argc, char **argv, char **env)
 	compressor->clock = 1;
 	compressor->eval();
 	compressor->reset = 0;
-	compressor->clock = 1;
-	compressor->eval();
-	compressor->clock = 0;
-	compressor->eval();
 	
 	int cycles = 0;
-	while(!TIMEOUT_ENABLE || cycles < TIMEOUT_CYCLES) {
+	do {
+		compressor->clock = 1;
+		compressor->eval();
+		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
 		compressor->io_in_finished = bytesRead == 0;
@@ -72,8 +71,6 @@ int main(int argc, char **argv, char **env)
 		
 		compressor->eval();
 		
-		if(compressor->io_out_finished) break;
-		
 		size_t c =
 			min(compressor->io_in_valid, compressor->io_in_ready);
 		inBufIdx -= c;
@@ -81,6 +78,7 @@ int main(int argc, char **argv, char **env)
 			inBuf[i] = inBuf[i + c];
 		
 		c = min(compressor->io_out_valid, compressor->io_out_ready);
+		if(compressor->io_out_finished) c = 0;
 		char tmpBuf[OUT_VEC_SIZE];
 		tmpBuf[0] = compressor->io_out_bits_0;
 		tmpBuf[1] = compressor->io_out_bits_1;
@@ -99,16 +97,7 @@ int main(int argc, char **argv, char **env)
 			outBuf[i + c] = outBuf[i];
 		outBufIdx -= c;
 		
-		compressor->clock = 1;
-		compressor->eval();
-#if TRACE_ENABLE
-		if(trace_enable) {
-			trace->dump(Verilated::time());
-			Verilated::timeInc(1);
-		}
-#endif
-		compressor->clock = 0;
-		compressor->eval();
+		
 #if TRACE_ENABLE
 		if(trace_enable) {
 			trace->dump(Verilated::time());
@@ -116,8 +105,17 @@ int main(int argc, char **argv, char **env)
 		}
 #endif
 		
-		cycles++;
-	}
+		compressor->clock = 0;
+		compressor->eval();
+		
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->dump(Verilated::time());
+			Verilated::timeInc(1);
+		}
+#endif
+	} while(!compressor->io_out_finished
+		&& (!TIMEOUT_ENABLE || cycles++ < TIMEOUT_CYCLES));
 	
 	if(inf != stdin)
 		fclose(inf);
