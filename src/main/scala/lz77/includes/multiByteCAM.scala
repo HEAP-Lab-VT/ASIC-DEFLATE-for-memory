@@ -87,7 +87,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   // find where the match should start in the pattern
   // and rank CAM indexes based on match length
-  val matchRow = Wire(Vec(params.camCharacters, UInt(params.characterBits.W)))
+  val matchRow =
+    Wire(Vec(params.camCharacters, UInt(params.camMaxCharsInBits.W)))
   when(continueLength === 0.U) {
     // start a match from scratch
     
@@ -135,7 +136,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   continueLength := 0.U
   continues := DontCare
   
-  when(matchLength >= params.minCharactersToEncode.U) {
+  when(continueLength + matchLength >= params.minCharactersToEncode.U) {
     when(matchLength + io.literalCount === io.charsIn.valid) {
       when(io.literalCount <= io.maxLiteralCount) {
         continueLength := continueLength + matchLength
@@ -143,12 +144,14 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       }
     } otherwise {
       io.matchLength := continueLength + matchLength
-      io.matchCAMAddress := matchCAMAddress
+      io.matchCAMAddress := Mux(matchLength === 0.U,
+        PriorityEncoder(continues),
+        matchCAMAddress)
     }
   }
   
   when(io.literalCount <= io.maxLiteralCount) {
-    when(matchLength >= params.minCharactersToEncode.U) {
+    when(continueLength + matchLength >= params.minCharactersToEncode.U) {
       io.charsIn.ready := io.literalCount + matchLength
     } otherwise {
       io.charsIn.ready := io.literalCount

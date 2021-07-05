@@ -16,61 +16,22 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   val encoder = Module(new LZ77Encoder(params))
   
   val camLitCount = Mux(cam.io.finished, 0.U, cam.io.literalCount)
-  
   val moreLiterals = RegInit(false.B)
   
-  val inputBuffer = Reg(Vec(params.camMaxCharsIn, UInt(params.characterBits.W)))
-  val inputBufferLength = RegInit(0.U(params.camMaxCharsInBits.W))
+  val inBuffer = Module(ReadyDecoupler(
+    params.compressorMaxCharacters,
+    params.compressorMaxCharacters,
+    UInt(params.characterBits.W)))
+  inBuffer.io.in <> io.in
+  cam.io.charsIn <> inBuffer.io.out
   
-  when(encoder.io.out.finished || moreLiterals) {
-    // if encoder is not working, connect CAM
-    io.in.ready := params.camMaxCharsIn.U - inputBufferLength
-    cam.io.charsIn.valid :=
-      (inputBufferLength + io.in.valid) min params.camMaxCharsIn.U
-    cam.io.charsIn.finished := false.B
-    for(i <- 0 until params.camMaxCharsIn)
-      cam.io.charsIn.bits(i) := Mux(i.U < inputBufferLength,
-        inputBuffer(i),
-        io.in.bits(i.U - inputBufferLength))
-    
-    inputBuffer := DontCare
-    for(i <- 0 until params.camMaxCharsIn)
-      when(i.U + cam.io.charsIn.ready < inputBufferLength) {
-        inputBuffer(i) := inputBuffer(i.U + cam.io.charsIn.ready)
-      }.elsewhen(i.U + cam.io.charsIn.ready - inputBufferLength < io.in.valid) {
-        inputBuffer(i) := io.in.bits(i.U + cam.io.charsIn.ready - inputBufferLength)
-      }
-    inputBufferLength := Mux(cam.io.charsIn.ready <= cam.io.charsIn.valid,
-      cam.io.charsIn.valid - cam.io.charsIn.ready, 0.U)
-    
-    when(io.in.finished) {
-      cam.io.charsIn.finished := inputBufferLength === 0.U
-      cam.io.charsIn.valid := inputBufferLength
-    }
-  } otherwise {
+  when(!encoder.io.out.finished && !moreLiterals) {
     // if encoder is working, disconnect CAM
-    io.in.ready := 0.U
+    inBuffer.io.out.ready := 0.U
     cam.io.charsIn.valid := 0.U
     cam.io.charsIn.bits := DontCare
-    cam.io.charsIn.finished := false.B
+    // cam.io.charsIn.finished := false.B
   }
-  
-  // limit literal count based on io.out.ready
-  cam.io.maxLiteralCount := 0.U
-  for(index <- 1 to params.camMaxCharsIn)
-    when(index.U +
-        PopCount(
-          cam.io.charsIn.bits
-          .take(index)
-          .map(_ === params.escapeCharacter.U)
-        ) <= io.out.ready
-        && index.U <= cam.io.charsIn.valid) {
-      cam.io.maxLiteralCount := index.U
-    }
-  
-  // assert ready signal to encoder
-  encoder.io.out.ready :=
-    Mux(io.out.ready > camLitCount, io.out.ready - camLitCount, 0.U)
   
   // connect CAM to encoder
   when(!cam.io.finished) {
@@ -82,11 +43,18 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   }
   
   // output literal
+  cam.io.maxLiteralCount := 0.U
   io.out.bits := DontCare
-  for(index <- 0 until params.compressorMaxCharacters) {
+  for(index <- 0 to params.camMaxCharsIn) {
     val outindex = index.U +
       (PopCount(cam.io.charsIn.bits.take(index)
-        .map(_ === params.escapeCharacter.U)) >> 1)
+        .map(_ === params.escapeCharacter.U)))
+    
+    when(outindex <= io.out.ready) {
+      cam.io.maxLiteralCount := index.U
+    }
+    
+    if(index < params.camMaxCharsIn)
     when(outindex < io.out.bits.length.U) {
       io.out.bits(outindex) := cam.io.charsIn.bits(index)
       when(cam.io.charsIn.bits(index) === params.escapeCharacter.U &&
@@ -99,11 +67,15 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   // output encoding
   val outLitCount = camLitCount + (
     PopCount(cam.io.charsIn.bits.zipWithIndex
-      .map(c => c._1 === params.escapeCharacter.U && c._2.U < camLitCount)) >> 1)
+      .map(c => c._1 === params.escapeCharacter.U && c._2.U < camLitCount)))
   for(index <- 0 until params.compressorMaxCharactersOut)
     when(outLitCount < (io.out.bits.length - index).U) {
       io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)
     }
+  
+  encoder.io.out.ready :=
+    Mux(outLitCount > io.out.ready, 0.U, io.out.ready - outLitCount)
+  moreLiterals := outLitCount > io.out.ready
   
   // calculate valid and finished
   io.out.valid := (outLitCount +& encoder.io.out.valid) min

@@ -21,11 +21,13 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   
   val remainingLength = WireDefault(remainingLengthType, remainingLengthReg)
   val minEncoding = WireDefault(minEncodingReg)
-  val minEncodingIndex = WireDefault(remainingLengthType, minEncodingIndexReg)
+  val minEncodingIndex = WireDefault(minEncodingIndexType, minEncodingIndexReg)
   
   
   when(io.matchLength =/= 0.U) {
-    remainingLength := io.matchLength +& (params.minEncodingWidth / params.characterBits * params.extraCharacterLengthIncrease - params.maxCharactersInMinEncoding).U
+    remainingLength := Mux(io.matchLength > params.maxCharactersInMinEncoding.U,
+      io.matchLength +& (((params.minEncodingWidth / params.characterBits) * params.extraCharacterLengthIncrease) - params.maxCharactersInMinEncoding).U,
+      ((params.minEncodingWidth / params.characterBits) * params.extraCharacterLengthIncrease).U)
     
     val escape = params.escapeCharacter.U(params.characterBits.W)
     val escapeconfirmation = ~escape(params.characterBits - 1)
@@ -46,18 +48,18 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   io.out.bits := DontCare
   for(index <- 0 until params.compressorMaxCharactersOut) {
     val output = io.out.bits(index)
-    when(minEncodingIndex + index.U < (params.minEncodingWidth / params.characterBits).U) {
+    when(minEncodingIndex +& index.U < (params.minEncodingWidth / params.characterBits).U) {
       output := minEncoding(minEncodingIndex + index.U)
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {
-        remainingLengthReg := remainingLength - (index * params.extraCharacterLengthIncrease).U
-        minEncodingIndexReg := minEncodingIndex + io.out.ready
+        remainingLengthReg := remainingLength - ((index + 1) * params.extraCharacterLengthIncrease).U
+        minEncodingIndexReg := minEncodingIndex + (index + 1).U
       }
     }.elsewhen(remainingLength > ((index + 1) * params.extraCharacterLengthIncrease).U) {
       output := params.maxCharacterValue.U
       io.out.valid := (index + 1).U
       when(index.U < io.out.ready) {
-        remainingLengthReg := remainingLength - (index * params.extraCharacterLengthIncrease).U
+        remainingLengthReg := remainingLength - ((index + 1) * params.extraCharacterLengthIncrease).U
         minEncodingIndexReg := (params.minEncodingWidth / params.characterBits).U
       }
     }.elsewhen(remainingLength > (index * params.extraCharacterLengthIncrease).U) {
