@@ -1,6 +1,10 @@
 #include "Vlz77Decompressor.h"
 #include "verilated.h"
+#include "verilated_vcd_c.h"
 #include <stdio.h>
+
+#define TRACE_ENABLE true
+
 #define TIMEOUT_ENABLE true
 #define TIMEOUT_CYCLES 20000
 
@@ -14,6 +18,17 @@ int main(int argc, char **argv, char **env)
 {
 	Verilated::commandArgs(argc, argv);
 	Vlz77Decompressor *decompressor = new Vlz77Decompressor;
+	
+#if TRACE_ENABLE
+	char trace_enable = argc > 3 && (argv[3][0] != '-' || argv[3][1] != '\0');
+	VerilatedVcdC* trace;
+	if(trace_enable) {
+		Verilated::traceEverOn(true);
+		trace = new VerilatedVcdC;
+		decompressor->trace(trace, 99);
+		trace->open(argv[3]);
+	}
+#endif
 	
 	FILE *inf = stdin;
 	FILE *outf = stdout;
@@ -35,7 +50,10 @@ int main(int argc, char **argv, char **env)
 	decompressor->reset = 0;
 	
 	int cycles = 0;
-	while(!TIMEOUT_ENABLE || cycles < TIMEOUT_CYCLES) {
+	do {
+		decompressor->clock = 1;
+		decompressor->eval();
+		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
 		decompressor->io_out_finished = bytesRead == 0;
@@ -50,8 +68,6 @@ int main(int argc, char **argv, char **env)
 		
 		decompressor->eval();
 		
-		if(decompressor->io_out_finished) break;
-		
 		size_t c =
 			min(decompressor->io_in_valid, decompressor->io_in_ready);
 		inBufIdx -= c;
@@ -59,6 +75,7 @@ int main(int argc, char **argv, char **env)
 			inBuf[i] = inBuf[i + c];
 		
 		c = min(decompressor->io_out_valid, decompressor->io_out_ready);
+		if(decompressor->io_out_finished) c = 0;
 		char tmpBuf[OUT_VEC_SIZE];
 		tmpBuf[0] = decompressor->io_out_bits_0;
 		tmpBuf[1] = decompressor->io_out_bits_1;
@@ -77,18 +94,36 @@ int main(int argc, char **argv, char **env)
 			outBuf[i + c] = outBuf[i];
 		outBufIdx -= c;
 		
+		
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->dump(Verilated::time());
+			Verilated::timeInc(1);
+		}
+#endif
+		
 		decompressor->clock = 0;
 		decompressor->eval();
-		decompressor->clock = 1;
-		decompressor->eval();
 		
-		cycles++;
-	}
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->dump(Verilated::time());
+			Verilated::timeInc(1);
+		}
+#endif
+} while(!decompressor->io_out_finished
+		&& !TIMEOUT_ENABLE || cycles++ < TIMEOUT_CYCLES);
 	
 	if(inf != stdin)
 		fclose(inf);
 	if(outf != stdout)
 		fclose(outf);
+		
+#if TRACE_ENABLE
+		if(trace_enable) {
+			trace->close();
+		}
+#endif
 	
 	delete decompressor;
 	
