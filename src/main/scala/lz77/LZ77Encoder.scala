@@ -32,7 +32,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
     val escape = params.escapeCharacter.U(params.characterBits.W)
     val escapeconfirmation = ~escape(params.characterBits - 1)
     val address = io.matchCAMAddress
-    val length = ((io.matchLength - params.minCharactersToEncode.U) min (1 << params.minEncodingSequenceLengthBits - 1).U)(params.minEncodingSequenceLengthBits - 1, 0)
+    val length = ((io.matchLength - params.minCharactersToEncode.U) min ((1 << params.minEncodingSequenceLengthBits) - 1).U)(params.minEncodingSequenceLengthBits - 1, 0)
     val minEncodingUInt = escape ## escapeconfirmation ## address ## length
     minEncoding := (0 until (params.minEncodingWidth / params.characterBits) reverse).map{i => minEncodingUInt((i + 1) * params.characterBits - 1, i * params.characterBits)}
     minEncodingIndex := 0.U
