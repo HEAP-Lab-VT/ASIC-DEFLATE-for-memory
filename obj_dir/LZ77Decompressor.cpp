@@ -56,7 +56,7 @@ int main(int argc, char **argv, char **env)
 		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
-		decompressor->io_out_finished = bytesRead == 0;
+		decompressor->io_in_finished = bytesRead == 0;
 		inBufIdx += bytesRead;
 		decompressor->io_in_bits_0 = inBuf[0];
 		decompressor->io_in_bits_1 = inBuf[1];
@@ -111,8 +111,8 @@ int main(int argc, char **argv, char **env)
 			Verilated::timeInc(1);
 		}
 #endif
-} while(!decompressor->io_out_finished
-		&& !TIMEOUT_ENABLE || cycles++ < TIMEOUT_CYCLES);
+	} while(!decompressor->io_out_finished
+		&& (!TIMEOUT_ENABLE || cycles++ < TIMEOUT_CYCLES));
 	
 	if(inf != stdin)
 		fclose(inf);
