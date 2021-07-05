@@ -56,7 +56,7 @@ int main(int argc, char **argv, char **env)
 		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
-		compressor->io_in_finished = bytesRead == 0;
+		compressor->io_in_finished = !bytesRead && !inBufIdx;
 		inBufIdx += bytesRead;
 		compressor->io_in_bits_0 = inBuf[0];
 		compressor->io_in_bits_1 = inBuf[1];
