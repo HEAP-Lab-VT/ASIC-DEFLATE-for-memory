@@ -64,7 +64,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   
   switch(state) {
     is(waitingForInput) {
-      when(io.in.finished) {
+      when(io.in.finished && io.in.valid === 0.U) {
         io.out.finished := true.B
         state := finished
       }.elsewhen(io.in.bits(0) =/= params.escapeCharacter.U ||
@@ -104,12 +104,20 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
         
         // assert ready and valid signals
         io.in.ready := out_to_in_index(io.out.ready).min(litcount)
-        io.out.valid := litcount - (pops(litcount) >> 1)
+        io.out.valid := (litcount - (pops(litcount) >> 1)) min
+          params.decompressorMaxCharactersOut.U
+        
+        io.out.finished := io.in.finished && litcount === io.in.valid &&
+          (litcount - (pops(litcount) >> 1)) <=
+            params.decompressorMaxCharactersOut.U
       }.elsewhen(io.in.valid < params.minCharactersToEncode.U) {
         // this might be an encoding, but not enough valid input to process it
-        // todo: buffer input in this case
         io.in.ready := 0.U
         io.out.valid := 0.U
+        io.out.finished := io.in.finished
+        
+        // if in-finished is asserted, then valid must be zero
+        // because otherwise, the decompressor would end in an invalid state
       } otherwise {
         // The input is not an ordinary character, it's an encoding.
         state := copyingDataFromHistory
@@ -186,6 +194,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
               matchLength := DontCare
               matchContinue := DontCare
             }
+            io.out.finished := io.in.finished && io.in.valid === (index + 1).U
           }
           when(index.U === io.in.valid) {
             // this marks the beginning of valid data
@@ -194,6 +203,7 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
             matchLength := 0.U
             matchContinue := true.B
             state := copyingDataFromHistory
+            // io.out.finished := false.B
           }
           when(io.out.ready < whole) {
             // receiver is not ready for this block

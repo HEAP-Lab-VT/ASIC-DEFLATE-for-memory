@@ -75,7 +75,6 @@ int main(int argc, char **argv, char **env)
 			inBuf[i] = inBuf[i + c];
 		
 		c = min(decompressor->io_out_valid, decompressor->io_out_ready);
-		if(decompressor->io_out_finished) c = 0;
 		char tmpBuf[OUT_VEC_SIZE];
 		tmpBuf[0] = decompressor->io_out_bits_0;
 		tmpBuf[1] = decompressor->io_out_bits_1;
