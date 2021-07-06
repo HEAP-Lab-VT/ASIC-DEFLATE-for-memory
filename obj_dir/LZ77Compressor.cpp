@@ -78,7 +78,6 @@ int main(int argc, char **argv, char **env)
 			inBuf[i] = inBuf[i + c];
 		
 		c = min(compressor->io_out_valid, compressor->io_out_ready);
-		if(compressor->io_out_finished) c = 0;
 		char tmpBuf[OUT_VEC_SIZE];
 		tmpBuf[0] = compressor->io_out_bits_0;
 		tmpBuf[1] = compressor->io_out_bits_1;

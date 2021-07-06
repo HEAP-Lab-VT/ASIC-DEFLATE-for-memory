@@ -15,7 +15,6 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   val cam = Module(new multiByteCAM(params))
   val encoder = Module(new LZ77Encoder(params))
   
-  val camLitCount = Mux(cam.io.finished, 0.U, cam.io.literalCount)
   val moreLiterals = RegInit(false.B)
   
   val inBuffer = Module(UniversalConnector(
@@ -25,22 +24,18 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   inBuffer.io.in <> io.in
   cam.io.charsIn <> inBuffer.io.out
   
-  when(!encoder.io.out.finished && !moreLiterals) {
+  when(encoder.io.working && !moreLiterals) {
     // if encoder is working, disconnect CAM
     inBuffer.io.out.ready := 0.U
     cam.io.charsIn.valid := 0.U
     cam.io.charsIn.bits := DontCare
-    // cam.io.charsIn.finished := false.B
+    cam.io.charsIn.finished :=
+      inBuffer.io.out.finished && inBuffer.io.out.valid === 0.U
   }
   
   // connect CAM to encoder
-  when(!cam.io.finished) {
-    encoder.io.matchLength := cam.io.matchLength
-    encoder.io.matchCAMAddress := cam.io.matchCAMAddress
-  } otherwise {
-    encoder.io.matchLength := 0.U
-    encoder.io.matchCAMAddress := DontCare
-  }
+  encoder.io.matchLength := cam.io.matchLength
+  encoder.io.matchCAMAddress := cam.io.matchCAMAddress
   
   // output literal
   val midEscape = RegInit(false.B)
@@ -64,7 +59,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
         when(outindex +& 1.U < io.out.bits.length.U) {
           io.out.bits(outindex + 1.U) := params.escapeCharacter.U
         }
-        when(outindex +& 1.U === io.out.ready && index.U < camLitCount) {
+        when(outindex +& 1.U === io.out.ready && index.U < cam.io.literalCount) {
           midEscape := true.B
         }
       }
@@ -72,9 +67,9 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   }
   
   // output encoding
-  val outLitCount = camLitCount +& midEscape +& (
+  val outLitCount = cam.io.literalCount +& midEscape +& (
     PopCount(cam.io.charsIn.bits.zipWithIndex
-      .map(c => c._1 === params.escapeCharacter.U && c._2.U < camLitCount)))
+      .map(c => c._1 === params.escapeCharacter.U && c._2.U < cam.io.literalCount)))
   for(index <- 0 until params.compressorMaxCharactersOut)
     when(outLitCount < (io.out.bits.length - index).U) {
       io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)
@@ -87,7 +82,8 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   // calculate valid and finished
   io.out.valid := (outLitCount +& encoder.io.out.valid) min
     params.compressorMaxCharactersOut.U
-  io.out.finished := cam.io.finished && encoder.io.out.finished
+  io.out.finished := cam.io.finished && encoder.io.out.finished &&
+    outLitCount +& encoder.io.out.valid <= params.compressorMaxCharactersOut.U
 }
 
 object lz77Compressor extends App {

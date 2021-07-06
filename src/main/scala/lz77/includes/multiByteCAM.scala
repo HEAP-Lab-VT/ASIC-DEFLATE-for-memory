@@ -89,6 +89,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   // and rank CAM indexes based on match length
   val matchRow =
     Wire(Vec(params.camCharacters, UInt(params.camMaxCharsInBits.W)))
+  val literalCount = Wire(UInt(params.camMaxCharsInBits.W))
   when(continueLength === 0.U) {
     // start a match from scratch
     
@@ -109,7 +110,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
             .reduce(_ || _),
           curRow)})
     
-    io.literalCount := row.lit
+    literalCount := row.lit
     matchRow := row.row
     
   } otherwise {
@@ -118,7 +119,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       .zip(continues)
       .map(a => Mux(a._2, a._1, 0.U))
     
-    io.literalCount := 0.U
+    literalCount := 0.U
   }
   
   val (matchLength, matchCAMAddress) = matchRow
@@ -133,55 +134,37 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   io.finished := false.B
   io.matchLength := 0.U
   io.matchCAMAddress := DontCare
+  io.literalCount := literalCount
   continueLength := 0.U
   continues := DontCare
   
-  when(continueLength + matchLength >= params.minCharactersToEncode.U) {
-    when(matchLength + io.literalCount === io.charsIn.valid) {
-      when(io.literalCount <= io.maxLiteralCount) {
-        continueLength := continueLength + matchLength
-        continues := matchRow.map(_ === io.charsIn.valid - io.literalCount)
-      }
-    } otherwise {
+  when(continueLength =/= 0.U || matchLength >= params.minCharactersToEncode.U){
+    when(matchLength + literalCount =/= io.charsIn.valid ||
+        io.charsIn.finished) {
       io.matchLength := continueLength + matchLength
       io.matchCAMAddress := Mux(matchLength === 0.U,
         PriorityEncoder(continues),
         matchCAMAddress)
+    }.elsewhen(literalCount <= io.maxLiteralCount) {
+      continueLength := continueLength + matchLength
+      continues := matchRow.map(_ === io.charsIn.valid - literalCount)
     }
+  }.elsewhen(io.charsIn.finished) {
+    io.literalCount := literalCount + matchLength
   }
   
-  when(io.literalCount <= io.maxLiteralCount) {
-    when(continueLength + matchLength >= params.minCharactersToEncode.U) {
-      io.charsIn.ready := io.literalCount + matchLength
-    } otherwise {
-      io.charsIn.ready := io.literalCount
-    }
-  } otherwise {
+  when(continueLength =/= 0.U) {
+    io.charsIn.ready := matchLength
+  }.elsewhen(literalCount > io.maxLiteralCount) {
     io.charsIn.ready := io.maxLiteralCount
+  }.elsewhen(matchLength >= params.minCharactersToEncode.U) {
+    io.charsIn.ready := literalCount + matchLength
+  } otherwise {
+    io.charsIn.ready := io.literalCount
   }
   
-  // handle finished state
-  when(io.charsIn.finished) {
-    when(continueLength === 0.U) {
-      // finish immediately
-      io.finished := true.B
-      io.charsIn.ready := DontCare
-      io.literalCount := DontCare
-      io.matchLength := DontCare
-      io.matchCAMAddress := DontCare
-      continueLength := 0.U
-      continues := DontCare
-    } otherwise {
-      // output continued match before finishing
-      io.finished := false.B
-      io.charsIn.ready := DontCare
-      io.literalCount := 0.U
-      io.matchLength := continueLength
-      io.matchCAMAddress := PriorityEncoder(continues)
-      continueLength := 0.U
-      continues := DontCare
-    }
-  }
+  // compute finished
+  io.finished := io.charsIn.finished && io.charsIn.ready === io.charsIn.valid
 }
 
 object multiByteCAM extends App {

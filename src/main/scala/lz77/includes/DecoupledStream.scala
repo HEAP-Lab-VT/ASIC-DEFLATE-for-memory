@@ -14,7 +14,13 @@ import chisel3.util._
  * consumer uses the DecoupledStream flipped. The number of data elements that
  * are passed through the interface in a cycle is the minimum of the ready and
  * valid signals. The bits signal carries the data elements, and at least as
- * many elements must be valid that is specified by the valid signal.
+ * many elements must be valid that are specified by the valid signal.
+ *
+ * The finished signal is asserted by the producer only if there are no more
+ * data elements beyond the currently valid elements. A producer is technically
+ * allowed to wait to assert this signal until all data is passed through;
+ * however, this behavour could cause deadlock if the consumer accepts data in
+ * chunks, so producers are encouraged to assert the signal as soon as possible.
  * 
  * There are two types of producers and consumers: 'push' and 'pull'. Sometimes,
  * a push producer is called a 'compatable' producer and a pull consuer is
@@ -62,6 +68,11 @@ object DecoupledStream {
  * is a pull (i.e. compatable) consumer and a push (i.e. compatable) producer.
  * This module can be used as a compatability layer to connect a push consumer
  * with a pull producer.
+ * 
+ * This module may also be used to convert between DecoupledStream interfaces of
+ * different sizes. This behavour can be particularly useful when a consumer
+ * accepts chuncked or lookahead data since this module will act as a buffer to
+ * facilitate such a consumer
  */
 class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
     extends Module {
@@ -83,17 +94,16 @@ class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
     io.out.bits(i) :=
       Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength))
   
-  io.out.valid := Mux(io.in.finished, bufferLength,
-    (bufferLength +& io.in.valid) min outSize.U)
+  io.out.valid := (bufferLength +& io.in.valid) min outSize.U
   io.in.ready := outSize.U - bufferLength
-  io.out.finished := io.in.finished && bufferLength === 0.U
+  io.out.finished := io.in.finished && io.in.ready >= io.in.valid
 }
 
-object ReadyDecoupler {
+object UniversalConnector {
   def apply[T <: Data](
       inSize: Int = 0,
       outSize: Int = 0,
       gen: T = new Bundle {}):
-      ReadyDecoupler[T] =
-    new ReadyDecoupler(inSize, outSize, gen)
+      UniversalConnector[T] =
+    new UniversalConnector(inSize, outSize, gen)
 }

@@ -9,6 +9,8 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
     val out = DecoupledStream(params.compressorMaxCharactersOut, UInt(params.characterBits.W))
     val matchLength = Input(UInt(params.patternLengthBits.W))
     val matchCAMAddress = Input(UInt(params.camAddressBits.W))
+    
+    val working = Output(Bool())
   })
   
   val remainingLengthType = UInt(log2Ceil(params.maxPatternLength + (params.minEncodingWidth / params.characterBits * params.extraCharacterLengthIncrease - params.maxCharactersInMinEncoding) + 1).W)
@@ -23,6 +25,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   val minEncoding = WireDefault(minEncodingReg)
   val minEncodingIndex = WireDefault(minEncodingIndexType, minEncodingIndexReg)
   
+  io.working := remainingLengthReg =/= 0.U
   
   when(io.matchLength =/= 0.U) {
     remainingLength := Mux(io.matchLength > params.maxCharactersInMinEncoding.U,
@@ -43,7 +46,7 @@ class LZ77Encoder(params: lz77Parameters) extends Module {
   }
   
   
-  io.out.finished := remainingLengthReg === 0.U
+  io.out.finished := remainingLength <= (params.compressorMaxCharactersOut * params.extraCharacterLengthIncrease).U
   io.out.valid := 0.U
   io.out.bits := DontCare
   for(index <- 0 until params.compressorMaxCharactersOut) {
