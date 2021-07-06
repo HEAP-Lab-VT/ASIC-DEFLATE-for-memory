@@ -50,6 +50,7 @@ int main(int argc, char **argv, char **env)
 	compressor->reset = 0;
 	
 	int cycles = 0;
+	int timeout = TIMEOUT_CYCLES;
 	do {
 		compressor->clock = 1;
 		compressor->eval();
@@ -76,6 +77,8 @@ int main(int argc, char **argv, char **env)
 		inBufIdx -= c;
 		for(int i = 0; i < inBufIdx; i++)
 			inBuf[i] = inBuf[i + c];
+		
+		if(c) timeout = TIMEOUT_CYCLES;
 		
 		c = min(compressor->io_out_valid, compressor->io_out_ready);
 		char tmpBuf[OUT_VEC_SIZE];
@@ -113,8 +116,8 @@ int main(int argc, char **argv, char **env)
 			Verilated::timeInc(1);
 		}
 #endif
-	} while(!compressor->io_out_finished
-		&& (!TIMEOUT_ENABLE || cycles++ < TIMEOUT_CYCLES));
+		cycles++;
+	} while(!compressor->io_out_finished && (!TIMEOUT_ENABLE || --timeout));
 	
 	if(inf != stdin)
 		fclose(inf);
@@ -129,7 +132,10 @@ int main(int argc, char **argv, char **env)
 	
 	delete compressor;
 	
-	fprintf(stderr, "compressor cycles: %d\n", cycles);
+	if(timeout)
+		fprintf(stderr, "compressor cycles: %d\n", cycles);
+	else
+		fprintf(stderr, "compressor cycles: %d (timeout)\n", cycles);
 	
 	exit(0);
 }
