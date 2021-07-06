@@ -43,10 +43,13 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   }
   
   // output literal
+  val midEscape = RegInit(false.B)
+  midEscape := midEscape && io.out.ready === 0.U
   cam.io.maxLiteralCount := 0.U
   io.out.bits := DontCare
+  when(midEscape) {io.out.bits(0) := params.escapeCharacter.U}
   for(index <- 0 to params.camMaxCharsIn) {
-    val outindex = index.U +
+    val outindex = index.U +& midEscape +&
       (PopCount(cam.io.charsIn.bits.take(index)
         .map(_ === params.escapeCharacter.U)))
     
@@ -57,15 +60,19 @@ class lz77Compressor(params: lz77Parameters) extends Module {
     if(index < params.camMaxCharsIn)
     when(outindex < io.out.bits.length.U) {
       io.out.bits(outindex) := cam.io.charsIn.bits(index)
-      when(cam.io.charsIn.bits(index) === params.escapeCharacter.U &&
-          outindex + 1.U < io.out.bits.length.U) {
-        io.out.bits(outindex + 1.U) := params.escapeCharacter.U
+      when(cam.io.charsIn.bits(index) === params.escapeCharacter.U) {
+        when(outindex +& 1.U < io.out.bits.length.U) {
+          io.out.bits(outindex + 1.U) := params.escapeCharacter.U
+        }
+        when(outindex +& 1.U === io.out.ready && index.U < camLitCount) {
+          midEscape := true.B
+        }
       }
     }
   }
   
   // output encoding
-  val outLitCount = camLitCount + (
+  val outLitCount = camLitCount +& midEscape +& (
     PopCount(cam.io.charsIn.bits.zipWithIndex
       .map(c => c._1 === params.escapeCharacter.U && c._2.U < camLitCount)))
   for(index <- 0 until params.compressorMaxCharactersOut)
