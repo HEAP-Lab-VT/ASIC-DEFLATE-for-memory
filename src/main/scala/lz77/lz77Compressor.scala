@@ -18,7 +18,7 @@ class lz77Compressor(params: lz77Parameters) extends Module {
   val camLitCount = Mux(cam.io.finished, 0.U, cam.io.literalCount)
   val moreLiterals = RegInit(false.B)
   
-  val inBuffer = Module(ReadyDecoupler(
+  val inBuffer = Module(UniversalConnector(
     params.compressorMaxCharacters,
     params.compressorMaxCharacters,
     UInt(params.characterBits.W)))

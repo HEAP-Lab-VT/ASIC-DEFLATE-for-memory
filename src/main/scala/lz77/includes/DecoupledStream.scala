@@ -3,7 +3,41 @@ package lz77.util
 import chisel3._
 import chisel3.util._
 
-// This is adapted from the Chisel source for `chisel3.util.Decoupled`.
+
+/**
+ * `DecoupledStream` is an adaption of `chisel3.util.Decoupled` that adds the
+ * capability to specify *how many* elements are ready or valid.
+ * 
+ * A DecoupledStream has two parts: a producer and a consumer. The producer
+ * is effectively "the output" of a stream of data, and the consumer is the
+ * receiver of the data. The producer uses the DecoupledStream as is, and the
+ * consumer uses the DecoupledStream flipped. The number of data elements that
+ * are passed through the interface in a cycle is the minimum of the ready and
+ * valid signals. The bits signal carries the data elements, and at least as
+ * many elements must be valid that is specified by the valid signal.
+ * 
+ * There are two types of producers and consumers: 'push' and 'pull'. Sometimes,
+ * a push producer is called a 'compatable' producer and a pull consuer is
+ * called a 'compatable' consumer.
+ * - A pull producer is wired such that the valid (or bits) signal is dependent
+ *   on the ready signal. Effectively, this requires the consumer to "pull" data
+ *   out of the producer.
+ * - A push (a.k.a. compatable) producer asserts the valid (and bits) signal
+ *   independent of the ready signal. Effectively, this "pushes" data to the
+ *   consumer (and the consumer decides how much to accept).
+ * - A push consumer is wired such that the ready signal is dependent on the
+ *   valid (or bits) signal. This arrangement requires the producer to "push"
+ *   data to the consumer.
+ * - A pull (a.k.a. compatable) consumer asserts the ready signal independent of
+ *   the valid (and bits) signal. This effectively "pulls" data from the
+ *   producer.
+ * A compatable type can be safely attached to both push and pull types i.e. the
+ * only unsafe attachment is between a pull producer and a push consumer.
+ * Connecting a pull producer and a push consumer is very likely to create
+ * circular combinational logic. If a pull producer and a push consumer must be
+ * connected, then a `UniversalConnector` may be placed between the two
+ * components as a compatability layer.
+ */
 class DecoupledStream[T <: Data](count: Int, gen: T)
     extends Bundle {
   
@@ -22,7 +56,14 @@ object DecoupledStream {
 }
 
 
-class ReadyDecoupler[T <: Data](inSize: Int, outSize: Int, gen: T)
+/**
+ * A stream pipeline module that passes data through unchanged and has
+ * compatable DecoupledStream interfaces on both sides. That is, this module
+ * is a pull (i.e. compatable) consumer and a push (i.e. compatable) producer.
+ * This module can be used as a compatability layer to connect a push consumer
+ * with a pull producer.
+ */
+class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
     extends Module {
   val io = IO(new StreamBundle(inSize, gen, outSize, gen))
   
