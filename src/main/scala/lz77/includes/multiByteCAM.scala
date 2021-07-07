@@ -122,7 +122,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
     literalCount := 0.U
   }
   
-  val (matchLength, matchCAMAddress) = matchRow
+  val (nolimitMatchLength, matchCAMAddress) = matchRow
     .zipWithIndex
     .map{case (len, add) => (len, add.U)}
     .reduce[(UInt, UInt)]{case ((len1, add1), (len2, add2)) =>
@@ -130,6 +130,8 @@ class multiByteCAM(params: lz77Parameters) extends Module {
       ( Mux(is1, len1, len2),
         Mux(is1, add1, add2))
     }
+  val matchLength =
+    nolimitMatchLength min (params.maxPatternLength.U - continueLength)
   
   io.finished := false.B
   io.matchLength := 0.U
