@@ -48,8 +48,8 @@ class lz77Compressor(params: lz77Parameters) extends Module {
       (PopCount(cam.io.charsIn.bits.take(index)
         .map(_ === params.escapeCharacter.U)))
     
-    when(outindex <= io.out.ready) {
-      cam.io.maxLiteralCount := index.U
+    when(outindex < io.out.ready) {
+      cam.io.maxLiteralCount := (index + 1).U
     }
     
     if(index < params.camMaxCharsIn)
