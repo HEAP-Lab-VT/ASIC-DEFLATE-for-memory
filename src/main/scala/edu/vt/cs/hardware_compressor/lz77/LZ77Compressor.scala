@@ -15,20 +15,15 @@ class LZ77Compressor(params: Parameters) extends Module {
   
   val moreLiterals = RegInit(false.B)
   
-  val inBuffer = Module(UniversalConnector(
-    params.compressorMaxCharacters,
-    params.compressorMaxCharacters,
-    UInt(params.characterBits.W)))
-  inBuffer.io.in <> io.in
-  cam.io.charsIn <> inBuffer.io.out
+  cam.io.charsIn <> io.in
   
   when(encoder.io.working && !moreLiterals) {
     // if encoder is working, disconnect CAM
-    inBuffer.io.out.ready := 0.U
+    io.in.ready := 0.U
     cam.io.charsIn.valid := 0.U
     cam.io.charsIn.bits := DontCare
     cam.io.charsIn.finished :=
-      inBuffer.io.out.finished && inBuffer.io.out.valid === 0.U
+      io.in.finished && io.in.valid === 0.U
   }
   
   // connect CAM to encoder
