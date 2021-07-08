@@ -1,7 +1,6 @@
-package lz77
+package edu.vt.cs.hardware_compressor.lz77
 
-import lz77Decompressor._
-import lz77Parameters._
+import edu.vt.cs.hardware_compressor.util._
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._
@@ -94,7 +93,7 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
     val input =
       expect.flatMap(d => if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
     
-    chisel3.iotesters.Driver(() => new lz77Decompressor(params)){lz77 =>
+    chisel3.iotesters.Driver(() => new LZ77Decompressor(params)){lz77 =>
       new StreamComparisonTester(lz77, input, expect)
     } should be (true)
   }
@@ -104,7 +103,7 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
     var (input, expect) = generateCompressed(params, 10000, false)
     
     chisel3.iotesters.Driver.execute(Array(),
-      () => new lz77Decompressor(params))
+      () => new LZ77Decompressor(params))
     {lz77 =>
       new StreamComparisonTester(lz77, input, expect)
     } should be (true)
@@ -115,7 +114,7 @@ class LZ77DecompressorTest extends AnyFlatSpec with Matchers {
     var (expect, input) = LZ77Golden.generateData(10000, params, true)
     
     chisel3.iotesters.Driver.execute(Array(),
-      () => new lz77Decompressor(params))
+      () => new LZ77Decompressor(params))
     {lz77 =>
       new StreamComparisonTester(lz77, input, expect)
     } should be (true)

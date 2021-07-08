@@ -61,10 +61,12 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.fu
 // ignore broken glue logic caused by change to lz77 interface
 // todo: fix the broken glue logic
 unmanagedSources / excludeFilter := HiddenFileFilter ||
-  "lz77And*" ||
-  "singleCyclePatternSearch.scala" ||
-  "lz77CompressorDecompressor.scala" ||
-  "LZ77Test.scala"
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (baseDirectory.value / "src" / "main" / "scala" / "combinations" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (baseDirectory.value / "src" / "main" / "scala" / "huffman" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (baseDirectory.value / "src" / "main" / "scala" / "lzw" getCanonicalPath))
 
 // workaround for sbt bug that causes a hang when killing test execution
 Global / cancelable := false

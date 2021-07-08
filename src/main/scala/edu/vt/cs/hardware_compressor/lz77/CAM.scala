@@ -1,11 +1,10 @@
-package multiByteCAM
+package edu.vt.cs.hardware_compressor.lz77
 
+import edu.vt.cs.hardware_compressor.util._
 import chisel3._
 import chisel3.util._
-import lz77Parameters._
-import lz77.util._
 
-class multiByteCAM(params: lz77Parameters) extends Module {
+class CAM(params: Parameters) extends Module {
   
   val io = IO(new Bundle {
     val charsIn = Flipped(DecoupledStream(
@@ -167,11 +166,4 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   // compute finished
   io.finished := io.charsIn.finished && io.charsIn.ready === io.charsIn.valid
-}
-
-object multiByteCAM extends App {
-  val settingsGetter = new getLZ77FromCSV()
-  val lz77Config = settingsGetter.getLZ77FromCSV("configFiles/lz77.csv")
-  chisel3.Driver
-    .execute(Array[String](), () => new multiByteCAM(lz77Config))
 }

@@ -1,11 +1,10 @@
-package lz77Decompressor
+package edu.vt.cs.hardware_compressor.lz77
 
+import edu.vt.cs.hardware_compressor.util._
 import chisel3._
 import chisel3.util._
-import lz77Parameters._
-import lz77.util._
 
-class lz77Decompressor(params: lz77Parameters) extends Module {
+class LZ77Decompressor(params: Parameters) extends Module {
   
   // val io = IO(new Bundle {
   // // todo: add parameter for max chars in and don't use maxEncodingCharacterWidths here
@@ -233,8 +232,8 @@ class lz77Decompressor(params: lz77Parameters) extends Module {
   }
 }
 
-object lz77Decompressor extends App {
+object LZ77Decompressor extends App {
   val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
   new chisel3.stage.ChiselStage()
-    .emitVerilog(new lz77Decompressor(params), args)
+    .emitVerilog(new LZ77Decompressor(params), args)
 }

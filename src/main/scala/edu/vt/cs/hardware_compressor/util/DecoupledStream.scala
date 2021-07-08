@@ -1,4 +1,4 @@
-package lz77.util
+package edu.vt.cs.hardware_compressor.util
 
 import chisel3._
 import chisel3.util._
@@ -106,4 +106,13 @@ object UniversalConnector {
       gen: T = new Bundle {}):
       UniversalConnector[T] =
     new UniversalConnector(inSize, outSize, gen)
+}
+
+
+class StreamBundle[I <: Data, O <: Data](inC: Int, inGen: I, outC: Int, outGen: O) extends Bundle {
+  val in = Flipped(DecoupledStream(inC, inGen))
+  val out = DecoupledStream(outC, outGen)
+  
+  override def cloneType: this.type =
+    new StreamBundle(inC, inGen, outC, outGen).asInstanceOf[this.type]
 }

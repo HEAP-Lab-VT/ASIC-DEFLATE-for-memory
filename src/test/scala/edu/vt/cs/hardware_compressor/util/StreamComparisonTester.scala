@@ -1,6 +1,5 @@
-package lz77
+package edu.vt.cs.hardware_compressor.util
 
-import lz77.util._
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._

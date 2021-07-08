@@ -1,10 +1,10 @@
-package lz77.util
+package edu.vt.cs.hardware_compressor.lz77
 
+import edu.vt.cs.hardware_compressor.util._
 import chisel3._
 import chisel3.util._
-import lz77Parameters._
 
-class LZ77Encoder(params: lz77Parameters) extends Module {
+class LZ77Encoder(params: Parameters) extends Module {
   val io = IO(new Bundle {
     val out = DecoupledStream(params.compressorMaxCharactersOut, UInt(params.characterBits.W))
     val matchLength = Input(UInt(params.patternLengthBits.W))

@@ -1,6 +1,5 @@
-package lz77
+package edu.vt.cs.hardware_compressor.lz77
 
-import lz77Parameters._
 import scala.util.control.Breaks._
 
 object LZ77Golden {

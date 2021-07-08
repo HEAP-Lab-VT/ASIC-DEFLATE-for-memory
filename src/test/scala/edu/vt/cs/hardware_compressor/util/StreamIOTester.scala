@@ -1,14 +1,12 @@
-package lz77.util
+package edu.vt.cs.hardware_compressor.util
 
-import lz77Decompressor._
-import lz77Parameters._
 import chisel3._
 import chisel3.util._
 import chisel3.iotesters._
 import java.io._
 import scala.util.control.Breaks._
 
-class StreamTester[T <: Module {def io : StreamBundle[UInt, UInt]}](module: T, in: InputStream, out: OutputStream)
+class StreamIOTester[T <: Module {def io : StreamBundle[UInt, UInt]}](module: T, in: InputStream, out: OutputStream)
     extends PeekPokeTester(module) {
   
   val inBuf = new Array[Byte](module.io.in.bits.length)
@@ -53,13 +51,4 @@ class StreamTester[T <: Module {def io : StreamBundle[UInt, UInt]}](module: T, i
     out.write(outBuf, 0, outBufLen)
     outBufLen = 0
   }}
-}
-
-
-
-object LZ77DecompressStdIO extends App {
-  val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
-  
-  chisel3.iotesters.Driver.execute(args, () => new lz77Decompressor(params))
-    {lz77 => new StreamTester(lz77, java.lang.System.in, java.lang.System.out)}
 }

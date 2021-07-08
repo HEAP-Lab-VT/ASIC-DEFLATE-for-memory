@@ -1,18 +1,16 @@
-package lz77Compressor
+package edu.vt.cs.hardware_compressor.lz77
 
+import edu.vt.cs.hardware_compressor.util._
 import chisel3._
 import chisel3.util._
-import lz77Parameters._
-import multiByteCAM._
-import lz77.util._
 
-class lz77Compressor(params: lz77Parameters) extends Module {
+class LZ77Compressor(params: Parameters) extends Module {
   
   val io = IO(new StreamBundle(
     params.compressorMaxCharacters, UInt(params.characterBits.W),
     params.compressorMaxCharactersOut, UInt(params.characterBits.W)))
   
-  val cam = Module(new multiByteCAM(params))
+  val cam = Module(new CAM(params))
   val encoder = Module(new LZ77Encoder(params))
   
   val moreLiterals = RegInit(false.B)
@@ -86,8 +84,8 @@ class lz77Compressor(params: lz77Parameters) extends Module {
     outLitCount +& encoder.io.out.valid <= params.compressorMaxCharactersOut.U
 }
 
-object lz77Compressor extends App {
+object LZ77Compressor extends App {
   val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
   new chisel3.stage.ChiselStage()
-    .emitVerilog(new lz77Compressor(params), args)
+    .emitVerilog(new LZ77Compressor(params), args)
 }

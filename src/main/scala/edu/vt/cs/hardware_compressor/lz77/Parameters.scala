@@ -1,9 +1,9 @@
-package lz77Parameters
+package edu.vt.cs.hardware_compressor.lz77
 
 import chisel3._
 import chisel3.util._
 
-class lz77Parameters(
+class Parameters(
     characterBitsParam: Int,
     charactersToCompressParam: Int,
     camCharactersParam: Int,
@@ -108,7 +108,7 @@ class lz77Parameters(
 
 class getLZ77FromCSV() {
   // This checks for errors in the configuration and prints a warning and exits if they are present.
-  def checkConfiguration(params: lz77Parameters) {
+  def checkConfiguration(params: Parameters) {
     if(params.characterBits < 2){
       println("Error, characterBits cannot be less than 2. Exitting.")
       sys.exit(1)
@@ -140,7 +140,7 @@ class getLZ77FromCSV() {
   }
 
   // This takes a dictionary entry and gets the character bits from it.
-  def getLZ77FromCSV(csvFilepath: String): lz77Parameters = {
+  def getLZ77FromCSV(csvFilepath: String): Parameters = {
 
     var boolMap: Map[String, Boolean] = Map()
     var intMap: Map[String, Int] = Map()
@@ -163,7 +163,7 @@ class getLZ77FromCSV() {
     file.close
 
     println("Getting from CSV test was successful")
-    val lz77ParametersOutput = new lz77Parameters(
+    val lz77ParametersOutput = new Parameters(
       characterBitsParam = intMap("characterBits"),
       charactersToCompressParam = intMap("charactersToCompress"),
       camCharactersParam = intMap("camCharacters"),
