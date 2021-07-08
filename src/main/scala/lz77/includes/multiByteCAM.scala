@@ -157,7 +157,7 @@ class multiByteCAM(params: lz77Parameters) extends Module {
   
   when(continueLength =/= 0.U) {
     io.charsIn.ready := matchLength
-  }.elsewhen(literalCount > io.maxLiteralCount) {
+  }.elsewhen(io.literalCount > io.maxLiteralCount) {
     io.charsIn.ready := io.maxLiteralCount
   }.elsewhen(matchLength >= params.minCharactersToEncode.U) {
     io.charsIn.ready := literalCount + matchLength
