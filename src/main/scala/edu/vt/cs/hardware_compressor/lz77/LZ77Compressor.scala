@@ -53,7 +53,7 @@ class LZ77Compressor(params: Parameters) extends Module {
         when(outindex +& 1.U < io.out.bits.length.U) {
           io.out.bits(outindex + 1.U) := params.escapeCharacter.U
         }
-        when(outindex +& 1.U === io.out.ready && index.U < cam.io.literalCount) {
+        when(outindex +& 1.U === io.out.ready && index.U < cam.io.literalCount){
           midEscape := true.B
         }
       }
@@ -63,7 +63,8 @@ class LZ77Compressor(params: Parameters) extends Module {
   // output encoding
   val outLitCount = cam.io.literalCount +& midEscape +& (
     PopCount(cam.io.charsIn.bits.zipWithIndex
-      .map(c => c._1 === params.escapeCharacter.U && c._2.U < cam.io.literalCount)))
+      .map(c => c._1 === params.escapeCharacter.U &&
+        c._2.U < cam.io.literalCount)))
   for(index <- 0 until params.compressorCharsOut)
     when(outLitCount < (io.out.bits.length - index).U) {
       io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)

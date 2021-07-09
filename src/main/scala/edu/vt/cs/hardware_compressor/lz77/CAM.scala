@@ -140,7 +140,7 @@ class CAM(params: Parameters) extends Module {
   continueLength := 0.U
   continues := DontCare
   
-  when(continueLength =/= 0.U || matchLength >= params.minCharsToEncode.U){
+  when(continueLength =/= 0.U || matchLength >= params.minCharsToEncode.U) {
     when(matchLength + literalCount =/= io.charsIn.valid ||
         io.charsIn.finished) {
       io.matchLength := continueLength + matchLength

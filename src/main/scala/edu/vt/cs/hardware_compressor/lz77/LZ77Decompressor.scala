@@ -6,15 +6,6 @@ import chisel3._
 import chisel3.util._
 
 class LZ77Decompressor(params: Parameters) extends Module {
-  
-  // val io = IO(new Bundle {
-  // // todo: add parameter for max chars in and don't use maxEncodingCharacterWidths here
-  // val in = Flipped(DecoupledStream(params.maxEncodingCharacterWidths,
-  //     UInt(params.characterBits.W)))
-  // val out = DecoupledStream(params.decompressorMaxCharactersOut,
-  //     UInt(params.characterBits.W))
-  // })
-  
   val io = IO(new StreamBundle(
     params.decompressorCharsIn, UInt(params.characterBits.W),
     params.decompressorCharsOut, UInt(params.characterBits.W)))
@@ -25,11 +16,10 @@ class LZ77Decompressor(params: Parameters) extends Module {
   io.out.bits := DontCare
   io.out.finished := false.B
   
-  // This register is likely the most complicated part of the design, as params.decompressorCharsOut will determine how many read and write ports it requires.
-  // use Mem to avoid FIRRTL stack overflow (chisel3 issue #642)
-  // val byteHistory = Reg(Vec(params.camSize.idxBits, UInt(params.characterBits.W)))
+  // Mem avoids FIRRTL stack overflow (chisel3 issue #642)
+  // Mem uses verilog array instead of chained muxes
   val byteHistory = Mem(params.camSize, UInt(params.characterBits.W))
-  // This keeps track of how many characters have been output by the design.
+  // the position in byteHistory of the next byte to write
   val byteHistoryIndex = RegInit(UInt(params.camSize.idxBits.W), 0.U)
   
   // push chars to history
@@ -48,7 +38,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
     }
   
   
-  // This keeps track of the information from the encoding for the state machine's processing.
+  // This records the encoding header while traversing an encoding
   val matchLength = Reg(UInt(log2Ceil(params.extraCharacterLengthIncrease
     max (params.maxCharsInMinEncoding + 2)).W))
   val matchAddress = Reg(UInt(params.camSize.idxBits.W))
