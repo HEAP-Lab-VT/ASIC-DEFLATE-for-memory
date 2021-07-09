@@ -1,3 +1,4 @@
 rm ./obj_dir/V*
 rm ./obj_dir/*.[adoh]
-verilator -Wno-WIDTH --cc wrappers/lz77CompressorDecompressorWrapper.v lz77CompressorDecompressor.v --exe lz77Simulation.cpp && make -j12 -C obj_dir/ -f Vlz77CompressorDecompressorWrapper.mk Vlz77CompressorDecompressorWrapper
+verilator -Wno-WIDTH --cc LZ77Compressor.v --exe LZ77Compressor.cpp $1 && make -j12 -C obj_dir/ -f VLZ77Compressor.mk VLZ77Compressor
+verilator -Wno-WIDTH --cc LZ77Decompressor.v --exe LZ77Decompressor.cpp $1 && make -j12 -C obj_dir/ -f VLZ77Decompressor.mk VLZ77Decompressor
