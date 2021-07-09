@@ -1,6 +1,7 @@
 package edu.vt.cs.hardware_compressor.lz77
 
 import edu.vt.cs.hardware_compressor.util._
+import Parameters._
 import chisel3._
 import chisel3.util._
 
@@ -15,8 +16,8 @@ class LZ77Decompressor(params: Parameters) extends Module {
   // })
   
   val io = IO(new StreamBundle(
-    params.maxEncodingCharacterWidths, UInt(params.characterBits.W),
-    params.decompressorMaxCharactersOut, UInt(params.characterBits.W)))
+    params.decompressorCharsIn, UInt(params.characterBits.W),
+    params.decompressorCharsOut, UInt(params.characterBits.W)))
   
   // This initializes the outputs of the decompressor.
   io.in.ready := 0.U
@@ -24,33 +25,33 @@ class LZ77Decompressor(params: Parameters) extends Module {
   io.out.bits := DontCare
   io.out.finished := false.B
   
-  // This register is likely the most complicated part of the design, as params.decompressorMaxCharactersOut will determine how many read and write ports it requires.
+  // This register is likely the most complicated part of the design, as params.decompressorCharsOut will determine how many read and write ports it requires.
   // use Mem to avoid FIRRTL stack overflow (chisel3 issue #642)
-  // val byteHistory = Reg(Vec(params.camCharacters, UInt(params.characterBits.W)))
-  val byteHistory = Mem(params.camCharacters, UInt(params.characterBits.W))
+  // val byteHistory = Reg(Vec(params.camSize.idxBits, UInt(params.characterBits.W)))
+  val byteHistory = Mem(params.camSize, UInt(params.characterBits.W))
   // This keeps track of how many characters have been output by the design.
-  val byteHistoryIndex = RegInit(UInt(params.camAddressBits.W), 0.U)
+  val byteHistoryIndex = RegInit(UInt(params.camSize.idxBits.W), 0.U)
   
   // push chars to history
   val newHistoryCount = io.out.valid min io.out.ready
   byteHistoryIndex := (
     if(params.camSizePow2) byteHistoryIndex + newHistoryCount
-    else (byteHistoryIndex +& newHistoryCount) % params.camAddressBits.U)
+    else (byteHistoryIndex +& newHistoryCount) % params.camSize.idxBits.U)
   for(index <- 0 until io.out.bits.length)
     when(index.U < newHistoryCount) {
       byteHistory(
         if(params.camSizePow2)
-          (byteHistoryIndex + index.U)(params.camAddressBits - 1, 0)
+          (byteHistoryIndex + index.U)(params.camSize.idxBits - 1, 0)
         else
-          (byteHistoryIndex + index.U) % params.camAddressBits.U
+          (byteHistoryIndex + index.U) % params.camSize.idxBits.U
       ) := io.out.bits(index)
     }
   
   
   // This keeps track of the information from the encoding for the state machine's processing.
   val matchLength = Reg(UInt(log2Ceil(params.extraCharacterLengthIncrease
-    max (params.maxCharactersInMinEncoding + 2)).W))
-  val matchAddress = Reg(UInt(params.camAddressBits.W))
+    max (params.maxCharsInMinEncoding + 2)).W))
+  val matchAddress = Reg(UInt(params.camSize.idxBits.W))
   val matchContinue = Reg(Bool())
   
   // This handles the state machine logic and storage
@@ -104,12 +105,12 @@ class LZ77Decompressor(params: Parameters) extends Module {
         // assert ready and valid signals
         io.in.ready := out_to_in_index(io.out.ready).min(litcount)
         io.out.valid := (litcount - (pops(litcount) >> 1)) min
-          params.decompressorMaxCharactersOut.U
+          params.decompressorCharsOut.U
         
         io.out.finished := io.in.finished && litcount === io.in.valid &&
           (litcount - (pops(litcount) >> 1)) <=
-            params.decompressorMaxCharactersOut.U
-      }.elsewhen(io.in.valid < params.minCharactersToEncode.U) {
+            params.decompressorCharsOut.U
+      }.elsewhen(io.in.valid < params.minCharsToEncode.U) {
         // this might be an encoding, but not enough valid input to process it
         io.in.ready := 0.U
         io.out.valid := 0.U
@@ -122,20 +123,20 @@ class LZ77Decompressor(params: Parameters) extends Module {
         state := copyingDataFromHistory
         
         val allInputCharacters = io.in.bits
-          .take(params.minCharactersToEncode)
+          .take(params.minCharsToEncode)
           .reduce(_ ## _)
         
         matchAddress := allInputCharacters(
-          params.minEncodingWidth - params.characterBits - 2,
-          params.minEncodingSequenceLengthBits)
-        matchLength := params.minCharactersToEncode.U +& allInputCharacters(
-          params.minEncodingSequenceLengthBits - 1,
+          params.minEncodingBits - params.characterBits - 2,
+          params.minEncodingLengthBits)
+        matchLength := params.minCharsToEncode.U +& allInputCharacters(
+          params.minEncodingLengthBits - 1,
           0)
         matchContinue := allInputCharacters(
-          params.minEncodingSequenceLengthBits - 1,
+          params.minEncodingLengthBits - 1,
           0).andR
         
-        io.in.ready := params.minCharactersToEncode.U
+        io.in.ready := params.minEncodingChars.U
         io.out.valid := 0.U
         
         // todo: process part of the encoding this cycle
@@ -146,16 +147,16 @@ class LZ77Decompressor(params: Parameters) extends Module {
       // processing an encoding
       
       for(index <- 0 until io.out.bits.length)
-        when(matchAddress < (params.camCharacters - index).U) {
+        when(matchAddress < (params.camSize - index).U) {
           io.out.bits(index) := byteHistory(matchAddress + byteHistoryIndex + (
-            if(params.camSizePow2) index.U(params.camAddressBits.W)
-            else Mux((params.camCharacters - index).U - matchAddress >
-              byteHistoryIndex, index.U, (params.camCharacters - index).U)))
+            if(params.camSizePow2) index.U(params.camSize.idxBits.W)
+            else Mux(params.camSize.U - matchAddress - index.U >
+              byteHistoryIndex, index.U, params.camSize.U - index.U)))
         } otherwise {
           if(index > 0)
             io.out.bits(index) :=
-              VecInit(io.out.bits.take(index))(matchAddress -
-                (params.camCharacters - index).U)
+              VecInit(io.out.bits.take(index))(matchAddress +
+                index.U - params.camSize.U)
         }
       
       when(matchContinue) {
@@ -233,7 +234,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
 }
 
 object LZ77Decompressor extends App {
-  val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+  val params = Parameters.fromCSV("configFiles/lz77.csv")
   new chisel3.stage.ChiselStage()
     .emitVerilog(new LZ77Decompressor(params), args)
 }

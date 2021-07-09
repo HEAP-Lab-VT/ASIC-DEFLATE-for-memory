@@ -1,21 +1,22 @@
 package edu.vt.cs.hardware_compressor.lz77
 
 import edu.vt.cs.hardware_compressor.util._
+import Parameters._
 import chisel3._
 import chisel3.util._
 
 class LZ77Compressor(params: Parameters) extends Module {
   
   val io = IO(new StreamBundle(
-    params.compressorMaxCharacters, UInt(params.characterBits.W),
-    params.compressorMaxCharactersOut, UInt(params.characterBits.W)))
+    params.compressorCharsIn, UInt(params.characterBits.W),
+    params.compressorCharsOut, UInt(params.characterBits.W)))
   
   val cam = Module(new CAM(params))
   val encoder = Module(new LZ77Encoder(params))
   
   val moreLiterals = RegInit(false.B)
   
-  cam.io.charsIn <> io.in
+  cam.io.charsIn <> io.in // this is why camCharsIn = compressorCharsIn
   
   when(encoder.io.working && !moreLiterals) {
     // if encoder is working, disconnect CAM
@@ -36,7 +37,7 @@ class LZ77Compressor(params: Parameters) extends Module {
   cam.io.maxLiteralCount := 0.U
   io.out.bits := DontCare
   when(midEscape) {io.out.bits(0) := params.escapeCharacter.U}
-  for(index <- 0 to params.camMaxCharsIn) {
+  for(index <- 0 to params.camCharsIn) {
     val outindex = index.U +& midEscape +&
       (PopCount(cam.io.charsIn.bits.take(index)
         .map(_ === params.escapeCharacter.U)))
@@ -45,7 +46,7 @@ class LZ77Compressor(params: Parameters) extends Module {
       cam.io.maxLiteralCount := (index + 1).U
     }
     
-    if(index < params.camMaxCharsIn)
+    if(index < params.camCharsIn)
     when(outindex < io.out.bits.length.U) {
       io.out.bits(outindex) := cam.io.charsIn.bits(index)
       when(cam.io.charsIn.bits(index) === params.escapeCharacter.U) {
@@ -63,7 +64,7 @@ class LZ77Compressor(params: Parameters) extends Module {
   val outLitCount = cam.io.literalCount +& midEscape +& (
     PopCount(cam.io.charsIn.bits.zipWithIndex
       .map(c => c._1 === params.escapeCharacter.U && c._2.U < cam.io.literalCount)))
-  for(index <- 0 until params.compressorMaxCharactersOut)
+  for(index <- 0 until params.compressorCharsOut)
     when(outLitCount < (io.out.bits.length - index).U) {
       io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)
     }
@@ -74,13 +75,13 @@ class LZ77Compressor(params: Parameters) extends Module {
   
   // calculate valid and finished
   io.out.valid := (outLitCount +& encoder.io.out.valid) min
-    params.compressorMaxCharactersOut.U
+    params.compressorCharsOut.U
   io.out.finished := cam.io.finished && encoder.io.out.finished &&
-    outLitCount +& encoder.io.out.valid <= params.compressorMaxCharactersOut.U
+    outLitCount +& encoder.io.out.valid <= params.compressorCharsOut.U
 }
 
 object LZ77Compressor extends App {
-  val params = new getLZ77FromCSV().getLZ77FromCSV("configFiles/lz77.csv")
+  val params = Parameters.fromCSV("configFiles/lz77.csv")
   new chisel3.stage.ChiselStage()
     .emitVerilog(new LZ77Compressor(params), args)
 }

@@ -1,45 +1,47 @@
 package edu.vt.cs.hardware_compressor.lz77
 
 import scala.util.control.Breaks._
+import Parameters._
 
 object LZ77Golden {
-  def encode(address: Int, length: Int, params: lz77Parameters): Seq[Int] = {
+  def encode(address: Int, length: Int, params: Parameters): Seq[Int] = {
     
     var encoding : BigInt = 0
     encoding <<= params.characterBits
     encoding |= params.escapeCharacter
     encoding <<= 1
     encoding |= ~params.escapeCharacter >> (params.characterBits - 1) & 1
-    encoding <<= params.camAddressBits
+    encoding <<= params.camSize.idxBits
     encoding |= address
     
-    encoding <<= params.minEncodingSequenceLengthBits
-    if(length <= params.maxCharactersInMinEncoding) {
-      encoding |= length - params.minCharactersToEncode
+    encoding <<= params.minEncodingLengthBits
+    if(length <= params.maxCharsInMinEncoding) {
+      encoding |= length - params.minCharsToEncode
     }
     else {
-      encoding |= (1 << params.minEncodingSequenceLengthBits) - 1
-      var remaining = length - params.maxCharactersInMinEncoding - 1
+      encoding |= (1 << params.minEncodingLengthBits) - 1
+      var remaining = length - params.maxCharsInMinEncoding - 1
       while(remaining >= 0) {
         encoding <<= params.characterBits
-        encoding |= params.maxCharacterValue min remaining
+        encoding |= params.characterBits.maxVal min remaining
         remaining -= params.extraCharacterLengthIncrease
       }
     }
     
     val encodinglength =
-      if(length <= params.maxCharactersInMinEncoding)
-        params.minEncodingWidth / params.characterBits
+      if(length <= params.maxCharsInMinEncoding)
+        params.minEncodingChars
       else
-        (params.minEncodingWidth / params.characterBits) + 1 +
-          ((length - params.maxCharactersInMinEncoding) /
-            params.maxCharacterValue)
+        params.minEncodingChars + 1 +
+          ((length - params.maxCharsInMinEncoding) /
+            params.characterBits.maxVal.intValue)
     
     return (0 until encodinglength reverse).map(i =>
-      (encoding >> (i * params.characterBits) & params.maxCharacterValue).toInt)
+      (encoding >> (i * params.characterBits) &
+        params.characterBits.maxVal).toInt)
   }
   
-  def compress(data: Seq[Int], params: lz77Parameters): Seq[Int] = {
+  def compress(data: Seq[Int], params: Parameters): Seq[Int] = {
     var compressed = Seq.empty[Int]
     var cam = Seq.empty[Int]
     var skip = 0
@@ -60,7 +62,7 @@ object LZ77Golden {
       if(skip > 0) {
         skip -= 1
       }
-      else if(matched._1 >= params.minCharactersToEncode) {
+      else if(matched._1 >= params.minCharsToEncode) {
         compressed ++= encode(matched._2, matched._1, params)
         skip = matched._1 - 1
       }
@@ -72,7 +74,7 @@ object LZ77Golden {
       
       // update cam
       cam :+= curData(0)
-      if(cam.length > params.camCharacters)
+      if(cam.length > params.camSize)
         cam = cam.tail
     }
     
@@ -81,7 +83,7 @@ object LZ77Golden {
   
   def generateData(
       len: Int = 4096,
-      params: lz77Parameters,
+      params: Parameters,
       overlap: Boolean = true
   ): Tuple2[Seq[Int], Seq[Int]] = {
     var uncompressed = Seq.empty[Int]
@@ -89,7 +91,7 @@ object LZ77Golden {
       if(d == params.escapeCharacter) Seq(d, d) else Seq(d))
     while(uncompressed.length < len) breakable {
       if(scala.math.random() >= .1 ||
-          uncompressed.length + params.minCharactersToEncode >= len ||
+          uncompressed.length + params.minCharsToEncode >= len ||
           uncompressed.length == 0) {
         val char = (scala.math.random() * 256).toInt
         uncompressed :+= char
@@ -98,19 +100,19 @@ object LZ77Golden {
           compressed :+= char
       }
       else {
-        val index = params.camCharacters - 1 - (scala.math.random() *
-          (uncompressed.length min params.camCharacters)).toInt
-        var length = params.minCharactersToEncode
+        val index = params.camSize - 1 - (scala.math.random() *
+          (uncompressed.length min params.camSize)).toInt
+        var length = params.minCharsToEncode
         val p = scala.math.random() * .3 + .7
         while(scala.math.random() < p && length < len - uncompressed.length)
           length += 1
-        if(index + length > params.camCharacters && !overlap) break // continue
+        if(index + length > params.camSize && !overlap) break // continue
         
         compressed ++= encode(index, length, params)
         
         uncompressed ++= Iterator.continually(
-          (Seq.fill(params.camCharacters)(0) ++ uncompressed)
-          .takeRight(params.camCharacters)
+          (Seq.fill(params.camSize)(0) ++ uncompressed)
+          .takeRight(params.camSize)
           .drop(index))
           .flatten
           .take(length)

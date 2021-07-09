@@ -1,4 +1,4 @@
-#include "Vlz77Decompressor.h"
+#include "VLZ77Decompressor.h"
 #include "verilated.h"
 #include "verilated_vcd_c.h"
 #include <stdio.h>
@@ -17,7 +17,7 @@ static size_t max(size_t a, size_t b) {return a >= b ? a : b;}
 int main(int argc, char **argv, char **env)
 {
 	Verilated::commandArgs(argc, argv);
-	Vlz77Decompressor *decompressor = new Vlz77Decompressor;
+	VLZ77Decompressor *decompressor = new VLZ77Decompressor;
 	
 #if TRACE_ENABLE
 	char trace_enable = argc > 3 && (argv[3][0] != '-' || argv[3][1] != '\0');

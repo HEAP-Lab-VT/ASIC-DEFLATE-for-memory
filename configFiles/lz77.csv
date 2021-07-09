@@ -1,10 +1,9 @@
 characterBits, 8
-charactersToCompress, 4096
-camCharacters, 4096
-camMaxPatternLength, 16
-camHistoryAvailable, true
-maxPatternLength, 266
+compressorCharsIn, 8
+compressorCharsOut, 8
+decompressorCharsIn, 5
+decompressorCharsOut, 8
+camSize, 4096
 escapeCharacter, 103
-decompressorMaxCharactersOut, 8
-compressorMaxCharacters, 8
-compressorMaxCharactersOut, 8
+minCharsToEncode, 3
+maxCharsToEncode, 266
