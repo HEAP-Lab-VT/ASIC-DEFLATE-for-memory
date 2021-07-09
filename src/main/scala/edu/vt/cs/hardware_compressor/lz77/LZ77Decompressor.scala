@@ -113,7 +113,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
         state := copyingDataFromHistory
         
         val allInputCharacters = io.in.bits
-          .take(params.minCharsToEncode)
+          .take(params.minEncodingChars)
           .reduce(_ ## _)
         
         matchAddress := allInputCharacters(
