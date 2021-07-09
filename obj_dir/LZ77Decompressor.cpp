@@ -48,6 +48,7 @@ int main(int argc, char **argv, char **env)
 	decompressor->clock = 1;
 	decompressor->eval();
 	decompressor->reset = 0;
+	decompressor->io_in_finished = 0;
 	
 	int cycles = 0;
 	int timeout = TIMEOUT_CYCLES;
@@ -57,7 +58,8 @@ int main(int argc, char **argv, char **env)
 		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
-		decompressor->io_in_finished = !bytesRead && !inBufIdx;
+		decompressor->io_in_finished = (!bytesRead && IN_VEC_SIZE - inBufIdx)
+			|| decompressor->io_in_finished;
 		inBufIdx += bytesRead;
 		decompressor->io_in_bits_0 = inBuf[0];
 		decompressor->io_in_bits_1 = inBuf[1];
@@ -114,7 +116,8 @@ int main(int argc, char **argv, char **env)
 		}
 #endif
 		cycles++;
-	} while(!decompressor->io_out_finished && (!TIMEOUT_ENABLE || --timeout));
+	} while((!decompressor->io_out_finished || outBufIdx)
+		&& (!TIMEOUT_ENABLE || --timeout));
 	
 	if(inf != stdin)
 		fclose(inf);

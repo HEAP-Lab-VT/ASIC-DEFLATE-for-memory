@@ -48,6 +48,7 @@ int main(int argc, char **argv, char **env)
 	compressor->clock = 1;
 	compressor->eval();
 	compressor->reset = 0;
+	compressor->io_in_finished = 0;
 	
 	int cycles = 0;
 	int timeout = TIMEOUT_CYCLES;
@@ -57,7 +58,8 @@ int main(int argc, char **argv, char **env)
 		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
-		compressor->io_in_finished = !bytesRead && !inBufIdx;
+		compressor->io_in_finished = (!bytesRead && IN_VEC_SIZE - inBufIdx)
+			|| compressor->io_in_finished;
 		inBufIdx += bytesRead;
 		compressor->io_in_bits_0 = inBuf[0];
 		compressor->io_in_bits_1 = inBuf[1];
@@ -117,7 +119,8 @@ int main(int argc, char **argv, char **env)
 		}
 #endif
 		cycles++;
-	} while(!compressor->io_out_finished && (!TIMEOUT_ENABLE || --timeout));
+	} while((!compressor->io_out_finished || outBufIdx)
+		&& (!TIMEOUT_ENABLE || --timeout));
 	
 	if(inf != stdin)
 		fclose(inf);
