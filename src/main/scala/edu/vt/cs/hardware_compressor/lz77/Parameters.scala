@@ -7,12 +7,12 @@ class Parameters(
     characterBitsParam: Int = 8,
     compressorCharsInParam: Int = 8,
     compressorCharsOutParam: Int = 8,
-    decompressorCharsInParam: Int = 5,
+    decompressorCharsInParam: Int = 8,
     decompressorCharsOutParam: Int = 8,
     camSizeParam: Int = 4096,
     escapeCharacterParam: Int = 103,
-    minCharsToEncodeParam: Int = 3,
-    maxCharsToEncodeParam: Int = 266
+    minCharsToEncodeParam: Int = 4,
+    maxCharsToEncodeParam: Int = 4095
 ) {
   
   //============================================================================
@@ -130,12 +130,12 @@ object Parameters {
       characterBits: Int = 8,
       compressorCharsIn: Int = 8,
       compressorCharsOut: Int = 8,
-      decompressorCharsIn: Int = 5,
+      decompressorCharsIn: Int = 8,
       decompressorCharsOut: Int = 8,
       camSize: Int = 4096,
       escapeCharacter: Int = 103,
-      minCharsToEncode: Int = 3,
-      maxCharsToEncode: Int = 266): Parameters =
+      minCharsToEncode: Int = 4,
+      maxCharsToEncode: Int = 4095): Parameters =
     new Parameters(
       characterBitsParam = characterBits,
       compressorCharsInParam = compressorCharsIn,

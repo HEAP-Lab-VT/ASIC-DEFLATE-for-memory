@@ -1,9 +1,9 @@
 characterBits, 8
 compressorCharsIn, 8
 compressorCharsOut, 8
-decompressorCharsIn, 5
+decompressorCharsIn, 8
 decompressorCharsOut, 8
 camSize, 4096
 escapeCharacter, 103
-minCharsToEncode, 3
-maxCharsToEncode, 266
+minCharsToEncode, 4
+maxCharsToEncode, 4095
