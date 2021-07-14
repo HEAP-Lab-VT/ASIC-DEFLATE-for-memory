@@ -5,7 +5,7 @@ import Parameters._
 import chisel3._
 import chisel3.util._
 
-class LZ77Encoder(params: Parameters) extends Module {
+class Encoder(params: Parameters) extends Module {
   val io = IO(new Bundle {
     val out = DecoupledStream(params.compressorCharsOut,
       UInt(params.characterBits.W))

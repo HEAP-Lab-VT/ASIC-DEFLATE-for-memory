@@ -12,7 +12,7 @@ class LZ77Compressor(params: Parameters) extends Module {
     params.compressorCharsOut, UInt(params.characterBits.W)))
   
   val cam = Module(new CAM(params))
-  val encoder = Module(new LZ77Encoder(params))
+  val encoder = Module(new Encoder(params))
   
   val moreLiterals = RegInit(false.B)
   
