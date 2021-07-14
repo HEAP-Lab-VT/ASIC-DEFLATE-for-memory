@@ -122,10 +122,21 @@ class CAM(params: Parameters) extends Module {
     literalCount := 0.U
   }
   
+  private implicit class splitReduceOp[A](seq: Seq[A]) {
+    def splitReduce[B >: A](op: (B, B) => B): B = {
+      if(seq.length == 0)
+        throw new NoSuchElementException("cannot reduce empty Seq")
+      var rseq: Seq[B] = seq // required for typing (I think)
+      while(rseq.length != 1)
+        rseq = rseq.grouped(2).toSeq
+          .map(s => if(s.length == 1) s(0) else op(s(0), s(1)))
+      rseq(0)
+    }
+  }
   val (nolimitMatchLength, matchCAMAddress) = matchRow
     .zipWithIndex
     .map{case (len, add) => (len, add.U)}
-    .reduce[(UInt, UInt)]{case ((len1, add1), (len2, add2)) =>
+    .splitReduce[(UInt, UInt)]{case ((len1, add1), (len2, add2)) =>
       val is1 = len1 >= len2
       ( Mux(is1, len1, len2),
         Mux(is1, add1, add2))
