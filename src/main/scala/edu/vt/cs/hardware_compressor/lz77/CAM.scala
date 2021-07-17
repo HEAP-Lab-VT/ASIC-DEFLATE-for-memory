@@ -71,9 +71,11 @@ class CAM(params: Parameters) extends Module {
     .zipWithIndex
     .map{case (c, i) =>
       history
+        .zipWithIndex
         .drop(i)
         .take(params.camSize)
-        .map(_ === c && i.U < io.charsIn.valid)}
+        .map{case (hc, hi) hc === c && i.U < io.charsIn.valid &&
+          (hi >= params.camSize.U - camIndex || !camFirstPass)}}
     .foldRight(
       Seq.fill(1, params.camSize)(0.U(params.camCharsIn.valBits.W)))
       {(equals, counts) =>
