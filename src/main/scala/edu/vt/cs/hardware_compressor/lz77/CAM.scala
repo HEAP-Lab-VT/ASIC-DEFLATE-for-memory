@@ -67,23 +67,20 @@ class CAM(params: Parameters) extends Module {
   
   
   // find the length of every possible match
-  val matchLengths = io.charsIn.bits
+  val equalityArray = io.charsIn.bits
     .zipWithIndex
     .map{case (c, i) =>
       history
         .zipWithIndex
         .drop(i)
         .take(params.camSize)
-        .map{case (hc, hi) hc === c && i.U < io.charsIn.valid &&
-          (hi >= params.camSize.U - camIndex || !camFirstPass)}}
-    .foldRight(
-      Seq.fill(1, params.camSize)(0.U(params.camCharsIn.valBits.W)))
+        .map{case (hc, hi) => hc === c && i.U < io.charsIn.valid &&
+          (hi.U >= params.camSize.U - camIndex || !camFirstPass)}}
+  val matchLengths = equalityArray
+    .scanRight(Seq.fill(params.camSize)(0.U(params.camCharsIn.valBits.W)))
       {(equals, counts) =>
-        equals
-          .zip(counts(0).map(_ + 1.U(params.camCharsIn.valBits.W)))
-          .map{case (e, c) =>
-            Mux(e, c, 0.U(params.camCharsIn.valBits.W))} +:
-        counts
+        equals.zip(counts)
+          .map{case (e, c) => Mux(e, c +% 1.U, 0.U)}
       }
   
   
@@ -124,27 +121,25 @@ class CAM(params: Parameters) extends Module {
     literalCount := 0.U
   }
   
-  private implicit class splitReduceOp[A](seq: Seq[A]) {
-    def splitReduce[B >: A](op: (B, B) => B): B = {
-      if(seq.length == 0)
-        throw new NoSuchElementException("cannot reduce empty Seq")
-      var rseq: Seq[B] = seq // required for typing (I think)
-      while(rseq.length != 1)
-        rseq = rseq.grouped(2).toSeq
-          .map(s => if(s.length == 1) s(0) else op(s(0), s(1)))
-      rseq(0)
-    }
+  
+  val lenExists = WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
+  val addrByLen =
+    Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
+  addrByLen := DontCare
+  
+  matchRow.zipWithIndex.foreach{case (l, i) =>
+    lenExists(l) := true.B
+    addrByLen(l) := i.U
   }
-  val (nolimitMatchLength, matchCAMAddress) = matchRow
-    .zipWithIndex
-    .map{case (len, add) => (len, add.U)}
-    .splitReduce[(UInt, UInt)]{case ((len1, add1), (len2, add2)) =>
-      val is1 = len1 >= len2
-      ( Mux(is1, len1, len2),
-        Mux(is1, add1, add2))
-    }
+  
+  lenExists(0) := true.B
+  addrByLen(0) := PriorityEncoder(continues)
+  
+  val matchCAMAddress = PriorityMux(lenExists.reverse, addrByLen.reverse)
   val matchLength =
-    nolimitMatchLength min (params.maxCharsToEncode.U - continueLength)
+    (params.camCharsIn.U - PriorityEncoder(lenExists.reverse)) min
+    (params.maxCharsToEncode.U - continueLength)
+  
   
   io.finished := false.B
   io.matchLength := 0.U
@@ -157,9 +152,7 @@ class CAM(params: Parameters) extends Module {
     when(matchLength + literalCount =/= io.charsIn.valid ||
         io.charsIn.finished) {
       io.matchLength := continueLength + matchLength
-      io.matchCAMAddress := Mux(matchLength === 0.U,
-        PriorityEncoder(continues),
-        matchCAMAddress)
+      io.matchCAMAddress := matchCAMAddress
     }.elsewhen(literalCount <= io.maxLiteralCount) {
       continueLength := continueLength + matchLength
       continues := matchRow.map(_ === io.charsIn.valid - literalCount)
