@@ -38,14 +38,14 @@ class CAM(params: Parameters) extends Module {
   
   // write data to history
   for(index <- 0 until io.charsIn.bits.length)
-    when(index.U < io.charsIn.ready) {
+    // when(index.U < io.charsIn.ready) {
       byteHistory(
         if(params.camSizePow2)
           (camIndex + index.U)(params.camSize.idxBits - 1, 0)
         else
           (camIndex +& index.U) % params.camSize.U
       ) := io.charsIn.bits(index)
-    }
+    // }
   if(params.camSizePow2) camIndex := camIndex + io.charsIn.ready
   else camIndex := (camIndex +& io.charsIn.ready) % params.camSize.U
   camFirstPass := camFirstPass &&
