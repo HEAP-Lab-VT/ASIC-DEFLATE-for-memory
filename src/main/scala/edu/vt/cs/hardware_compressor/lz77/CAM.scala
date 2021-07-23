@@ -161,14 +161,14 @@ class CAM(params: Parameters) extends Module {
     io.literalCount := literalCount + matchLength
   }
   
-  when(continueLength =/= 0.U) {
-    io.charsIn.ready := matchLength
-  }.elsewhen(io.literalCount > io.maxLiteralCount) {
+  when(io.literalCount > io.maxLiteralCount) {
     io.charsIn.ready := io.maxLiteralCount
-  }.elsewhen(matchLength >= params.minCharsToEncode.U) {
+  }.elsewhen(matchLength >= params.minCharsToEncode.U ||
+      continueLength =/= 0.U ||
+      io.charsIn.finished) {
     io.charsIn.ready := literalCount + matchLength
   } otherwise {
-    io.charsIn.ready := io.literalCount
+    io.charsIn.ready := literalCount
   }
   
   // compute finished
