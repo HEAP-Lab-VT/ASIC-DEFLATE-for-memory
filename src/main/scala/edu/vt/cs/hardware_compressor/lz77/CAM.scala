@@ -55,6 +55,7 @@ class CAM(params: Parameters) extends Module {
   // merge byteHistory and searchPattern for easy matching
   val history =
     (0 until params.camSize)
+      .map(_ + params.historySize - params.camSize)
       .map{i => byteHistory(
         if(params.histSizePow2)
           i.U +% camIndex
