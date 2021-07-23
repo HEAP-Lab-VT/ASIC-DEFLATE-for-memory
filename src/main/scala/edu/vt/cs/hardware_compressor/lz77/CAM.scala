@@ -22,11 +22,11 @@ class CAM(params: Parameters) extends Module {
   
   
   // This stores the byte history of the CAM.
-  val byteHistory = Mem(params.camSize, UInt(params.characterBits.W))
+  val byteHistory = Mem(params.historySize, UInt(params.characterBits.W))
   // This is true iff the camIndex has not yet rolled over
   val camFirstPass = RegInit(true.B)
   // This stores the cam index where the next character will be stored
-  val camIndex = RegInit(UInt(params.camSize.idxBits.W), 0.U)
+  val camIndex = RegInit(UInt(params.historySize.idxBits.W), 0.U)
   
   
   // CAM indexes eligible for continuation
@@ -40,28 +40,28 @@ class CAM(params: Parameters) extends Module {
   for(index <- 0 until io.charsIn.bits.length)
     // when(index.U < io.charsIn.ready) {
       byteHistory(
-        if(params.camSizePow2)
-          (camIndex + index.U)(params.camSize.idxBits - 1, 0)
+        if(params.histSizePow2)
+          (camIndex + index.U)(params.historySize.idxBits - 1, 0)
         else
-          (camIndex +& index.U) % params.camSize.U
+          (camIndex +& index.U) % params.historySize.U
       ) := io.charsIn.bits(index)
     // }
   if(params.camSizePow2) camIndex := camIndex + io.charsIn.ready
-  else camIndex := (camIndex +& io.charsIn.ready) % params.camSize.U
+  else camIndex := (camIndex +& io.charsIn.ready) % params.historySize.U
   camFirstPass := camFirstPass &&
-    (io.charsIn.ready < params.camSize.U - camIndex)
+    (io.charsIn.ready < params.historySize.U - camIndex)
   
   
   // merge byteHistory and searchPattern for easy matching
   val history =
     (0 until params.camSize)
       .map{i => byteHistory(
-        if(params.camSizePow2)
+        if(params.histSizePow2)
           i.U +% camIndex
         else
-          Mux(camIndex < (params.camSize - i).U,
+          Mux(camIndex < (params.historySize - i).U,
             camIndex +% i.U,
-            camIndex -% (params.camSize - i).U)
+            camIndex -% (params.historySize - i).U)
       )} ++
       io.charsIn.bits
   

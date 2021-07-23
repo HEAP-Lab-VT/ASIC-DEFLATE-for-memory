@@ -58,6 +58,12 @@ class Parameters(
   // input buss width of the CAM
   val camCharsIn = compressorCharsIn // not configurable without buffer
   
+  // size of the history buffer (including space for erroneous writes)
+  val historySize = camSize + camCharsIn
+  
+  // iff the history size is a power of 2 (allows some wrapping optimizations)
+  val histSizePow2 = historySize == 1 << log2Ceil(historySize)
+  
   
   //============================================================================
   // ENCODING PARAMETERS
@@ -118,10 +124,10 @@ class Parameters(
     throw new IllegalArgumentException(
       "decompressorCharsIn must be at least minEncodingChars")
   
-  if(!camSizePow2)
+  if(!histSizePow2)
     // may require more complex logic including dividers
-    println(
-      "warning: CAM size not a power of 2; may cause decreased performance")
+    println("warning: " +
+      "CAM history size not a power of 2; may cause decreased performance")
 }
 
 object Parameters {
