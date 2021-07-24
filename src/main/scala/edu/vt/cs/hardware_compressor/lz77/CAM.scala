@@ -87,59 +87,76 @@ class CAM(params: Parameters) extends Module {
   
   // find where the match should start in the pattern
   // and rank CAM indexes based on match length
-  val matchRow =
-    Wire(Vec(params.camSize, UInt(params.camCharsIn.valBits.W)))
+  val matchLength = Wire(UInt(params.camCharsIn.valBits.W))
+  val matchCAMAddress = Wire(UInt(params.camSize.idxBits.W))
   val literalCount = Wire(UInt(params.camCharsIn.valBits.W))
   when(continueLength === 0.U) {
     // start a match from scratch
     
-    class Row extends Bundle {
-      val row = Vec(params.camSize, UInt(params.characterBits.W))
-      val lit = UInt(params.camCharsIn.valBits.W)
+    // find best match in each row
+    class Match extends Bundle {
+      val length = UInt(params.camCharsIn.valBits.W)
+      val address = UInt(params.camSize.idxBits.W)
+    }
+    val bestMatches = matchLengths.map{row =>
+      val lenExists =
+        WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
+      val addrByLen =
+        Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
+      addrByLen := DontCare
+      
+      row.zipWithIndex.foreach{case (l, i) =>
+        lenExists(l) := true.B
+        addrByLen(l) := i.U
+      }
+      
+      lenExists(0) := true.B
+      addrByLen(0) := DontCare
+      
+      val bestMatch = Wire(new Match)
+      bestMatch.length :=
+        (params.camCharsIn.U - PriorityEncoder(lenExists.reverse)) min
+        (params.maxCharsToEncode.U - continueLength)
+      bestMatch.address := PriorityMux(lenExists.reverse, addrByLen.reverse)
+      bestMatch
     }
     
-    val row = PriorityMux(
-      matchLengths.zipWithIndex.map{case (lens, lit) =>
-        val curRow = Wire(new Row)
-        curRow.row := VecInit(lens)
-        curRow.lit := lit.U
-        ( lens
-            .map(len =>
-              len >= params.minCharsToEncode.U ||
-              len === io.charsIn.valid - lit.U)
-            .reduce(_ || _),
-          curRow)})
+    // find which rows are valid candidates
+    val validRows = matchLengths.zipWithIndex.map{case (lens, lit) => lens
+      .map{len =>
+        len >= params.minCharsToEncode.U ||
+        len === io.charsIn.valid - lit.U}
+      .reduce(_ || _)}
     
-    literalCount := row.lit
-    matchRow := row.row
+    literalCount := PriorityEncoder(validRows)
+    val m = PriorityMux(validRows, bestMatches)
+    matchLength := m.length
+    matchCAMAddress := m.address
     
   } otherwise {
     // there is a match to continue
-    matchRow := matchLengths(0)
-      .zip(continues)
-      .map(a => Mux(a._2, a._1, 0.U))
     
+    val lenExists =
+      WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
+    val addrByLen =
+      Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
+    addrByLen := DontCare
+    
+    matchLengths(0).zip(continues).zipWithIndex.foreach{case ((l, c), i) =>
+      when(c) {
+        lenExists(l) := true.B
+        addrByLen(l) := i.U
+      }
+    }
+    
+    lenExists(0) := true.B
+    
+    matchLength :=
+      (params.camCharsIn.U - PriorityEncoder(lenExists.reverse)) min
+      (params.maxCharsToEncode.U - continueLength)
+    matchCAMAddress := PriorityMux(lenExists.reverse, addrByLen.reverse)
     literalCount := 0.U
   }
-  
-  
-  val lenExists = WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
-  val addrByLen =
-    Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
-  addrByLen := DontCare
-  
-  matchRow.zipWithIndex.foreach{case (l, i) =>
-    lenExists(l) := true.B
-    addrByLen(l) := i.U
-  }
-  
-  lenExists(0) := true.B
-  addrByLen(0) := PriorityEncoder(continues)
-  
-  val matchCAMAddress = PriorityMux(lenExists.reverse, addrByLen.reverse)
-  val matchLength =
-    (params.camCharsIn.U - PriorityEncoder(lenExists.reverse)) min
-    (params.maxCharsToEncode.U - continueLength)
   
   
   io.finished := false.B
@@ -156,7 +173,8 @@ class CAM(params: Parameters) extends Module {
       io.matchCAMAddress := matchCAMAddress
     }.elsewhen(literalCount <= io.maxLiteralCount) {
       continueLength := continueLength + matchLength
-      continues := matchRow.map(_ === io.charsIn.valid - literalCount)
+      continues := VecInit(matchLengths.map(l => VecInit(l)))(literalCount)
+        .map(_ === io.charsIn.valid - literalCount)
     }
   }.elsewhen(io.charsIn.finished) {
     io.literalCount := literalCount + matchLength
