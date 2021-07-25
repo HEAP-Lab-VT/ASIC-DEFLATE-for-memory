@@ -17,15 +17,7 @@ class LZ77Compressor(params: Parameters) extends Module {
   val moreLiterals = RegInit(false.B)
   
   cam.io.charsIn <> io.in // this is why camCharsIn = compressorCharsIn
-  
-  when(encoder.io.working && !moreLiterals) {
-    // if encoder is working, disconnect CAM
-    io.in.ready := 0.U
-    cam.io.charsIn.valid := 0.U
-    cam.io.charsIn.bits := DontCare
-    cam.io.charsIn.finished :=
-      io.in.finished && io.in.valid === 0.U
-  }
+  cam.io.matchReady := true.B
   
   // connect CAM to encoder
   encoder.io.matchLength := cam.io.matchLength
@@ -58,6 +50,14 @@ class LZ77Compressor(params: Parameters) extends Module {
         }
       }
     }
+  }
+  
+  when(encoder.io.working && !moreLiterals) {
+    // if encoder is working, disable CAM
+    cam.io.maxLiteralCount := 0.U
+    cam.io.matchReady := false.B
+    encoder.io.matchLength := 0.U
+    encoder.io.matchCAMAddress := DontCare
   }
   
   // output encoding

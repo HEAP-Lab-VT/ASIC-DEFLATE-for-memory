@@ -11,6 +11,7 @@ class CAM(params: Parameters) extends Module {
     val charsIn = Flipped(DecoupledStream(
       params.camCharsIn, UInt(params.characterBits.W)))
     val maxLiteralCount = Input(UInt(params.camCharsIn.valBits.W))
+    val matchReady = Input(Bool())
     
     // Output a match and the number of literals preceeding the match
     val matchCAMAddress = Output(UInt(params.camSize.idxBits.W))
@@ -166,30 +167,57 @@ class CAM(params: Parameters) extends Module {
   continueLength := 0.U
   continues := DontCare
   
-  when(continueLength =/= 0.U || matchLength >= params.minCharsToEncode.U) {
-    when(matchLength + literalCount =/= io.charsIn.valid ||
-        io.charsIn.finished) {
-      io.matchLength := continueLength + matchLength
-      io.matchCAMAddress := matchCAMAddress
-    }.elsewhen(literalCount <= io.maxLiteralCount) {
-      continueLength := continueLength + matchLength
-      continues := VecInit(matchLengths.map(l => VecInit(l)))(literalCount)
-        .map(_ === io.charsIn.valid - literalCount)
-    }
-  }.elsewhen(io.charsIn.finished) {
-    io.literalCount := literalCount + matchLength
+  val endMatch = matchLength === io.charsIn.valid - literalCount
+  val continued = continueLength =/= 0.U
+  val fullMatch = matchLength >= params.minCharsToEncode.U
+  val reachMatch = literalCount <= io.maxLiteralCount
+  val ligitMatch = fullMatch || continued
+  // NOTES: !endMatch implies ligitMatch
+  //        continued implies reachMatch
+  
+  when(!endMatch) {
+    io.matchLength := continueLength + matchLength
+    io.matchCAMAddress := matchCAMAddress
   }
   
-  when(io.literalCount > io.maxLiteralCount) {
+  when((endMatch || !io.matchReady) &&
+      ligitMatch &&
+      reachMatch) {
+    continueLength := continueLength + matchLength
+    continues := VecInit(matchLengths.map(l => VecInit(l)))(literalCount)
+      .map(_ === io.charsIn.valid - literalCount)
+  }
+  
+  when(!reachMatch) {
     io.charsIn.ready := io.maxLiteralCount
-  }.elsewhen(matchLength >= params.minCharsToEncode.U ||
-      continueLength =/= 0.U ||
-      io.charsIn.finished) {
+  }.elsewhen(ligitMatch) {
     io.charsIn.ready := literalCount + matchLength
   } otherwise {
     io.charsIn.ready := literalCount
   }
   
-  // compute finished
-  io.finished := io.charsIn.finished && io.charsIn.ready === io.charsIn.valid
+  when(io.charsIn.finished) {
+    // wierd things happen when input runs out because there's no continue
+    
+    // don't try to continue
+    continueLength := 0.U
+    continues := DontCare
+    
+    when(ligitMatch) {
+      // push the match (it might otherwise continue)
+      io.matchLength := continueLength + matchLength
+      io.matchCAMAddress := matchCAMAddress
+      
+      io.charsIn.ready := Mux(reachMatch,
+        Mux(io.matchReady, literalCount + matchLength, literalCount),
+        io.maxLiteralCount)
+    } otherwise {
+      // make match into a literal (it would otherwise wait for more input)
+      io.literalCount := io.charsIn.valid
+      
+      io.charsIn.ready := io.charsIn.valid min io.maxLiteralCount
+    }
+    
+    io.finished := io.charsIn.ready === io.charsIn.valid
+  }
 }
