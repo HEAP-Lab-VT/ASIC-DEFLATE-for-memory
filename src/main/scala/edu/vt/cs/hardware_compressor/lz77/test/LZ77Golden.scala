@@ -1,5 +1,6 @@
 package edu.vt.cs.hardware_compressor.lz77.test
 
+import edu.vt.cs.hardware_compressor.lz77._
 import scala.util.control.Breaks._
 import Parameters._
 
