@@ -26,14 +26,14 @@ class LZ77Decompressor(params: Parameters) extends Module {
   val newHistoryCount = io.out.valid min io.out.ready
   byteHistoryIndex := (
     if(params.camSizePow2) byteHistoryIndex + newHistoryCount
-    else (byteHistoryIndex +& newHistoryCount) % params.camSize.idxBits.U)
+    else (byteHistoryIndex +& newHistoryCount) % params.camSize.U)
   for(index <- 0 until io.out.bits.length)
     when(index.U < newHistoryCount) {
       byteHistory(
         if(params.camSizePow2)
           (byteHistoryIndex + index.U)(params.camSize.idxBits - 1, 0)
         else
-          (byteHistoryIndex + index.U) % params.camSize.idxBits.U
+          (byteHistoryIndex + index.U) % params.camSize.U
       ) := io.out.bits(index)
     }
   
@@ -140,8 +140,10 @@ class LZ77Decompressor(params: Parameters) extends Module {
         when(matchAddress < (params.camSize - index).U) {
           io.out.bits(index) := byteHistory(matchAddress + byteHistoryIndex + (
             if(params.camSizePow2) index.U(params.camSize.idxBits.W)
-            else Mux(params.camSize.U - matchAddress - index.U >
-              byteHistoryIndex, index.U, params.camSize.U - index.U)))
+            else
+              Mux(matchAddress + index.U < params.camSize.U - byteHistoryIndex,
+                index.U,
+                index.U - params.camSize.U)))
         } otherwise {
           if(index > 0)
             io.out.bits(index) :=
