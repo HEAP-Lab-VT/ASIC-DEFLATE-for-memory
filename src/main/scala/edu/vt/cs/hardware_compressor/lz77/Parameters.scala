@@ -160,22 +160,22 @@ object Parameters {
     for (line <- file.getLines) {
       val cols = line.split(",").map(_.trim)
       if (cols.length == 2) {
-        println(s"${cols(0)} = ${cols(1)}")
+        System.err.println(s"${cols(0)} = ${cols(1)}")
         if (cols(1) == "true" || cols(1) == "false") {
           boolMap += (cols(0) -> (cols(1) == "true"))
         } else {
           intMap += (cols(0) -> cols(1).toInt)
         }
       } else if (cols.length != 0) {
-        println("Error, each line should have two values separated by a comma."+
+        System.err.println("Error, each line should have two values separated by a comma."+
           " The line:\n")
-        println(line)
-        println("\nDid notmeet this requirement")
+        System.err.println(line)
+        System.err.println("\nDid notmeet this requirement")
       }
     }
     file.close
 
-    println("Getting from CSV test was successful")
+    System.err.println("Getting from CSV test was successful")
     val lz77ParametersOutput = new Parameters(
       characterBitsParam = intMap("characterBits"),
       compressorCharsInParam = intMap("compressorCharsIn"),

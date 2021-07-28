@@ -1,8 +1,9 @@
 package edu.vt.cs.hardware_compressor.lz77.test
 
-import edu.vt.cs.hardware_compressor.lz77._
+import edu.vt.cs.hardware_compressor.lz77.Parameters
+import edu.vt.cs.hardware_compressor.lz77.Parameters._
 import scala.util.control.Breaks._
-import Parameters._
+import java.io._
 
 object LZ77Golden {
   def encode(address: Int, length: Int, params: Parameters): Seq[Int] = {
@@ -42,45 +43,34 @@ object LZ77Golden {
         params.characterBits.maxVal).toInt)
   }
   
-  def compress(data: Seq[Int], params: Parameters): Seq[Int] = {
-    var compressed = Seq.empty[Int]
-    var cam = Seq.empty[Int]
-    var skip = 0
-    
-    for(curData <- data.tails.toSeq.init) {
-      // find match
-      val matched = cam
-        .tails.toSeq
-        .init
-        .map(_ ++ curData)
-        .map(_.zip(curData))
-        .map(_.takeWhile(e => e._1 == e._2))
-        .map(_.length)
-        .zipWithIndex
-        .fold((0, 0))((m1, m2) => if(m1._1 > m2._1) m1 else m2)
-      
-      // add to compressed characters
-      if(skip > 0) {
-        skip -= 1
-      }
-      else if(matched._1 >= params.minCharsToEncode) {
-        compressed ++= encode(matched._2, matched._1, params)
-        skip = matched._1 - 1
-      }
-      else {
-        compressed :+= curData(0)
-        if(curData(0) == params.escapeCharacter)
-          compressed :+= curData(0)
-      }
-      
-      // update cam
-      cam :+= curData(0)
-      if(cam.length > params.camSize)
-        cam = cam.tail
+  def compress(data: Seq[Int], params: Parameters): Seq[Int] =
+    Stream.iterate((data, Seq.empty[Int], Seq.empty[Int]))
+    {case (data, cam, _) =>
+      if(data.isEmpty) (Seq.empty[Int], Seq.empty[Int], Seq.empty[Int])
+      else (if(cam.isEmpty) None else Some(cam))
+        .map(_
+          .tails.toSeq.init
+          .map(_ ++: data)
+          .map(_.zip(data))
+          .map(_.take(params.maxCharsToEncode))
+          .map(_.takeWhile(e => e._1 == e._2))
+          .map(_.length)
+          .zipWithIndex
+          .maxBy(_._1))
+        .filter(_._1 >= params.minCharsToEncode)
+        .map{case (l, i) => (l, i, data.splitAt(l))}
+        .map{case (l, i, d) => (
+          d._2,
+          (cam ++: d._1).takeRight(params.camSize),
+          encode(i - cam.length + params.camSize, l, params))}
+        .getOrElse((
+          data.tail,
+          (cam :+ data.head).takeRight(params.camSize),
+          if(data.head == params.escapeCharacter) Seq(data.head, data.head)
+          else Seq(data.head)))
     }
-    
-    return compressed
-  }
+    .takeWhile(c => c._1.length != 0 || c._3.length != 0)
+    .flatMap(_._3)
   
   def generateData(
       len: Int = 4096,
@@ -121,5 +111,28 @@ object LZ77Golden {
     }
     
     (uncompressed, compressed)
+  }
+}
+
+
+object LZ77GoldenCompress extends App {
+  val params = Parameters.fromCSV("configFiles/lz77.csv")
+  val in =
+    if(args.length >= 1 && args(0) != "-")
+      new BufferedInputStream(new FileInputStream(args(0)))
+    else
+      System.in
+  val out =
+    if(args.length >= 2 && args(1) != "-")
+      new BufferedOutputStream(new FileOutputStream(args(1)))
+    else
+      System.out
+  try {
+    LZ77Golden.compress(Stream.continually(in.read).takeWhile(_ != -1), params)
+      .foreach(b => out.write(b))
+    out.flush
+  } finally {
+    if(in != System.in) in.close
+    if(out != System.out) out.close
   }
 }
