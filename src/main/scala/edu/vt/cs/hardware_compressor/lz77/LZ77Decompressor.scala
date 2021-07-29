@@ -100,7 +100,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
         io.out.finished := io.in.finished && litcount === io.in.valid &&
           (litcount - (pops(litcount) >> 1)) <=
             params.decompressorCharsOut.U
-      }.elsewhen(io.in.valid < params.minCharsToEncode.U) {
+      }.elsewhen(io.in.valid < params.minEncodingChars.U) {
         // this might be an encoding, but not enough valid input to process it
         io.in.ready := 0.U
         io.out.valid := 0.U

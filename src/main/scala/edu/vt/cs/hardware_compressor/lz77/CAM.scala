@@ -186,6 +186,8 @@ class CAM(params: Parameters) extends Module {
     continueLength := continueLength + matchLength
     continues := VecInit(matchLengths.map(l => VecInit(l)))(literalCount)
       .map(_ === io.charsIn.valid - literalCount)
+      .zip(continues.map(_ || !continued))
+      .map{case (v, c) => v && c}
   }
   
   when(!reachMatch) {
