@@ -44,13 +44,13 @@ object LZ77Golden {
   }
   
   def compress(data: Seq[Int], params: Parameters): Seq[Int] =
-    Stream.iterate((data, Seq.empty[Int], Seq.empty[Int]))
+    Stream.iterate((data.toStream, Seq.empty[Int], Seq.empty[Int]))
     {case (data, cam, _) =>
-      if(data.isEmpty) (Seq.empty[Int], Seq.empty[Int], Seq.empty[Int])
+      if(data.isEmpty) (Stream.empty[Int], Seq.empty[Int], Seq.empty[Int])
       else (if(cam.isEmpty) None else Some(cam))
         .map(_
           .tails.toSeq.init
-          .map(_ ++: data)
+          .map{_ ++: data}
           .map(_.zip(data))
           .map(_.take(params.maxCharsToEncode))
           .map(_.takeWhile(e => e._1 == e._2))
@@ -69,7 +69,7 @@ object LZ77Golden {
           if(data.head == params.escapeCharacter) Seq(data.head, data.head)
           else Seq(data.head)))
     }
-    .takeWhile(c => c._1.length != 0 || c._3.length != 0)
+    .takeWhile(c => c._1.nonEmpty || c._3.nonEmpty)
     .flatMap(_._3)
   
   def generateData(
