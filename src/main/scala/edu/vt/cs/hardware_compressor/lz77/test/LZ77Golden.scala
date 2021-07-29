@@ -56,6 +56,7 @@ object LZ77Golden {
           .map(_.takeWhile(e => e._1 == e._2))
           .map(_.length)
           .zipWithIndex
+          .reverse
           .maxBy(_._1))
         .filter(_._1 >= params.minCharsToEncode)
         .map{case (l, i) => (l, i, data.splitAt(l))}
