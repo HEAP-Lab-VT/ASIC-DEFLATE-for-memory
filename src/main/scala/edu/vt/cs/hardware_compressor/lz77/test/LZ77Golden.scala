@@ -69,7 +69,8 @@ object LZ77Golden {
           if(data.head == params.escapeCharacter) Seq(data.head, data.head)
           else Seq(data.head)))
     }
-    .takeWhile(c => c._1.nonEmpty || c._3.nonEmpty)
+    .drop(1)
+    .takeWhile(_._3.nonEmpty)
     .flatMap(_._3)
   
   def generateData(
