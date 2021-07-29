@@ -18,6 +18,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
   
   // Mem avoids FIRRTL stack overflow (chisel3 issue #642)
   // Mem uses verilog array instead of chained muxes
+  // TODO: prewrite optimization like compressor
   val byteHistory = Mem(params.camSize, UInt(params.characterBits.W))
   // the position in byteHistory of the next byte to write
   val byteHistoryIndex = RegInit(UInt(params.camSize.idxBits.W), 0.U)
