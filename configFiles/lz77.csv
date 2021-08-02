@@ -1,5 +1,5 @@
 characterBits, 8
-compressorCharsIn, 8
+compressorCharsIn, 11
 compressorCharsOut, 8
 decompressorCharsIn, 8
 decompressorCharsOut, 8

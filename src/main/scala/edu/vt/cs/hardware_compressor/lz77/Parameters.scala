@@ -55,11 +55,17 @@ class Parameters(
   // true iff the CAM size is a power of 2 (allows some wrapping optimizations)
   val camSizePow2 = camSize == 1 << log2Ceil(camSize)
   
-  // input buss width of the CAM
+  // input bus width of the CAM
   val camCharsIn = compressorCharsIn // not configurable without buffer
   
+  val camLookahead = minCharsToEncodeParam - 1
+  
+  // number of characters processed by the cam every cycle
+  // (bus width - lookahead)
+  val camCharsPerCycle = camCharsIn - camLookahead
+  
   // size of the history buffer (including space for erroneous writes)
-  val historySize = camSize + camCharsIn
+  val historySize = camSize + camCharsPerCycle
   
   // iff the history size is a power of 2 (allows some wrapping optimizations)
   val histSizePow2 = historySize == 1 << log2Ceil(historySize)
@@ -198,6 +204,7 @@ object Parameters {
     def idxUInt(): UInt = UInt(v.idxBits.W)
     def maxVal(): BigInt = (BigInt(1) << v.intValue) - 1
     def space(): BigInt = BigInt(1) << v.intValue
+    def pow2(): Boolean = v == 1 << log2Ceil(v)
   }
   implicit class widthOpsInt(v: Int) extends widthOpsBigInt(v)
   implicit class widthOpsLong(v: Long) extends widthOpsBigInt(v)
