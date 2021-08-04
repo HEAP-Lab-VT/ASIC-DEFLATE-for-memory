@@ -68,8 +68,10 @@ class CAM(params: Parameters) extends Module {
       )} ++
       io.charsIn.bits
   
-  var charsToProcess = Mux(io.charsIn.valid >= (params.camLookahead).U,
-    io.charsIn.valid - (params.camLookahead).U, 0.U)
+  var charsToProcess = Mux(io.charsIn.finished,
+    io.charsIn.valid min params.camCharsPerCycle.U,
+    Mux(io.charsIn.valid >= params.camLookahead.U,
+      io.charsIn.valid - params.camLookahead.U, 0.U))
   
   // find the length of every possible match
   val equalityArray = io.charsIn.bits
@@ -102,16 +104,6 @@ class CAM(params: Parameters) extends Module {
     .map(_.map(lv => Mux(lv._2, lv._1, 0.U)))
     .map(v => VecInit(v)))
   
-  var sColSets = VecInit(equalityArray
-    .take(params.camCharsPerCycle)
-    .scanRight(Seq.fill(params.camSize)(true.B))
-    {(equals, counts) =>
-      equals.zip(counts)
-        .map{case (e, c) => e && c}
-    }
-    .init
-    .map(v => VecInit(v)))
-  
   
   when(pushbacknext) {
     stall := true.B
@@ -120,14 +112,15 @@ class CAM(params: Parameters) extends Module {
   }
   
   
+  
   //============================================================================
   // PIPELINE STAGE 2
   matchLengths = WireDefault(RegEnable(matchLengths, !stall))
   charsToProcess = WireDefault(RegEnable(charsToProcess, 0.U, !stall))
+  var io_charsIn_bits = WireDefault(RegEnable(io.charsIn.bits, !stall))
   var io_charsIn_valid = WireDefault(RegEnable(io.charsIn.valid, 0.U, !stall))
   var io_charsIn_finished =
     WireDefault(RegEnable(io.charsIn.finished, false.B, !stall))
-  sColSets = RegEnable(RegEnable(sColSets, !stall), !stall)
   
   stall = WireDefault(false.B)
   pushbackprev = pushbacknext
@@ -135,50 +128,83 @@ class CAM(params: Parameters) extends Module {
   //============================================================================
   
   
-  // There are five categories of matches:
-  // A-match (all): starts in or before current cycle (includes both N and C)
-  // N-match (new): starts in current sycle
-  // C-match (continue): starts before current cycle (includes both S and D)
-  // S-match (shallow): starts in previous cycle
-  // D-match (deep): starts before previous cycle
   
-  private class Match extends Bundle {
-    val length = UInt(params.camCharsIn.valBits.W)
-    val address = UInt(params.camSize.idxBits.W)
-  }
+  var intracycleIndex = RegNext(0.U(params.camCharsPerCycle.idxBits.W), 0.U)
   
-  // find matches starting this cycle
-  private var nMatches = VecInit(matchLengths.map{row =>
-    val lenExists =
-      WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
-    val addrByLen =
-      Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
-    addrByLen := DontCare
-    val bestMatch = Wire(new Match)
+  // CAM indexes eligible for continuation
+  val continues =
+    RegInit(VecInit(Seq.fill(params.camSize)(false.B)))
+  // the current length of sequences in the continuation
+  val continueLength = RegInit(0.U(params.maxCharsToEncode.valBits.W))
+  
+  // find where the match should start in the pattern
+  // and rank CAM indexes based on match length
+  var matchIndex = Wire(UInt(params.camCharsPerCycle.idxBits.W))
+  var matchLength = Wire(UInt(params.camCharsPerCycle.valBits.W))
+  var matchLengthFull = Wire(UInt(params.maxCharsToEncode.valBits.W))
+  var matchCAMAddress = Wire(UInt(params.camSize.idxBits.W))
+  when(continueLength === 0.U) {
+    // start a match from scratch
     
-    row.zipWithIndex.foreach{case (l, i) =>
-      lenExists(l) := true.B
-      addrByLen(l) := i.U
+    // find best match in each row
+    class Match extends Bundle {
+      val length = UInt(params.camCharsIn.valBits.W)
+      val address = UInt(params.camSize.idxBits.W)
+    }
+    val bestMatches = matchLengths.map{row =>
+      val lenExists =
+        WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
+      val addrByLen =
+        Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
+      addrByLen := DontCare
+      
+      row.zipWithIndex.foreach{case (l, i) =>
+        lenExists(l) := true.B
+        addrByLen(l) := i.U
+      }
+      
+      lenExists(0) := true.B
+      addrByLen(0) := DontCare
+      
+      val bestMatch = Wire(new Match)
+      bestMatch.length :=
+        params.camCharsPerCycle.U - PriorityEncoder(lenExists.reverse)
+      bestMatch.address := PriorityMux(lenExists.reverse, addrByLen.reverse)
+      bestMatch
     }
     
-    lenExists(0) := true.B
-    addrByLen(0) := DontCare
+    // find which rows are valid candidates
+    val validRows = matchLengths
+      .map(_.map(_ =/= 0.U))
+      .map(_.reduce(_ || _))
+      .zipWithIndex
+      .map{case (v, i) => v && i.U >= intracycleIndex}
     
-    bestMatch.length := params.camCharsIn.U - PriorityEncoder(lenExists.reverse)
-    bestMatch.address := PriorityMux(lenExists.reverse, addrByLen.reverse)
-    bestMatch
-  })
-  
-  // find continued matches
-  private val sMatches = VecInit(sColSets.map{cs =>
+    matchIndex := PriorityEncoder(validRows)
+    val m = PriorityMux(validRows, bestMatches)
+    matchLength := (
+      if(params.maxCharsToEncode < params.camCharsPerCycle)
+        m.length min params.maxCharsToEncode.U
+      else
+        m.length)
+    matchCAMAddress := m.address
+    matchLengthFull := matchLength
+    
+    // update continue
+    // if it should not continue, it will be reset later this cycle
+    continueLength := matchLengthFull
+    continues := matchLengths(matchIndex)
+      .map(_ + matchIndex === charsToProcess)
+  } otherwise {
+    // there is a match to continue
+    
     val lenExists =
       WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
     val addrByLen =
       Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
     addrByLen := DontCare
-    val bestMatch = Wire(new Match)
     
-    matchLengths(0).zip(cs).zipWithIndex.foreach{case ((l, c), i) =>
+    matchLengths(0).zip(continues).zipWithIndex.foreach{case ((l, c), i) =>
       when(c) {
         lenExists(l) := true.B
         addrByLen(l) := i.U
@@ -187,57 +213,49 @@ class CAM(params: Parameters) extends Module {
     
     lenExists(0) := true.B
     
-    bestMatch.length := params.camCharsIn.U - PriorityEncoder(lenExists.reverse)
-    bestMatch.address := PriorityMux(lenExists.reverse, addrByLen.reverse)
-    bestMatch
-  })
-  
-  val dColSet = Reg(Vec(params.camSize, Bool()))
-  
-  private val dMatch = {
-    val lenExists =
-      WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
-    val addrByLen =
-      Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
-    addrByLen := DontCare
-    val bestMatch = Wire(new Match)
+    matchIndex := 0.U
+    matchLength :=
+      (params.camCharsPerCycle.U - PriorityEncoder(lenExists.reverse)) min
+      (params.maxCharsToEncode.U - continueLength)
+    matchCAMAddress := PriorityMux(lenExists.reverse, addrByLen.reverse)
+    matchLengthFull := matchLength + continueLength
     
-    matchLengths(0).zip(dColSet).zipWithIndex.foreach{case ((l, c), i) =>
-      when(c) {
-        lenExists(l) := true.B
-        addrByLen(l) := i.U
-      }
-    }
-    
-    lenExists(0) := true.B
-    
-    bestMatch.length := params.camCharsIn.U - PriorityEncoder(lenExists.reverse)
-    bestMatch.address := PriorityMux(lenExists.reverse, addrByLen.reverse)
-    bestMatch
+    // update continue
+    // if it should not continue, it will be reset later this cycle
+    continueLength := matchLengthFull
+    continues := matchLengths(0)
+      .map(_ === charsToProcess)
+      .zip(continues)
+      .map(c => c._1 && c._2)
   }
   
-  // these wires are for passing data from stage 3 to stage 2
-  val contIsDeep = WireDefault(false.B)
-  val contIndex = WireDefault(0.U(params.camCharsPerCycle.idxBits.W))
+  intracycleIndex := 0.U
   
-  private var cMatch = Mux(contIsDeep, dMatch, sMatches(contIndex))
-  
-  dColSet := matchLengths(0)
-    .map(_ === charsToProcess)
-    .zip(Mux(contIsDeep, dColSet, sColSets(contIndex)))
-    .map{l => l._1 && l._2}
+  when(matchIndex + matchLength =/= charsToProcess) {
+    continueLength := 0.U
+    continues := DontCare
+    intracycleIndex := matchIndex + matchLength
+    pushbackprev := true.B
+  }
   
   when(pushbacknext) {
     stall := true.B
     pushbackprev := true.B
-    dColSet := dColSet
+    continueLength := continueLength
+    continues := continues
+    intracycleIndex := intracycleIndex
   }
+  
+  
   
   //============================================================================
   // PIPELINE STAGE 3
-  nMatches = WireDefault(RegEnable(nMatches, !stall))
-  cMatch = WireDefault(RegEnable(cMatch, !stall))
+  matchIndex = WireDefault(RegEnable(matchIndex, !stall))
+  matchLength = WireDefault(RegEnable(matchLength, !stall))
+  matchLengthFull = WireDefault(RegEnable(matchLengthFull, !stall))
+  matchCAMAddress = WireDefault(RegEnable(matchCAMAddress, !stall))
   charsToProcess = WireDefault(RegEnable(charsToProcess, 0.U, !stall))
+  io_charsIn_bits = WireDefault(RegEnable(io_charsIn_bits, !stall))
   io_charsIn_valid = WireDefault(RegEnable(io_charsIn_valid, 0.U, !stall))
   io_charsIn_finished =
     WireDefault(RegEnable(io_charsIn_finished, false.B, !stall))
@@ -248,74 +266,35 @@ class CAM(params: Parameters) extends Module {
   //============================================================================
   
   
-  val intracycleIdx = RegNext(0.U(params.camCharsPerCycle.idxBits.W), 0.U)
-  val continueLength = RegInit(0.U(params.maxCharsToEncode.valBits.W))
   
-  val continued = continueLength =/= 0.U
-  
-  val nMatchesValid = nMatches
-    .map(_.length =/= 0.U)
-    .zipWithIndex
-    .map(v => v._1 && v._2.U >= intracycleIdx)
-  val nMatchIdx = PriorityEncoder(nMatchesValid)
-  private val nMatch = nMatches(nMatchIdx)
-  val nAnyValid = nMatchesValid.reduce(_ || _)
-  
-  val chosenMatchIdx = Mux(continued, 0.U, nMatchIdx)
-  private val chosenMatch = Mux(continued, cMatch, nMatch)
-  val chosenMatchValid = Mux(continued, true.B, nAnyValid)
-  val preceedingLiterals = chosenMatchIdx - intracycleIdx
-  
-  // these are sent to stage 2
-  contIndex := nMatchIdx
-  contIsDeep := continued
+  intracycleIndex = RegNext(0.U(params.camCharsPerCycle.idxBits.W), 0.U)
   
   io.finished := false.B
-  io.matchLength := 0.U
-  io.matchCAMAddress := DontCare
-  io.literalCount := preceedingLiterals
-  continueLength := 0.U
+  io.matchLength := matchLengthFull
+  io.matchCAMAddress := matchCAMAddress
   
-  val goesToEnd = chosenMatch.length + chosenMatchIdx === charsToProcess
-  val reachMatch = preceedingLiterals <= io.maxLiteralCount
+  val finished = io_charsIn_finished && charsToProcess === io_charsIn_valid
   
-  when(!chosenMatchValid) {
-    io.literalCount := charsToProcess - intracycleIdx
-  }.elsewhen(chosenMatch.length + continueLength >= params.maxCharsToEncode.U) {
-    io.matchLength := params.maxCharsToEncode.U - continueLength
-    io.matchCAMAddress := chosenMatch.address
-    io.literalCount := preceedingLiterals
-    when(!io.matchReady) {
-      pushbackprev := true.B
-      intracycleIdx := chosenMatchIdx
-    } otherwise {
-      pushbackprev := true.B
-      intracycleIdx := chosenMatchIdx + io.matchLength
-    }
-  }.elsewhen(!goesToEnd) {
-    io.matchLength := continueLength + chosenMatch.length
-    io.matchCAMAddress := chosenMatch.address
-    io.literalCount := preceedingLiterals
-    when(!io.matchReady) {
-      pushbackprev := true.B
-      intracycleIdx := chosenMatchIdx
-    } otherwise {
-      pushbackprev := true.B
-      intracycleIdx := chosenMatchIdx + chosenMatch.length
-    }
-  }.elsewhen(reachMatch) {
-    continueLength := continueLength + chosenMatch.length
-    io.literalCount := preceedingLiterals
-  } otherwise {
-    io.literalCount := preceedingLiterals
+  pushbackprev := true.B
+  intracycleIndex := matchIndex + Mux(io.matchReady, matchLength, 0.U)
+  
+  when(matchIndex + matchLength === charsToProcess && !finished) {
+    io.matchLength := 0.U
+    io.matchCAMAddress := DontCare
   }
+  
+  when(matchIndex + matchLength === charsToProcess || matchLength === 0.U) {
+    pushbackprev := false.B
+    intracycleIndex := 0.U
+  }
+  
+  io.literalCount := Mux(matchLength === 0.U, charsToProcess, matchIndex) - intracycleIndex
   
   when(io.literalCount > io.maxLiteralCount) {
     pushbackprev := true.B
-    intracycleIdx := intracycleIdx + io.maxLiteralCount
+    intracycleIndex := intracycleIndex + io.maxLiteralCount
   }
   
-  // todo: handle charsIn.finished
-  // todo: output literal characters
-  //       (current impl depends on in == literal)
+  io.finished := io_charsIn_finished &&
+    (matchIndex + matchLength === io_charsIn_valid || matchLength === 0.U)
 }
