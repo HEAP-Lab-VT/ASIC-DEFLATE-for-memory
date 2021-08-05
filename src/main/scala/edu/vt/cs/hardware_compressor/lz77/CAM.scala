@@ -87,7 +87,7 @@ class CAM(params: Parameters) extends Module {
   
   val matchValids = equalityArray
     .zipWithIndex
-    map{case (e, i) => e.map(_ && i.U < io.charsIn.valid)}
+    .map{case (e, i) => e.map(_ && i.U < io.charsIn.valid)}
     .sliding(params.minCharsToEncode)
     .map(_.reduce((a, b) => a.zip(b).map(ab => ab._1 && ab._2)))
     .toSeq
