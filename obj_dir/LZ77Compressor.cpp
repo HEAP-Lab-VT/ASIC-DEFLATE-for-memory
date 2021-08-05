@@ -8,7 +8,7 @@
 #define TIMEOUT_ENABLE true
 #define TIMEOUT_CYCLES 20000
 
-#define IN_VEC_SIZE 8
+#define IN_VEC_SIZE 11
 #define OUT_VEC_SIZE 8
 
 static size_t min(size_t a, size_t b) {return a <= b ? a : b;}
@@ -69,6 +69,9 @@ int main(int argc, char **argv, char **env)
 		compressor->io_in_bits_5 = inBuf[5];
 		compressor->io_in_bits_6 = inBuf[6];
 		compressor->io_in_bits_7 = inBuf[7];
+		compressor->io_in_bits_8 = inBuf[8];
+		compressor->io_in_bits_9 = inBuf[9];
+		compressor->io_in_bits_10 = inBuf[10];
 		compressor->io_in_valid = inBufIdx;
 		compressor->io_out_ready = OUT_VEC_SIZE - outBufIdx;
 		

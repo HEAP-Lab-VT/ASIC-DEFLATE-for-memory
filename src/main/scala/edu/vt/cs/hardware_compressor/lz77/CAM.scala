@@ -10,13 +10,14 @@ class CAM(params: Parameters) extends Module {
   val io = IO(new Bundle {
     val charsIn = Flipped(DecoupledStream(
       params.camCharsIn, UInt(params.characterBits.W)))
-    val maxLiteralCount = Input(UInt(params.camCharsIn.valBits.W))
-    val matchReady = Input(Bool())
     
     // Output a match and the number of literals preceeding the match
     val matchCAMAddress = Output(UInt(params.camSize.idxBits.W))
     val matchLength = Output(UInt(params.maxCharsToEncode.valBits.W))
-    val literalCount = Output(UInt(params.camCharsIn.valBits.W))
+    val matchReady = Input(Bool())
+    
+    val litOut = DecoupledStream(
+      params.camCharsPerCycle, UInt(params.characterBits.W))
     
     val finished = Output(Bool())
   })
@@ -288,13 +289,19 @@ class CAM(params: Parameters) extends Module {
     intracycleIndex := 0.U
   }
   
-  io.literalCount := Mux(matchLength === 0.U, charsToProcess, matchIndex) - intracycleIndex
+  io.litOut.valid :=
+    Mux(matchLength === 0.U, charsToProcess, matchIndex) - intracycleIndex
   
-  when(io.literalCount > io.maxLiteralCount) {
+  when(io.litOut.valid > io.litOut.ready) {
     pushbackprev := true.B
-    intracycleIndex := intracycleIndex + io.maxLiteralCount
+    intracycleIndex := intracycleIndex + io.litOut.ready
+  }
+  
+  for(i <- 0 until params.camCharsPerCycle) {
+    io.litOut.bits(i) := io_charsIn_bits(intracycleIndex + i.U)
   }
   
   io.finished := io_charsIn_finished &&
     (matchIndex + matchLength === io_charsIn_valid || matchLength === 0.U)
+  io.litOut.finished := io.finished // not used
 }
