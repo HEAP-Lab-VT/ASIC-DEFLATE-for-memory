@@ -82,10 +82,12 @@ class CAM(params: Parameters) extends Module {
         .zipWithIndex
         .drop(i)
         .take(params.camSize)
-        .map{case (hc, hi) => hc === c && i.U < io.charsIn.valid &&
+        .map{case (hc, hi) => hc === c &&
           (hi.U >= params.camSize.U - camIndex || !camFirstPass)}}
   
   val matchValids = equalityArray
+    .zipWithIndex
+    map{case (e, i) => e.map(_ && i.U < io.charsIn.valid)}
     .sliding(params.minCharsToEncode)
     .map(_.reduce((a, b) => a.zip(b).map(ab => ab._1 && ab._2)))
     .toSeq
