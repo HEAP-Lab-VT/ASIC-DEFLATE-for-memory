@@ -118,7 +118,9 @@ class CAM(params: Parameters) extends Module {
   
   //============================================================================
   // PIPELINE STAGE 2
-  matchLengths = WireDefault(RegEnable(matchLengths, !stall))
+  matchLengths = WireDefault(RegEnable(matchLengths,
+    VecInit(Seq.fill(params.camCharsPerCycle, params.camSize)(0.U)
+      .map(v => VecInit(v))), !stall))
   charsToProcess = WireDefault(RegEnable(charsToProcess, 0.U, !stall))
   var io_charsIn_bits = WireDefault(RegEnable(io.charsIn.bits, !stall))
   var io_charsIn_valid = WireDefault(RegEnable(io.charsIn.valid, 0.U, !stall))
@@ -254,8 +256,8 @@ class CAM(params: Parameters) extends Module {
   //============================================================================
   // PIPELINE STAGE 3
   matchIndex = WireDefault(RegEnable(matchIndex, !stall))
-  matchLength = WireDefault(RegEnable(matchLength, !stall))
-  matchLengthFull = WireDefault(RegEnable(matchLengthFull, !stall))
+  matchLength = WireDefault(RegEnable(matchLength, 0.U, !stall))
+  matchLengthFull = WireDefault(RegEnable(matchLengthFull, 0.U, !stall))
   matchCAMAddress = WireDefault(RegEnable(matchCAMAddress, !stall))
   charsToProcess = WireDefault(RegEnable(charsToProcess, 0.U, !stall))
   io_charsIn_bits = WireDefault(RegEnable(io_charsIn_bits, !stall))
