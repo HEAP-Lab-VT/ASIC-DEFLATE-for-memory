@@ -19,29 +19,27 @@ class LZ77Decompressor(params: Parameters) extends Module {
   // Mem avoids FIRRTL stack overflow (chisel3 issue #642)
   // Mem uses verilog array instead of chained muxes
   // TODO: prewrite optimization like compressor
-  val byteHistory = Mem(params.camSize, UInt(params.characterBits.W))
+  val camBuffer = Mem(params.camBufSize, UInt(params.characterBits.W))
   // the position in byteHistory of the next byte to write
-  val byteHistoryIndex = RegInit(UInt(params.camSize.idxBits.W), 0.U)
+  val camIndex = RegInit(UInt(params.camBufSize.idxBits.W), 0.U)
   
   // push chars to history
   val newHistoryCount = io.out.valid min io.out.ready
-  byteHistoryIndex := (
-    if(params.camSizePow2) byteHistoryIndex + newHistoryCount
-    else (byteHistoryIndex +& newHistoryCount) % params.camSize.U)
-  for(index <- 0 until io.out.bits.length)
-    when(index.U < newHistoryCount) {
-      byteHistory(
-        if(params.camSizePow2)
-          (byteHistoryIndex + index.U)(params.camSize.idxBits - 1, 0)
-        else
-          (byteHistoryIndex + index.U) % params.camSize.U
-      ) := io.out.bits(index)
-    }
+  camIndex := (
+    if(params.camBufSize.isPow2) camIndex + newHistoryCount
+    else (camIndex +& newHistoryCount) % params.camBufSize.U)
+  for(index <- 0 until params.decompressorCharsOut)
+    camBuffer(
+      if(params.camBufSize.isPow2)
+        (camIndex + index.U)(params.camBufSize.idxBits - 1, 0)
+      else
+        (camIndex + index.U) % params.camBufSize.U
+    ) := io.out.bits(index)
   
   
   // This records the encoding header while traversing an encoding
-  val matchLength = Reg(UInt(log2Ceil(params.extraCharacterLengthIncrease
-    max (params.maxCharsInMinEncoding + 2)).W))
+  val matchLength = Reg(UInt((params.extraCharacterLengthIncrease
+    max (params.maxCharsInMinEncoding + 1)).valBits.W))
   val matchAddress = Reg(UInt(params.camSize.idxBits.W))
   val matchContinue = Reg(Bool())
   
@@ -51,7 +49,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
     Enum(
       numberOfStates
     )
-  val state = RegInit(UInt(log2Ceil(numberOfStates).W), waitingForInput)
+  val state = RegInit(UInt(numberOfStates.idxBits.W), waitingForInput)
   
   switch(state) {
     is(waitingForInput) {
@@ -139,12 +137,12 @@ class LZ77Decompressor(params: Parameters) extends Module {
       
       for(index <- 0 until io.out.bits.length)
         when(matchAddress < (params.camSize - index).U) {
-          io.out.bits(index) := byteHistory(matchAddress + byteHistoryIndex + (
-            if(params.camSizePow2) index.U(params.camSize.idxBits.W)
+          io.out.bits(index) := camBuffer(matchAddress + camIndex + (
+            if(params.camBufSize.isPow2) index.U(params.camBufSize.idxBits.W)
             else
-              Mux(matchAddress + index.U < params.camSize.U - byteHistoryIndex,
+              Mux(matchAddress + index.U < params.camBufSize.U - camIndex,
                 index.U,
-                index.U - params.camSize.U)))
+                index.U - params.camBufSize.U)))
         } otherwise {
           if(index > 0)
             io.out.bits(index) :=

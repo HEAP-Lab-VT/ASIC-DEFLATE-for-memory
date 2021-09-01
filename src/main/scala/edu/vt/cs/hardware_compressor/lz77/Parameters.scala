@@ -2,14 +2,15 @@ package edu.vt.cs.hardware_compressor.lz77
 
 import chisel3._
 import chisel3.util._
+import Parameters._
 
 class Parameters(
     characterBitsParam: Int = 8,
-    compressorCharsInParam: Int = 8,
+    compressorCharsInParam: Int = 11,
     compressorCharsOutParam: Int = 8,
     decompressorCharsInParam: Int = 8,
     decompressorCharsOutParam: Int = 8,
-    camSizeParam: Int = 4096,
+    camSizeParam: Int = 4088,
     escapeCharacterParam: Int = 103,
     minCharsToEncodeParam: Int = 4,
     maxCharsToEncodeParam: Int = 4095
@@ -52,9 +53,6 @@ class Parameters(
   // size of the CAM (in characters)
   val camSize = camSizeParam
   
-  // true iff the CAM size is a power of 2 (allows some wrapping optimizations)
-  val camSizePow2 = camSize == 1 << log2Ceil(camSize)
-  
   // input bus width of the CAM
   val camCharsIn = compressorCharsIn // not configurable without buffer
   
@@ -64,11 +62,8 @@ class Parameters(
   // (bus width - lookahead)
   val camCharsPerCycle = camCharsIn - camLookahead
   
-  // size of the history buffer (including space for erroneous writes)
-  val historySize = camSize + camCharsPerCycle
-  
-  // iff the history size is a power of 2 (allows some wrapping optimizations)
-  val histSizePow2 = historySize == 1 << log2Ceil(historySize)
+  // size of the CAM buffer (including space for erroneous writes)
+  val camBufSize = (camSize + camCharsPerCycle).ceilPow2.intValue
   
   
   //============================================================================
@@ -86,20 +81,20 @@ class Parameters(
   
   // size of shortest encoding: escape + confirmation + address + length
   val minEncodingChars =
-    ((characterBits + 1 + log2Ceil(camSize)) / characterBits) + 1
+    ((characterBits + 1 + camSize.idxBits) / characterBits) + 1
   val minEncodingBits = minEncodingChars * characterBits
   
   // bits in min-encoding used to identify the length of the sequence
   val minEncodingLengthBits =
-    minEncodingBits - characterBits - 1 - log2Ceil(camSize)
+    minEncodingBits - characterBits - 1 - camSize.idxBits
   
   // additional sequence characters that can be described with one additional
   // character to the encoding
-  val extraCharacterLengthIncrease = (1 << characterBits) - 1
+  val extraCharacterLengthIncrease = characterBits.space.intValue - 1
   
   // maximum characters that can be in a sequence of the minimum encoding length
   val maxCharsInMinEncoding =
-    minCharsToEncode + (1 << minEncodingLengthBits) - 2
+    minCharsToEncode + minEncodingLengthBits.maxVal.intValue - 1
   
   
   //============================================================================
@@ -130,21 +125,31 @@ class Parameters(
     throw new IllegalArgumentException(
       "decompressorCharsIn must be at least minEncodingChars")
   
-  if(!histSizePow2)
+  if(!camBufSize.isPow2)
     // may require more complex logic including dividers
-    println("warning: " +
-      "CAM history size not a power of 2; may cause decreased performance")
+    println(s"warning: CAM buffer size not a power of 2 ($camBufSize); " +
+      "may cause decreased performance")
+  
+  if(camBufSize > camSize + camCharsPerCycle)
+    // CAM buffer is larger than necessary
+    println("warning: CAM buffer not fully utilized." +
+      s" (${camSize + camCharsPerCycle} of $camBufSize elements utilized.)")
+  
+  if(camBufSize < camSize + camCharsPerCycle)
+    // CAM buffer is too small
+    throw new IllegalArgumentException(
+      "CAM buffer too small")
 }
 
 object Parameters {
   
   def apply(
       characterBits: Int = 8,
-      compressorCharsIn: Int = 8,
+      compressorCharsIn: Int = 11,
       compressorCharsOut: Int = 8,
       decompressorCharsIn: Int = 8,
       decompressorCharsOut: Int = 8,
-      camSize: Int = 4096,
+      camSize: Int = 4088,
       escapeCharacter: Int = 103,
       minCharsToEncode: Int = 4,
       maxCharsToEncode: Int = 4095): Parameters =
@@ -204,7 +209,8 @@ object Parameters {
     def idxUInt(): UInt = UInt(v.idxBits.W)
     def maxVal(): BigInt = (BigInt(1) << v.intValue) - 1
     def space(): BigInt = BigInt(1) << v.intValue
-    def pow2(): Boolean = v == 1 << log2Ceil(v)
+    def isPow2(): Boolean = v == v.ceilPow2
+    def ceilPow2(): BigInt = v.idxBits.space
   }
   implicit class widthOpsInt(v: Int) extends widthOpsBigInt(v)
   implicit class widthOpsLong(v: Long) extends widthOpsBigInt(v)

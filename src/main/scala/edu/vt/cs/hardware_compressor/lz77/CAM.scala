@@ -30,42 +30,42 @@ class CAM(params: Parameters) extends Module {
   
   
   // This stores the byte history of the CAM.
-  val byteHistory = Mem(params.historySize, UInt(params.characterBits.W))
+  val camBuffer = Mem(params.camBufSize, UInt(params.characterBits.W))
   // This is true iff the camIndex has not yet rolled over
   val camFirstPass = RegInit(true.B)
   // This stores the cam index where the next character will be stored
-  val camIndex = RegInit(UInt(params.historySize.idxBits.W), 0.U)
+  val camIndex = RegInit(UInt(params.camBufSize.idxBits.W), 0.U)
   
   
   // write data to history
   for(index <- 0 until io.charsIn.bits.length)
     // when(index.U < io.charsIn.ready) {
-      byteHistory(
-        if(params.histSizePow2)
-          (camIndex + index.U)(params.historySize.idxBits - 1, 0)
+      camBuffer(
+        if(params.camBufSize.isPow2)
+          (camIndex + index.U)(params.camBufSize.idxBits - 1, 0)
         else
-          (camIndex +& index.U) % params.historySize.U
+          (camIndex +& index.U) % params.camBufSize.U
       ) := io.charsIn.bits(index)
     // }
-  if(params.camSize.pow2) camIndex := camIndex + io.charsIn.ready
-  else camIndex := (camIndex +& io.charsIn.ready) % params.historySize.U
+  if(params.camBufSize.isPow2) camIndex := camIndex + io.charsIn.ready
+  else camIndex := (camIndex +& io.charsIn.ready) % params.camBufSize.U
   camFirstPass := camFirstPass &&
-    (io.charsIn.ready < params.historySize.U - camIndex)
+    (io.charsIn.ready < params.camBufSize.U - camIndex)
   
   io.charsIn.ready := params.camCharsPerCycle.U
   
   
-  // merge byteHistory and searchPattern for easy matching
+  // merge camBuffer and searchPattern for easy matching
   val history =
     (0 until params.camSize)
-      .map(_ + params.historySize - params.camSize)
-      .map{i => byteHistory(
-        if(params.historySize.pow2)
+      .map(_ + params.camBufSize - params.camSize)
+      .map{i => camBuffer(
+        if(params.camBufSize.isPow2)
           i.U +% camIndex
         else
-          Mux(camIndex < (params.historySize - i).U,
+          Mux(camIndex < (params.camBufSize - i).U,
             camIndex +% i.U,
-            camIndex -% (params.historySize - i).U)
+            camIndex -% (params.camBufSize - i).U)
       )} ++
       io.charsIn.bits
   
