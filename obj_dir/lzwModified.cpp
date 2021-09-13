@@ -39,7 +39,7 @@
 
 // This allows lzwModified to only match the first X characters initially, choose the first longest match, then only investigate that match to see if the match was longer.
 #define CAP_INITIAL_MATCH false
-#define INITIAL_MATCH_CAP_LENGTH 7
+#define INITIAL_MATCH_CAP_LENGTH 16
 
 #define DEBUG false
 
