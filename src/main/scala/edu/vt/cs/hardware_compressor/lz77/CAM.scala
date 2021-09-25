@@ -52,7 +52,12 @@ class CAM(params: Parameters) extends Module {
   camFirstPass := camFirstPass &&
     (io.charsIn.ready < params.camBufSize.U - camIndex)
   
-  io.charsIn.ready := params.camCharsPerCycle.U
+  
+  var charsToProcess = Mux(io.charsIn.finished,
+    io.charsIn.valid min params.camCharsPerCycle.U,
+    Mux(io.charsIn.valid >= params.camLookahead.U,
+      io.charsIn.valid - params.camLookahead.U, 0.U))
+  io.charsIn.ready := charsToProcess
   
   
   // merge camBuffer and searchPattern for easy matching
@@ -68,11 +73,6 @@ class CAM(params: Parameters) extends Module {
             camIndex -% (params.camBufSize - i).U)
       )} ++
       io.charsIn.bits
-  
-  var charsToProcess = Mux(io.charsIn.finished,
-    io.charsIn.valid min params.camCharsPerCycle.U,
-    Mux(io.charsIn.valid >= params.camLookahead.U,
-      io.charsIn.valid - params.camLookahead.U, 0.U))
   
   // find the length of every possible match
   val equalityArray = io.charsIn.bits
@@ -92,7 +92,7 @@ class CAM(params: Parameters) extends Module {
     .map(_.reduce((a, b) => a.zip(b).map(ab => ab._1 && ab._2)))
     .toSeq
   
-  var matchLengths = VecInit(equalityArray
+  var allLengths = VecInit(equalityArray
     .take(params.camCharsPerCycle)
     .zipWithIndex
     .map{case (e, i) => e.map(_ && i.U < charsToProcess)}
@@ -102,10 +102,18 @@ class CAM(params: Parameters) extends Module {
         .map{case (e, c) => Mux(e, c +% 1.U, 0.U)}
     }
     .init
-    .zip(matchValids)
-    .map(lv => lv._1.zip(lv._2))
-    .map(_.map(lv => Mux(lv._2, lv._1, 0.U)))
-    .map(v => VecInit(v)))
+    .map(l => VecInit(l))
+    .toSeq)
+  var matchLengths = VecInit(equalityArray
+    .zipWithIndex
+    .map{case (e, i) => e.map(_ && i.U < io.charsIn.valid)}
+    .sliding(params.minCharsToEncode)
+    .map(_.reduce((a, b) => a.zip(b).map(ab => ab._1 && ab._2)))
+    .toSeq
+    .zip(allLengths)
+    .map(vl => vl._1.zip(vl._2))
+    .map(_.map(vl => Mux(vl._1, vl._2, 0.U)))
+    .map(l => VecInit(l)))
   
   
   when(pushbacknext) {
@@ -119,6 +127,9 @@ class CAM(params: Parameters) extends Module {
   //============================================================================
   // PIPELINE STAGE 2
   matchLengths = WireDefault(RegEnable(matchLengths,
+    VecInit(Seq.fill(params.camCharsPerCycle, params.camSize)
+      (0.U(params.camCharsPerCycle.valBits.W)).map(v => VecInit(v))), !stall))
+  allLengths = WireDefault(RegEnable(allLengths,
     VecInit(Seq.fill(params.camCharsPerCycle, params.camSize)
       (0.U(params.camCharsPerCycle.valBits.W)).map(v => VecInit(v))), !stall))
   charsToProcess = WireDefault(RegEnable(charsToProcess,
@@ -146,7 +157,7 @@ class CAM(params: Parameters) extends Module {
   
   // find where the match should start in the pattern
   // and rank CAM indexes based on match length
-  var matchIndex = Wire(UInt(params.camCharsPerCycle.idxBits.W))
+  var matchIndex = Wire(UInt(params.camCharsPerCycle.valBits.W))
   var matchLength = Wire(UInt(params.camCharsPerCycle.valBits.W))
   var matchLengthFull = Wire(UInt(params.maxCharsToEncode.valBits.W))
   var matchCAMAddress = Wire(UInt(params.camSize.idxBits.W))
@@ -160,9 +171,9 @@ class CAM(params: Parameters) extends Module {
     }
     val bestMatches = matchLengths.map{row =>
       val lenExists =
-        WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
+        WireDefault(VecInit(Seq.fill(params.camCharsPerCycle + 1)(false.B)))
       val addrByLen =
-        Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
+        Wire(Vec(params.camCharsPerCycle + 1, UInt(params.camSize.idxBits.W)))
       addrByLen := DontCare
       
       row.zipWithIndex.foreach{case (l, i) =>
@@ -185,7 +196,8 @@ class CAM(params: Parameters) extends Module {
       .map(_.map(_ =/= 0.U))
       .map(_.reduce(_ || _))
       .zipWithIndex
-      .map{case (v, i) => v && i.U >= intracycleIndex}
+      .map{case (v, i) => v && i.U >= intracycleIndex || i.U === charsToProcess}
+      .:+(true.B)
     
     matchIndex := PriorityEncoder(validRows)
     val m = PriorityMux(validRows, bestMatches)
@@ -206,12 +218,12 @@ class CAM(params: Parameters) extends Module {
     // there is a match to continue
     
     val lenExists =
-      WireDefault(VecInit(Seq.fill(params.camCharsIn + 1)(false.B)))
+      WireDefault(VecInit(Seq.fill(params.camCharsPerCycle + 1)(false.B)))
     val addrByLen =
-      Wire(Vec(params.camCharsIn + 1, UInt(params.camSize.idxBits.W)))
+      Wire(Vec(params.camCharsPerCycle + 1, UInt(params.camSize.idxBits.W)))
     addrByLen := DontCare
     
-    matchLengths(0).zip(continues).zipWithIndex.foreach{case ((l, c), i) =>
+    allLengths(0).zip(continues).zipWithIndex.foreach{case ((l, c), i) =>
       when(c) {
         lenExists(l) := true.B
         addrByLen(l) := i.U
@@ -278,7 +290,7 @@ class CAM(params: Parameters) extends Module {
   
   
   
-  intracycleIndex = RegNext(0.U(params.camCharsPerCycle.idxBits.W), 0.U)
+  intracycleIndex = RegNext(intracycleIndex, 0.U)
   
   io.finished := false.B
   io.matchLength := matchLengthFull
@@ -286,21 +298,17 @@ class CAM(params: Parameters) extends Module {
   
   val finished = io_charsIn_finished && charsToProcess === io_charsIn_valid
   
-  pushbackprev := true.B
-  intracycleIndex := matchIndex + Mux(io.matchReady, matchLength, 0.U)
-  
   when(matchIndex + matchLength === charsToProcess && !finished) {
     io.matchLength := 0.U
     io.matchCAMAddress := DontCare
   }
   
-  when(matchIndex + matchLength === charsToProcess || matchLength === 0.U) {
-    pushbackprev := false.B
-    intracycleIndex := 0.U
-  }
+  io.litOut.valid := matchIndex - intracycleIndex
   
-  io.litOut.valid :=
-    Mux(matchLength === 0.U, charsToProcess, matchIndex) - intracycleIndex
+  when(!io.matchReady && matchLength =/= 0.U) {
+    pushbackprev := true.B
+    intracycleIndex := matchIndex
+  }
   
   when(io.litOut.valid > io.litOut.ready) {
     pushbackprev := true.B
