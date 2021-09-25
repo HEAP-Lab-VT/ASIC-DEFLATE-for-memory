@@ -137,7 +137,8 @@ class LZ77Decompressor(params: Parameters) extends Module {
       
       for(index <- 0 until io.out.bits.length)
         when(matchAddress < (params.camSize - index).U) {
-          io.out.bits(index) := camBuffer(matchAddress + camIndex + (
+          io.out.bits(index) := camBuffer(matchAddress + camIndex -
+            params.camSize.U + (
             if(params.camBufSize.isPow2) index.U(params.camBufSize.idxBits.W)
             else
               Mux(matchAddress + index.U < params.camBufSize.U - camIndex,
