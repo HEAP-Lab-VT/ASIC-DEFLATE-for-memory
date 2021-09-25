@@ -62,7 +62,7 @@ class LZ77Compressor(params: Parameters) extends Module {
   
   // output encoding
   val outLitCount = cam.io.litOut.valid +& midEscape +& (
-    PopCount(cam.io.charsIn.bits.zipWithIndex
+    PopCount(cam.io.litOut.bits.zipWithIndex
       .map(c => c._1 === params.escapeCharacter.U &&
         c._2.U < cam.io.litOut.valid)))
   for(index <- 0 until params.compressorCharsOut)
