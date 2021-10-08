@@ -10,7 +10,7 @@ class Parameters(
     compressorCharsOutParam: Int = 8,
     decompressorCharsInParam: Int = 8,
     decompressorCharsOutParam: Int = 8,
-    camSizeParam: Int = 4088,
+    camSizeParam: Int = 1016,
     escapeCharacterParam: Int = 103,
     minCharsToEncodeParam: Int = 4,
     maxCharsToEncodeParam: Int = 4095

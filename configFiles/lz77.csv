@@ -3,7 +3,7 @@ compressorCharsIn, 11
 compressorCharsOut, 8
 decompressorCharsIn, 8
 decompressorCharsOut, 8
-camSize, 4088
+camSize, 1016
 escapeCharacter, 103
 minCharsToEncode, 4
 maxCharsToEncode, 4095
