@@ -1,9 +1,12 @@
 #include "VLZ77Decompressor.h"
 #include "verilated.h"
-#include "verilated_vcd_c.h"
 #include <stdio.h>
 
 #define TRACE_ENABLE true
+
+#if TRACE_ENABLE
+#include "verilated_vcd_c.h"
+#endif
 
 #define TIMEOUT_ENABLE true
 #define TIMEOUT_CYCLES 20000
