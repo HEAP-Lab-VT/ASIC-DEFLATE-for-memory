@@ -38,7 +38,7 @@ class CAM(params: Parameters) extends Module {
   
   
   // write data to history
-  for(index <- 0 until io.charsIn.bits.length)
+  for(index <- 0 until params.camCharsPerCycle)
     // when(index.U < io.charsIn.ready) {
       camBuffer(
         if(params.camBufSize.isPow2)
