@@ -38,8 +38,8 @@ class LZ77Compressor(params: Parameters) extends Module {
       cam.io.litOut.ready := (index + 1).U
     }
     
-    if(index < params.camCharsPerCycle)
-    when(outindex < io.out.bits.length.U) {
+    if(index < params.compressorCharsOut)
+    when(outindex < params.compressorCharsOut.U) {
       io.out.bits(outindex) := cam.io.litOut.bits(index)
       when(cam.io.litOut.bits(index) === params.escapeCharacter.U) {
         when(outindex +& 1.U < io.out.bits.length.U) {
@@ -52,19 +52,22 @@ class LZ77Compressor(params: Parameters) extends Module {
     }
   }
   
+  // literal count including double escapes
+  val outLitCount = WireDefault(cam.io.litOut.valid +& midEscape +& (
+    PopCount(cam.io.litOut.bits.zipWithIndex
+      .map(c => c._1 === params.escapeCharacter.U &&
+        c._2.U < cam.io.litOut.valid))))
+  
   when(encoder.io.working && !moreLiterals) {
     // if encoder is working, disable CAM
     cam.io.litOut.ready := 0.U
     cam.io.matchReady := false.B
     encoder.io.matchLength := 0.U
     encoder.io.matchCAMAddress := DontCare
+    outLitCount := 0.U
   }
   
   // output encoding
-  val outLitCount = cam.io.litOut.valid +& midEscape +& (
-    PopCount(cam.io.litOut.bits.zipWithIndex
-      .map(c => c._1 === params.escapeCharacter.U &&
-        c._2.U < cam.io.litOut.valid)))
   for(index <- 0 until params.compressorCharsOut)
     when(outLitCount < (io.out.bits.length - index).U) {
       io.out.bits(index.U + outLitCount) := encoder.io.out.bits(index)

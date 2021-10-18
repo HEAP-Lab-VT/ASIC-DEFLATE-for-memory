@@ -186,7 +186,9 @@ class LZ77Decompressor(params: Parameters) extends Module {
               matchLength := DontCare
               matchContinue := DontCare
             }
-            io.out.finished := io.in.finished && io.in.valid === (index + 1).U
+            io.out.finished := io.in.finished &&
+              io.in.valid === (index + 1).U &&
+              outvalid <= io.out.bits.length.U
           }
           when(index.U === io.in.valid) {
             // this marks the beginning of valid data
