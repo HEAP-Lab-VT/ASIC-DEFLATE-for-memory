@@ -2,7 +2,7 @@
 #include "verilated.h"
 #include <stdio.h>
 
-#define TRACE_ENABLE true
+#define TRACE_ENABLE false
 
 #if TRACE_ENABLE
 #include "verilated_vcd_c.h"
@@ -61,8 +61,7 @@ int main(int argc, char **argv, char **env)
 		
 		size_t bytesRead =
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
-		compressor->io_in_finished = (!bytesRead && IN_VEC_SIZE - inBufIdx)
-			|| compressor->io_in_finished;
+		compressor->io_in_finished = compressor->io_in_finished || feof(inf);
 		inBufIdx += bytesRead;
 		compressor->io_in_bits_0 = inBuf[0];
 		compressor->io_in_bits_1 = inBuf[1];
