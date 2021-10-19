@@ -81,6 +81,7 @@ class LZ77Compressor(params: Parameters) extends Module {
   io.out.valid := (outLitCount +& encoder.io.out.valid) min
     params.compressorCharsOut.U
   io.out.finished := cam.io.finished && encoder.io.out.finished &&
+    (!encoder.io.working || cam.io.litOut.valid =/= 0.U) &&
     outLitCount +& encoder.io.out.valid <= params.compressorCharsOut.U
 }
 
