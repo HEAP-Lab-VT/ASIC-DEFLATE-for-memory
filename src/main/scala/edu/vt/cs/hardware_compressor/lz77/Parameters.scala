@@ -127,12 +127,12 @@ class Parameters(
   
   if(!camBufSize.isPow2)
     // may require more complex logic including dividers
-    println(s"warning: CAM buffer size not a power of 2 ($camBufSize); " +
-      "may cause decreased performance")
+    System.err.println(s"warning: CAM buffer size not a power of 2" +
+      " ($camBufSize); may cause decreased performance")
   
   if(camBufSize > camSize + camCharsPerCycle)
     // CAM buffer is larger than necessary
-    println("warning: CAM buffer not fully utilized." +
+    System.err.println("warning: CAM buffer not fully utilized." +
       s" (${camSize + camCharsPerCycle} of $camBufSize elements utilized.)")
   
   if(camBufSize < camSize + camCharsPerCycle)
