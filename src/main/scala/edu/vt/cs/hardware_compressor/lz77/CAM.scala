@@ -246,6 +246,12 @@ class CAM(params: Parameters) extends Module {
       .map(_ === charsToProcess)
       .zip(continues)
       .map(c => c._1 && c._2)
+    
+    // don't save the continueLength if it is end of input
+    when(io_charsIn_finished && matchLength === 0.U) {
+      continueLength := 0.U
+      continues := DontCare
+    }
   }
   
   intracycleIndex := 0.U
