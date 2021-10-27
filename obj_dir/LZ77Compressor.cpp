@@ -2,14 +2,16 @@
 #include "verilated.h"
 #include <stdio.h>
 
+#ifndef TRACE_ENABLE
 #define TRACE_ENABLE false
+#endif
 
 #if TRACE_ENABLE
 #include "verilated_vcd_c.h"
 #endif
 
 #define TIMEOUT_ENABLE true
-#define TIMEOUT_CYCLES 20000
+#define TIMEOUT_CYCLES 1000
 
 #define IN_VEC_SIZE 11
 #define OUT_VEC_SIZE 8
