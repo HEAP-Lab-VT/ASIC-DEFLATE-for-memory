@@ -1,7 +1,7 @@
 package edu.vt.cs.hardware_compressor.lz77.test
 
 import edu.vt.cs.hardware_compressor.lz77.Parameters
-import edu.vt.cs.hardware_compressor.lz77.Parameters._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
 import scala.util.control.Breaks._
 import java.io._
 

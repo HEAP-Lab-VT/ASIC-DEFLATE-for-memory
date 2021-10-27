@@ -2,7 +2,7 @@ package edu.vt.cs.hardware_compressor.lz77
 
 import chisel3._
 import chisel3.util._
-import Parameters._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
     characterBitsParam: Int = 8,
@@ -199,23 +199,5 @@ object Parameters {
       maxCharsToEncodeParam = intMap("maxCharsToEncode"))
 
     return lz77ParametersOutput
-  }
-  
-  // some handy functions for interpreting parameters
-  implicit class widthOpsBigInt(v: BigInt) {
-    def valBits(): Int = log2Ceil(v + 1)
-    def idxBits(): Int = log2Ceil(v)
-    def valUInt(): UInt = UInt(v.valBits.W)
-    def idxUInt(): UInt = UInt(v.idxBits.W)
-    def maxVal(): BigInt = (BigInt(1) << v.intValue) - 1
-    def space(): BigInt = BigInt(1) << v.intValue
-    def isPow2(): Boolean = v == v.ceilPow2
-    def ceilPow2(): BigInt = v.idxBits.space
-  }
-  implicit class widthOpsInt(v: Int) extends widthOpsBigInt(v)
-  implicit class widthOpsLong(v: Long) extends widthOpsBigInt(v)
-  implicit class widthOpsUInt(v: UInt) {
-    def maxVal(): BigInt = (1 << v.getWidth) - 1
-    def space(): BigInt = 1 << v.getWidth
   }
 }

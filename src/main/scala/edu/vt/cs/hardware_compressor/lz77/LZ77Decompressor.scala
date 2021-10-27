@@ -1,7 +1,7 @@
 package edu.vt.cs.hardware_compressor.lz77
 
 import edu.vt.cs.hardware_compressor.util._
-import Parameters._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
 import chisel3._
 import chisel3.util._
 
