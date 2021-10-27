@@ -12,6 +12,7 @@ class Encoder(params: Parameters) extends Module {
     val matchLength = Input(UInt(params.maxCharsToEncode.valBits.W))
     val matchCAMAddress = Input(UInt(params.camSize.idxBits.W))
     
+    // true iff continuing from previous cycle
     val working = Output(Bool())
   })
   
