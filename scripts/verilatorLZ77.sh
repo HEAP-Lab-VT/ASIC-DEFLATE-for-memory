@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 
 # argument parsing from https://stackoverflow.com/a/14203146/8353152
+traceargs=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
   key="$1"
-
+  
   case $key in
     --trace)
-      traceargs="--trace -CFLAGS \"-DTRACE_ENABLE=true\""
+      traceargs+=" --trace -CFLAGS \"-DTRACE_ENABLE=true\""
       shift # past argument
       ;;
     --no-trace)
-      traceargs="-CFLAGS \"-DTRACE_ENABLE=false\""
+      traceargs+=" -CFLAGS \"-DTRACE_ENABLE=false\""
+      shift # past argument
+      ;;
+    --trace-underscore)
+      traceargs+=" --trace-underscore"
       shift # past argument
       ;;
     *)    # unknown option
