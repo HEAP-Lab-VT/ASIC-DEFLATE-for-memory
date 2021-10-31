@@ -42,7 +42,7 @@ class LZ77Compressor(params: Parameters) extends Module {
     when(outindex < params.compressorCharsOut.U) {
       io.out.bits(outindex) := cam.io.litOut.bits(index)
       when(cam.io.litOut.bits(index) === params.escapeCharacter.U) {
-        when(outindex +& 1.U < io.out.bits.length.U) {
+        when(outindex < (params.compressorCharsOut - 1).U) {
           io.out.bits(outindex + 1.U) := params.escapeCharacter.U
         }
         when(outindex +& 1.U === io.out.ready && index.U < cam.io.litOut.valid){
@@ -61,6 +61,7 @@ class LZ77Compressor(params: Parameters) extends Module {
   when(encoder.io.working && !moreLiterals) {
     // if encoder is working, disable CAM
     cam.io.litOut.ready := 0.U
+    midEscape := false.B
     cam.io.matchReady := false.B
     encoder.io.matchLength := 0.U
     encoder.io.matchCAMAddress := DontCare
