@@ -35,7 +35,7 @@ object LZ77Golden {
         params.minEncodingChars
       else
         params.minEncodingChars + 1 +
-          ((length - params.maxCharsInMinEncoding) /
+          ((length - params.maxCharsInMinEncoding - 1) /
             params.characterBits.maxVal.intValue)
     
     return (0 until encodinglength reverse).map(i =>
