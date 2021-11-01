@@ -75,29 +75,7 @@ object DecoupledStream {
  * facilitate such a consumer
  */
 class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
-    extends Module {
-  val io = IO(new StreamBundle(inSize, gen, outSize, gen))
-  
-  val buffer = Reg(Vec(outSize, gen))
-  val bufferLength = RegInit(0.U(log2Ceil(outSize + 1).W))
-  
-  for(i <- 0 until outSize)
-    when(i.U +& io.out.ready < bufferLength) {
-      buffer(i) := buffer(i.U + io.out.ready)
-    } otherwise {
-      buffer(i) := io.in.bits(i.U + io.out.ready - bufferLength)
-    }
-  bufferLength := Mux(io.out.ready < io.out.valid,
-    io.out.valid - io.out.ready, 0.U)
-  
-  for(i <- 0 until outSize)
-    io.out.bits(i) :=
-      Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength))
-  
-  io.out.valid := (bufferLength +& io.in.valid) min outSize.U
-  io.in.ready := outSize.U - bufferLength
-  io.out.finished := io.in.finished && io.in.ready >= io.in.valid
-}
+    extends StreamBuffer[T](inSize, outSize, outSize, gen, false) {}
 
 object UniversalConnector {
   def apply[T <: Data](
@@ -115,4 +93,34 @@ class StreamBundle[I <: Data, O <: Data](inC: Int, inGen: I, outC: Int, outGen: 
   
   override def cloneType: this.type =
     new StreamBundle(inC, inGen, outC, outGen).asInstanceOf[this.type]
+}
+
+
+class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
+    delay: Bool) extends Module {
+  val io = IO(new StreamBundle(inSize, gen, outSize, gen))
+  
+  val buffer = Reg(Vec(bufSize, gen))
+  val bufferLength = RegInit(0.U(bufSize.maxVal.W))
+  
+  for(i <- 0 until bufSize)
+    if(delay)
+      buffer(i) := buffer(i.U + io.out.ready)
+    else when(i.U +& io.out.ready < bufferLength) {
+      buffer(i) := buffer(i.U + io.out.ready)
+    } otherwise {
+      buffer(i) := io.in.bits(i.U + io.out.ready - bufferLength)
+    }
+  
+  bufferLength := Mux(bufferLength +& io.in.valid > io.out.ready,
+    (bufferLength +& io.in.valid - io.out.ready) min bufSize.U, 0.U)
+  
+  for(i <- 0 until outSize)
+    io.out.bits(i) := if(delay) buffer(i) else
+      Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength))
+  
+  val outUnbound = if(delay) bufferLength else (bufferLength +& io.in.valid)
+  io.out.valid := outUnbound min outSize.U
+  io.in.ready := (bufSize.U - bufferLength) min inSize.U
+  io.out.finished := io.in.finished && outUnbound <= outSize.U
 }
