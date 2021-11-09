@@ -101,7 +101,7 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
   val io = IO(new StreamBundle(inSize, gen, outSize, gen))
   
   val buffer = Reg(Vec(bufSize, gen))
-  val bufferLength = RegInit(0.U(bufSize.maxVal.W))
+  val bufferLength = RegInit(0.U(bufSize.valBits.W))
   
   for(i <- 0 until bufSize)
     if(delay)
