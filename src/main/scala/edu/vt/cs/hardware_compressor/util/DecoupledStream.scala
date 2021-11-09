@@ -124,3 +124,56 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
   io.in.ready := (bufSize.U - bufferLength) min inSize.U
   io.out.finished := io.in.finished && outUnbound <= outSize.U
 }
+
+
+class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
+    outSizes: Seq[Int], delay: Bool = false) extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(DecoupledStream(inSize, gen))
+    val out = outSizes.map(s => DecoupledStream(s, gen))
+  })
+  
+  val buffer = Reg(Vec(bufSize, gen))
+  val bufferLength = RegInit(0.U(bufSize.valBits.W))
+  val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
+  
+  // This is the amount that the buffer shifts in a cycle
+  // NOTE: progression width assumes at least one offset must be zero
+  // TODO: use a treeified min-reduction
+  val progression = Wire(UInt(
+    (((if(delay) 0 else inSize) + bufsize) min outsizes.max).valBits.W))
+  progression := (if(delay) bufferLength else (bufferLength +& io.in.valid)) min
+    io.out.zip(offsets).map(_._1.ready &+ _._2).reduce(_ min _)
+  
+  for(i <- 0 until bufSize)
+    if(delay)
+      buffer(i) := buffer(i.U + progression)
+    else when(i.U +& progression < bufferLength) {
+      buffer(i) := buffer(i.U + progression)
+    } otherwise {
+      buffer(i) := io.in.bits(i.U + progression - bufferLength)
+    }
+  
+  bufferLength := Mux(bufferLength +& io.in.valid > progression,
+    (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
+  
+  io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
+    val forward = bufferLength - off;
+    
+    for(i <- 0 until siz)
+      out.bits(i) := if(delay) buffer(i + off) else
+        Mux(i.U < forward, buffer(i + off),
+          io.in.bits(i.U - forward))
+    
+    val outUnbound = if(delay) forward else (forward +& io.in.valid)
+    when(outUnbound <= outSize.U) {
+      out.valid := outUnbound
+      out.finished := io.in.finished
+    } otherwise {
+      out.valid := outSize.U
+      out.finished := false.B
+    }
+  }
+  
+  io.in.ready := (bufSize.U - bufferLength) min inSize.U
+}
