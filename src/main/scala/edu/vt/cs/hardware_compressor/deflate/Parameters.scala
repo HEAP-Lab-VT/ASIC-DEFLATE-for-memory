@@ -6,7 +6,7 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
     lzParam: edu.vt.cs.hardware_compressor.lz77.Parameters,
-    huffmanParam: huffmanParameters.huffmanParameters,
+    huffmanParam: huffmanParameters.huffmanParameters
 ) {
   
   //============================================================================
