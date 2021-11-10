@@ -5,6 +5,10 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 import scala.util.control.Breaks._
 import java.io._
 
+// Note: This can be compiled into a jar by using the following sbt command:
+// set assembly / mainClass :=
+// Some("edu.vt.cs.hardware_compressor.lz77.test.LZ77GoldenCompress"); assembly
+
 object LZ77Golden {
   def encode(address: Int, length: Int, params: Parameters): Seq[Int] = {
     
