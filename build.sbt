@@ -63,10 +63,14 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.fu
 unmanagedSources / excludeFilter := HiddenFileFilter ||
   new SimpleFileFilter(_.getCanonicalPath contains
     (baseDirectory.value / "src" / "main" / "scala" / "combinations" getCanonicalPath)) ||
-  new SimpleFileFilter(_.getCanonicalPath contains
-    (baseDirectory.value / "src" / "main" / "scala" / "huffman" getCanonicalPath)) ||
+  // new SimpleFileFilter(_.getCanonicalPath contains
+  //   (baseDirectory.value / "src" / "main" / "scala" / "huffman" getCanonicalPath)) ||
   new SimpleFileFilter(_.getCanonicalPath contains
     (baseDirectory.value / "src" / "main" / "scala" / "lzw" getCanonicalPath))
+  // new SimpleFileFilter(_.getCanonicalPath contains
+  //   (baseDirectory.value / "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" / "huffman" getCanonicalPath)) ||
+  // new SimpleFileFilter(_.getCanonicalPath contains
+  //   (baseDirectory.value / "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" / "deflate" getCanonicalPath))
 
 // workaround for sbt bug that causes a hang when killing test execution
 Global / cancelable := false
