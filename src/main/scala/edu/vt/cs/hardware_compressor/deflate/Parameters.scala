@@ -75,7 +75,7 @@ object Parameters {
   
   def apply(
     lz: edu.vt.cs.hardware_compressor.lz77.Parameters,
-    huffman: huffmanParameters.huffmanParameters,): Parameters =
+    huffman: huffmanParameters.huffmanParameters): Parameters =
     new Parameters(
       lzParam = lz,
       huffmanParam = huffman)

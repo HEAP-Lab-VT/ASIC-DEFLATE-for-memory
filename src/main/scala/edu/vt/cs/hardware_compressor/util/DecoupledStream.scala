@@ -2,6 +2,7 @@ package edu.vt.cs.hardware_compressor.util
 
 import chisel3._
 import chisel3.util._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 
 /**
@@ -97,7 +98,7 @@ class StreamBundle[I <: Data, O <: Data](inC: Int, inGen: I, outC: Int, outGen: 
 
 
 class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
-    delay: Bool) extends Module {
+    delay: Boolean) extends Module {
   val io = IO(new StreamBundle(inSize, gen, outSize, gen))
   
   val buffer = Reg(Vec(bufSize, gen))
@@ -116,8 +117,8 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
     (bufferLength +& io.in.valid - io.out.ready) min bufSize.U, 0.U)
   
   for(i <- 0 until outSize)
-    io.out.bits(i) := if(delay) buffer(i) else
-      Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength))
+    io.out.bits(i) := (if(delay) buffer(i) else
+      Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength)))
   
   val outUnbound = if(delay) bufferLength else (bufferLength +& io.in.valid)
   io.out.valid := outUnbound min outSize.U
@@ -127,7 +128,7 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
 
 
 class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
-    outSizes: Seq[Int], delay: Bool = false) extends Module {
+    outSizes: Seq[Int], delay: Boolean = false) extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(inSize, gen))
     val out = outSizes.map(s => DecoupledStream(s, gen))
@@ -141,9 +142,9 @@ class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
   // NOTE: progression width assumes at least one offset must be zero
   // TODO: use a treeified min-reduction
   val progression = Wire(UInt(
-    (((if(delay) 0 else inSize) + bufsize) min outsizes.max).valBits.W))
+    (((if(delay) 0 else inSize) + bufSize) min outSizes.max).valBits.W))
   progression := (if(delay) bufferLength else (bufferLength +& io.in.valid)) min
-    io.out.zip(offsets).map(_._1.ready &+ _._2).reduce(_ min _)
+    io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
   
   for(i <- 0 until bufSize)
     if(delay)
@@ -161,16 +162,16 @@ class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
     val forward = bufferLength - off;
     
     for(i <- 0 until siz)
-      out.bits(i) := if(delay) buffer(i + off) else
-        Mux(i.U < forward, buffer(i + off),
-          io.in.bits(i.U - forward))
+      out.bits(i) := (if(delay) buffer(i.U + off) else
+        Mux(i.U < forward, buffer(i.U + off),
+          io.in.bits(i.U - forward)))
     
     val outUnbound = if(delay) forward else (forward +& io.in.valid)
-    when(outUnbound <= outSize.U) {
+    when(outUnbound <= siz.U) {
       out.valid := outUnbound
       out.finished := io.in.finished
     } otherwise {
-      out.valid := outSize.U
+      out.valid := siz.U
       out.finished := false.B
     }
   }
