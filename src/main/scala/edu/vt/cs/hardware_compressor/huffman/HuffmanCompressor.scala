@@ -61,7 +61,6 @@ class HuffmanCompressor(params: Parameters) extends Module {
   //============================================================================
   // COMPRESSOR INPUT
   //============================================================================
-  // This is similar to counter input
   
   
   for(i <- 0 until params.compressionParallelism) {
