@@ -22,7 +22,7 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   val compressorCharsIn = lz.compressorCharsIn
-  val compressorCharsOut = 
+  val compressorCharsOut = 6/*this is a placeholder*/
   val characterBits = lz.characterBits
   
   

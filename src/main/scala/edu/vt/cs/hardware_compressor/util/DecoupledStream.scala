@@ -50,6 +50,7 @@ class DecoupledStream[T <: Data](count: Int, gen: T)
   
   val ready = Input(UInt(log2Ceil(count + 1).W))
   val valid = Output(UInt(log2Ceil(count + 1).W))
+  // TODO: rename this to 'data'
   val bits  = Output(Vec(count, gen))
   val finished = Output(Bool())
   
