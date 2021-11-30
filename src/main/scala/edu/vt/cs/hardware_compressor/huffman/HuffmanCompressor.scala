@@ -5,6 +5,8 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 import chisel3._
 import chisel3.util._
 
+import huffmanCompressor.huffmanCompressor
+
 
 // Note: This module uses push input and pull output to facilitate block-style
 //  input and output, so one or more universal connectors may be necessary to
@@ -91,7 +93,9 @@ class HuffmanCompressor(params: Parameters) extends Module {
   //============================================================================
   
   io.out.zip(cHuffman.io.outputs).foreach{case (out, subout) =>
-    out.bits := 
+    
+    // assume packed starting from the least-significant bit (xxxx4321)
+    out.bits := subout.dataOut.asBools
     
     // make output valid as a chunk
     out.valid := Mux(subout.valid && subout.ready, subout.dataLength, 0.U)
