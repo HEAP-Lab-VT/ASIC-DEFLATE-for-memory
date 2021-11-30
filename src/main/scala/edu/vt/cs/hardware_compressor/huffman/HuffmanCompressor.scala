@@ -69,7 +69,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
     cHuffman.io.compressorInputs(i).dataIn := io.in_compressor.bits(i)
     
     // assert valid when valid is at least i
-    cHuffman.io.compressorInputs(i) := io.in_compressor.valid >= i.U
+    cHuffman.io.compressorInputs(i).valid := io.in_compressor.valid >= i.U
     
     when(io.in_compressor.finished) {
       // stop by setting the compression limit to the current byte
