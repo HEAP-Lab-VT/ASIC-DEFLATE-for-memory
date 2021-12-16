@@ -62,14 +62,20 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // COMPRESSOR INPUT
   //============================================================================
   
-  
+  var ready = true.B
   for(i <- 0 until params.compressionParallelism) {
     
     // connect data
     cHuffman.io.compressorInputs(i).dataIn := io.in_compressor.bits(i)
     
-    // assert valid when valid is at least i
-    cHuffman.io.compressorInputs(i).valid := io.in_compressor.valid >= i.U
+    // assert valid when valid is at least i and all previous are ready
+    cHuffman.io.compressorInputs(i).valid := io.in_compressor.valid >= i.U &&
+      ready
+    
+    ready &&= cHuffman.io.compressorInputs(i).ready
+    when(ready) {
+      io.in_counter.ready := (i + 1).U
+    }
     
     when(io.in_compressor.finished) {
       // stop by setting the compression limit to the current byte
@@ -82,9 +88,6 @@ class HuffmanCompressor(params: Parameters) extends Module {
       cHuffman.io.compressorInputs(i).compressionLimit := params.maxChars.U
     }
   }
-  
-  io.in_counter.ready :=
-    PriorityEncoder(cHuffman.io.compressorInputs.map(!_.ready) :+ true.B)
   
   
   //============================================================================
