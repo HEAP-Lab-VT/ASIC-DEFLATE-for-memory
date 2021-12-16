@@ -65,14 +65,14 @@ int main(int argc, char **argv, char **env)
 			fread(inBuf + inBufIdx, 1, IN_VEC_SIZE - inBufIdx, inf);
 		decompressor->io_in_finished = decompressor->io_in_finished || feof(inf);
 		inBufIdx += bytesRead;
-		decompressor->io_in_bits_0 = inBuf[0];
-		decompressor->io_in_bits_1 = inBuf[1];
-		decompressor->io_in_bits_2 = inBuf[2];
-		decompressor->io_in_bits_3 = inBuf[3];
-		decompressor->io_in_bits_4 = inBuf[4];
-		decompressor->io_in_bits_5 = inBuf[5];
-		decompressor->io_in_bits_6 = inBuf[6];
-		decompressor->io_in_bits_7 = inBuf[7];
+		decompressor->io_in_data_0 = inBuf[0];
+		decompressor->io_in_data_1 = inBuf[1];
+		decompressor->io_in_data_2 = inBuf[2];
+		decompressor->io_in_data_3 = inBuf[3];
+		decompressor->io_in_data_4 = inBuf[4];
+		decompressor->io_in_data_5 = inBuf[5];
+		decompressor->io_in_data_6 = inBuf[6];
+		decompressor->io_in_data_7 = inBuf[7];
 		decompressor->io_in_valid = inBufIdx;
 		decompressor->io_out_ready = OUT_VEC_SIZE - outBufIdx;
 		
@@ -88,14 +88,14 @@ int main(int argc, char **argv, char **env)
 		
 		c = min(decompressor->io_out_valid, decompressor->io_out_ready);
 		char tmpBuf[OUT_VEC_SIZE];
-		tmpBuf[0] = decompressor->io_out_bits_0;
-		tmpBuf[1] = decompressor->io_out_bits_1;
-		tmpBuf[2] = decompressor->io_out_bits_2;
-		tmpBuf[3] = decompressor->io_out_bits_3;
-		tmpBuf[4] = decompressor->io_out_bits_4;
-		tmpBuf[5] = decompressor->io_out_bits_5;
-		tmpBuf[6] = decompressor->io_out_bits_6;
-		tmpBuf[7] = decompressor->io_out_bits_7;
+		tmpBuf[0] = decompressor->io_out_data_0;
+		tmpBuf[1] = decompressor->io_out_data_1;
+		tmpBuf[2] = decompressor->io_out_data_2;
+		tmpBuf[3] = decompressor->io_out_data_3;
+		tmpBuf[4] = decompressor->io_out_data_4;
+		tmpBuf[5] = decompressor->io_out_data_5;
+		tmpBuf[6] = decompressor->io_out_data_6;
+		tmpBuf[7] = decompressor->io_out_data_7;
 		for(int i = 0; i < c; i++)
 			outBuf[i + outBufIdx] = tmpBuf[i];
 		outBufIdx += c;

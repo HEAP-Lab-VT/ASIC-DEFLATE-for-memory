@@ -50,8 +50,8 @@ class DecoupledStream[T <: Data](count: Int, gen: T)
   
   val ready = Input(UInt(log2Ceil(count + 1).W))
   val valid = Output(UInt(log2Ceil(count + 1).W))
-  // TODO: rename this to 'data'
-  val bits  = Output(Vec(count, gen))
+  val data = Output(Vec(count, gen))
+  def bits = data // alias legacy name
   val finished = Output(Bool())
   
   override def cloneType: this.type =
