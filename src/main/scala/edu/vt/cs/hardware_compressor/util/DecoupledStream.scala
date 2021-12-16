@@ -132,7 +132,7 @@ class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
     outSizes: Seq[Int], delay: Boolean = false) extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(inSize, gen))
-    val out = outSizes.map(s => DecoupledStream(s, gen))
+    val out = MixedVec(outSizes.map(s => DecoupledStream(s, gen)))
   })
   
   val buffer = Reg(Vec(bufSize, gen))
