@@ -326,6 +326,6 @@ class CAM(params: Parameters) extends Module {
   }
   
   io.finished := io_charsIn_finished &&
-    (matchIndex + matchLength === io_charsIn_valid || matchLengthFull === 0.U)
+    matchIndex + matchLength >= io_charsIn_valid
   io.litOut.finished := io.finished // not used
 }

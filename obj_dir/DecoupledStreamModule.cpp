@@ -1,7 +1,7 @@
 #include "verilated.h"
 #include <stdio.h>
 
-// ugly pre-processor macros
+// <editor-fold> ugly pre-processor macros
 #define _STR(s) #s
 #define STR(s) _STR(s)
 #define _CAT(s,t) s##t
@@ -58,6 +58,7 @@
 #define REPEAT48(x) REPEAT47(x) x(47)
 #define REPEAT49(x) REPEAT48(x) x(48)
 #define REPEAT50(x) REPEAT49(x) x(49)
+// </editor-fold>
 
 #ifndef MODNAME
 // #define MODNAME LZ77Compressor
