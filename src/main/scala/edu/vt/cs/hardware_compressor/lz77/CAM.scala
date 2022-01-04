@@ -29,50 +29,34 @@ class CAM(params: Parameters) extends Module {
   var pushbacknext = WireDefault(false.B)
   
   
-  // This stores the byte history of the CAM.
-  val camBuffer = Mem(params.camBufSize, UInt(params.characterBits.W))
-  // This is true iff the camIndex has not yet rolled over
-  val camFirstPass = RegInit(true.B)
-  // This stores the cam index where the next character will be stored
-  val camIndex = RegInit(UInt(params.camBufSize.idxBits.W), 0.U)
+  // stores the byte history of the CAM.
+  val camBuffer = Seq.fill(params.camBufSize)(Reg(UInt(params.characterBits.W)))
+  // stores the cam index where the next character will be stored
+  val bufferLength = RegInit(UInt(params.camBufSize.valBits.W), 0.U)
   
   
-  // write data to history
-  for(index <- 0 until params.camCharsPerCycle)
-    // when(index.U < io.charsIn.ready) {
-      camBuffer(
-        if(params.camBufSize.isPow2)
-          (camIndex + index.U)(params.camBufSize.idxBits - 1, 0)
-        else
-          (camIndex +& index.U) % params.camBufSize.U
-      ) := io.charsIn.bits(index)
-    // }
-  if(params.camBufSize.isPow2) camIndex := camIndex + io.charsIn.ready
-  else camIndex := (camIndex +& io.charsIn.ready) % params.camBufSize.U
-  camFirstPass := camFirstPass &&
-    (io.charsIn.ready < params.camBufSize.U - camIndex)
-  
-  
+  // number of characters to process in this cycle if no stall
   var charsToProcess = Mux(io.charsIn.finished,
     io.charsIn.valid min params.camCharsPerCycle.U,
     Mux(io.charsIn.valid >= params.camLookahead.U,
       io.charsIn.valid - params.camLookahead.U, 0.U))
-  io.charsIn.ready := charsToProcess
+  
+  io.charsIn.ready := Mux(!stall, charsToProcess, 0.U)
   
   
-  // merge camBuffer and searchPattern for easy matching
-  val history =
-    (0 until params.camSize)
-      .map(_ + params.camBufSize - params.camSize)
-      .map{i => camBuffer(
-        if(params.camBufSize.isPow2)
-          i.U +% camIndex
-        else
-          Mux(camIndex < (params.camBufSize - i).U,
-            camIndex +% i.U,
-            camIndex -% (params.camBufSize - i).U)
-      )} ++
-      io.charsIn.bits
+  // write data to history
+  when(!stall) {
+    (camBuffer ++ io.charsIn.data)
+      .sliding(params.camCharsPerCycle + 1)
+      .map(v => VecInit(v)(charsToProcess))
+      .zip(camBuffer.iterator) // idk why iterator, Seq extends IterableOnce
+      .foreach{case (h, b) => b := h}
+    bufferLength := (bufferLength +& charsToProcess) min params.camBufSize.U
+  }
+  
+  
+  // merge camBuffer and charsIn for easy matching
+  val history = camBuffer.takeRight(params.camSize) ++ io.charsIn.bits
   
   // find the length of every possible match
   val equalityArray = io.charsIn.bits
@@ -83,7 +67,7 @@ class CAM(params: Parameters) extends Module {
         .drop(i)
         .take(params.camSize)
         .map{case (hc, hi) => hc === c &&
-          (hi.U >= params.camSize.U - camIndex || !camFirstPass)}}
+          (params.camSize - hi max 0).U <= bufferLength}}
   
   val matchValids = equalityArray
     .zipWithIndex
@@ -119,7 +103,6 @@ class CAM(params: Parameters) extends Module {
   when(pushbacknext) {
     stall := true.B
     pushbackprev := true.B
-    io.charsIn.ready := 0.U
   }
   
   
