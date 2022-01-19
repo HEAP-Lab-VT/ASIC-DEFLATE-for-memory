@@ -136,14 +136,14 @@ class LZ77Decompressor(params: Parameters) extends Module {
       // processing an encoding
       
       for(index <- 0 until io.out.bits.length)
-        when(matchAddress < (params.camSize - index).U) {
-          io.out.bits(index) := camBuffer(matchAddress + camIndex -
-            params.camSize.U + (
-            if(params.camBufSize.isPow2) index.U(params.camBufSize.idxBits.W)
+        when(matchAddress < (params.camSize - index max 0).U) {
+          val bufIdx = matchAddress +& camIndex +&
+            (params.camBufSize - params.camSize + index).U
+          io.out.bits(index) := camBuffer(
+            if(params.camBufSize.isPow2)
+              bufIdx(params.camBufSize.idxBits - 1, 0)
             else
-              Mux(matchAddress + index.U < params.camBufSize.U - camIndex,
-                index.U,
-                index.U - params.camBufSize.U)))
+              bufIdx % params.camBufSize.idxBits.U)
         } otherwise {
           if(index > 0)
             io.out.bits(index) :=
@@ -154,23 +154,22 @@ class LZ77Decompressor(params: Parameters) extends Module {
       when(matchContinue) {
         // the current character is part of an encoding length
         
-        // the maximum input characters to consume w/ these params
+        // the maximum input characters to consume with these params
         val maxInChars = io.in.bits.length min
-          (io.out.bits.length / params.extraCharacterLengthIncrease + 1)
-        // valid out chars up to (but not including) current index
-        var whole = matchLength +&
-          (maxInChars * params.extraCharacterLengthIncrease).U
-        // set defaults for valid, ready, and length
-        io.out.valid := whole min io.out.bits.length.U
-        io.in.ready := maxInChars.U
-        matchLength := 0.U
-        when(io.out.ready < whole) {
-          matchLength := whole - io.out.ready
-        }
+          ((io.out.bits.length - 1) / params.extraCharacterLengthIncrease + 1)
+        
+        // Loop through input and detect conditions that stop parsing.
+        // Any of the following conditions stop parsing:
+        //  1) non-full character (end of encoding)
+        //  2) end of valid input
+        //  3) output not ready
+        // Loop backward so first (most recent) stop condition is used.
+        // matchLength is residual length from already processed characters
         for(index <- 0 until maxInChars reverse) {
-          // update whole for current index
-          whole = matchLength +&
+          // valid out chars up to (but not including) current index
+          val whole = matchLength +&
             (index * params.extraCharacterLengthIncrease).U
+          if(index != maxInChars)
           when(!io.in.bits(index).andR) {
             // current character is incomplete
             // consume current, and de-assert continue
@@ -190,7 +189,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
               io.in.valid === (index + 1).U &&
               outvalid <= io.out.bits.length.U
           }
-          when(index.U === io.in.valid) {
+          when(index.U === io.in.valid || (index == maxInChars).B) {
             // this marks the beginning of valid data
             // reset to defaults because previous assertions are invalid
             io.out.valid := whole min io.out.bits.length.U
@@ -206,7 +205,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
             matchLength := whole - io.out.ready
             matchContinue := true.B
             state := copyingDataFromHistory
-          }
+          } otherwise {if(index == maxInChars) io.in.ready := maxInChars.U}
         }
       } otherwise {
         // the encoding is already consumed, push remaining matchLength
