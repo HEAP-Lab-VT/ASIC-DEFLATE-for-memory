@@ -19,10 +19,10 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       UInt(params.characterBits.W))
   })
   
-  val cHuffman = Module(new huffmanDecompressor(params.cHuffman))
+  val huffman = Module(new huffmanDecompressor(params.huffman))
   
   // generate a rising edge
-  cHuffman.io.start := RegNext(true.B, false.B);
+  huffman.io.start := RegNext(true.B, false.B);
   
   
   //============================================================================
@@ -39,12 +39,12 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     // following is an incomplete/incorrect implementation
     // TODO
     // connect data
-    cHuffman.io.dataIn(i).bits := io.in(i).bits.asUInt // TODO
+    huffman.io.dataIn(i).bits := io.in(i).bits.asUInt // TODO
     
     // assert valid when valid is at least i
-    cHuffman.io.dataIn(i).valid := io.in(i).valid >= i.U
+    huffman.io.dataIn(i).valid := io.in(i).valid >= i.U
     
-    io.in(i).finished := cHuffman.io.finished
+    io.in(i).finished := huffman.io.finished
   }
   
   
@@ -53,14 +53,14 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   //============================================================================
   
   for(i <- 0 until params.parallelism) {
-    io.out(i).bits(0) := cHuffman.io.dataOut(i).bits
+    io.out(i).bits(0) := huffman.io.dataOut(i).bits
     
     // make output valid as a chunk
-    io.out(i).valid := Mux(cHuffman.io.dataOut.valid && !cHuffman.io.finished,
+    io.out(i).valid := Mux(huffman.io.dataOut.valid && !huffman.io.finished,
       1.U, 0.U)
     
-    cHuffman.io.dataout.ready := io.out(i).ready =/= 0.U
+    huffman.io.dataout.ready := io.out(i).ready =/= 0.U
     
-    io.out(i).finished := cHuffman.io.finished
+    io.out(i).finished := huffman.io.finished
   }
 }

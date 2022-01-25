@@ -21,10 +21,10 @@ class HuffmanCompressor(params: Parameters) extends Module {
       params.compressorCharsOut, UInt(params.compressedCharBits.W)))
   })
   
-  val cHuffman = Module(new huffmanCompressor(params.cHuffman))
+  val huffman = Module(new huffmanCompressor(params.huffman))
   
   // generate a rising edge
-  cHuffman.io.start := RegNext(true.B, false.B);
+  huffman.io.start := RegNext(true.B, false.B);
   
   
   //============================================================================
@@ -35,26 +35,26 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // we assume that the index only advances by small amounts, and we only need
   // it to determine how many characters were consumed per cycle.
   // val counterIdx = RegInit(UInt(params.counterCharsIn.idxBits.W), 0.U)
-  // counterIdx := cHuffman.io.characterFrequencyInputs.currentByteOut
+  // counterIdx := huffman.io.characterFrequencyInputs.currentByteOut
   
   // Thankfully, data translates directly.
-  cHuffman.io.characterFrequencyInputs.dataIn := io.in_counter.bits
+  huffman.io.characterFrequencyInputs.dataIn := io.in_counter.bits
   
   // only assert valid when all inputs are valid
-  cHuffman.io.characterFrequencyInputs.valid :=
+  huffman.io.characterFrequencyInputs.valid :=
     io.in_counter.valid === params.counterCharsIn.U ||
     (io.in_counter.finished && io.in_counter.valid =/= 0.U)
   
   // We do not know soon enough how many bytes are consumed, so we make the
   // (rather liberal) assumption that when ready and valid are asserted, all
   // inputs are consumed.
-  io.in_counter.ready := Mux(cHuffman.io.characterFrequencyInputs.ready &&
-    cHuffman.io.characterFrequencyInputs.valid, params.counterCharsIn.U, 0.U)
+  io.in_counter.ready := Mux(huffman.io.characterFrequencyInputs.ready &&
+    huffman.io.characterFrequencyInputs.valid, params.counterCharsIn.U, 0.U)
   
-  if(params.cHuffman.variableCompression)
+  if(params.huffman.variableCompression)
   when(io.in_counter.finished) {
-    cHuffman.io.characterFrequencyInputs.compressionLimit :=
-      cHuffman.io.characterFrequencyInputs.currentByteOut + io.in_counter.valid
+    huffman.io.characterFrequencyInputs.compressionLimit :=
+      huffman.io.characterFrequencyInputs.currentByteOut + io.in_counter.valid
   }
   
   
@@ -66,13 +66,13 @@ class HuffmanCompressor(params: Parameters) extends Module {
   for(i <- 0 until params.compressionParallelism) {
     
     // connect data
-    cHuffman.io.compressorInputs(i).dataIn := io.in_compressor.bits(i)
+    huffman.io.compressorInputs(i).dataIn := io.in_compressor.bits(i)
     
     // assert valid when valid is at least i and all previous are ready
-    cHuffman.io.compressorInputs(i).valid := io.in_compressor.valid >= i.U &&
+    huffman.io.compressorInputs(i).valid := io.in_compressor.valid >= i.U &&
       ready
     
-    ready &&= cHuffman.io.compressorInputs(i).ready
+    ready &&= huffman.io.compressorInputs(i).ready
     when(ready) {
       io.in_counter.ready := (i + 1).U
     }
@@ -80,12 +80,12 @@ class HuffmanCompressor(params: Parameters) extends Module {
     when(io.in_compressor.finished) {
       // stop by setting the compression limit to the current byte
       // TODO: Figure out whether the compression limit includes other ways.
-      cHuffman.io.compressorInputs(i).compressionLimit :=
-        cHuffman.io.compressorInputs(i).currentByteOut +
-        Mux(cHuffman.io.compressorInputs(i).valid, 1.U, 0.U)
+      huffman.io.compressorInputs(i).compressionLimit :=
+        huffman.io.compressorInputs(i).currentByteOut +
+        Mux(huffman.io.compressorInputs(i).valid, 1.U, 0.U)
     } otherwise {
       // set the compression limit as high as possible
-      cHuffman.io.compressorInputs(i).compressionLimit := params.maxChars.U
+      huffman.io.compressorInputs(i).compressionLimit := params.maxChars.U
     }
   }
   
@@ -94,7 +94,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // COMPRESSOR OUTPUT
   //============================================================================
   
-  io.out.zip(cHuffman.io.outputs).foreach{case (out, subout) =>
+  io.out.zip(huffman.io.outputs).foreach{case (out, subout) =>
     
     // assume packed starting from the least-significant bit (xxxx4321)
     out.bits := subout.dataOut.asBools
@@ -104,6 +104,6 @@ class HuffmanCompressor(params: Parameters) extends Module {
     
     subout.ready := out.ready >= subout.dataLength
     
-    out.finished := cHuffman.io.finished
+    out.finished := huffman.io.finished
   }
 }

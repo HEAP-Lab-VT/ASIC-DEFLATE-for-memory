@@ -5,7 +5,7 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
-    cHuffmanParam: huffmanParameters.huffmanParameters
+    huffmanParam: huffmanParameters.huffmanParameters
 ) {
   
   //============================================================================
@@ -14,7 +14,7 @@ class Parameters(
   
   // These are the parameters for the wrapped huffman module from Chandler
   // Most of the other parameters should be based on these.
-  val cHuffman = cHuffmanParam
+  val huffman = huffmanParam
   
   
   //============================================================================
@@ -70,8 +70,8 @@ class Parameters(
 object Parameters {
   
   def apply(
-    cHuffman: huffmanParameters.huffmanParameters): Parameters =
-    new Parameters(cHuffmanParam = cHuffman)
+    huffman: huffmanParameters.huffmanParameters): Parameters =
+    new Parameters(huffmanParam = huffman)
   
   def fromCSV(csvPath: String): Parameters = {
     var map: Map[String, String] = Map()
@@ -90,7 +90,7 @@ object Parameters {
     file.close
     
     val params = new Parameters(
-      cHuffmanParam = huffmanParameters.getHuffmanFromCSV
+      huffmanParam = huffmanParameters.getHuffmanFromCSV
         .getHuffmanFromCSV(map("sub-huffman")))
       
     System.err.println("Getting from CSV was successful")
