@@ -11,7 +11,7 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
  * 
  * A DecoupledStream has two parts: a producer and a consumer. The producer
  * is effectively "the output" of a stream of data, and the consumer is the
- * receiver of the data. The producer uses the DecoupledStream as is, and the
+ * receiver of that data. The producer uses the DecoupledStream as is, and the
  * consumer uses the DecoupledStream flipped. The number of data elements that
  * are passed through the interface in a cycle is the minimum of the ready and
  * valid signals. The bits signal carries the data elements, and at least as
@@ -24,7 +24,7 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
  * chunks, so producers are encouraged to assert the signal as soon as possible.
  * 
  * There are two types of producers and consumers: 'push' and 'pull'. Sometimes,
- * a push producer is called a 'compatable' producer and a pull consuer is
+ * a push producer is called a 'compatable' producer and a pull consumer is
  * called a 'compatable' consumer.
  * - A pull producer is wired such that the valid (or bits) signal is dependent
  *   on the ready signal. Effectively, this requires the consumer to "pull" data
@@ -73,7 +73,7 @@ object DecoupledStream {
  * 
  * This module may also be used to convert between DecoupledStream interfaces of
  * different sizes. This behavour can be particularly useful when a consumer
- * accepts chuncked or lookahead data since this module will act as a buffer to
+ * accepts chunked or lookahead data since this module will act as a buffer to
  * facilitate such a consumer
  */
 class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
