@@ -17,8 +17,8 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
  * valid signals. The bits signal carries the data elements, and at least as
  * many elements must be valid that are specified by the valid signal.
  *
- * The finished signal is asserted by the producer only if there are no more
- * data elements beyond the currently valid elements. A producer is technically
+ * The 'last' signal is asserted by the producer only if there are no more data
+ * elements beyond the currently valid elements. A producer is technically
  * allowed to wait to assert this signal until all data is passed through;
  * however, this behavour could cause deadlock if the consumer accepts data in
  * chunks, so producers are encouraged to assert the signal as soon as possible.
@@ -52,7 +52,8 @@ class DecoupledStream[T <: Data](count: Int, gen: T)
   val valid = Output(UInt(log2Ceil(count + 1).W))
   val data = Output(Vec(count, gen))
   def bits = data // alias legacy name
-  val finished = Output(Bool())
+  val last = Output(Bool())
+  def finished = last // alias legacy name
   
   override def cloneType: this.type =
     new DecoupledStream(count, gen).asInstanceOf[this.type]
@@ -124,7 +125,7 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
   val outUnbound = if(delay) bufferLength else (bufferLength +& io.in.valid)
   io.out.valid := outUnbound min outSize.U
   io.in.ready := (bufSize.U - bufferLength) min inSize.U
-  io.out.finished := io.in.finished && outUnbound <= outSize.U
+  io.out.last := io.in.last && outUnbound <= outSize.U
 }
 
 
@@ -170,10 +171,10 @@ class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
     val outUnbound = if(delay) forward else (forward +& io.in.valid)
     when(outUnbound <= siz.U) {
       out.valid := outUnbound
-      out.finished := io.in.finished
+      out.last := io.in.last
     } otherwise {
       out.valid := siz.U
-      out.finished := false.B
+      out.last := false.B
     }
   }
   
