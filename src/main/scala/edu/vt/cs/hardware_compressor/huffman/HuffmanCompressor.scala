@@ -96,8 +96,8 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   io.out.zip(huffman.io.outputs).foreach{case (out, subout) =>
     
-    // assume packed starting from the least-significant bit (xxxx4321)
-    out.bits := subout.dataOut.asBools
+    // packed starting from most-significant bit (1234xxxx)
+    out.bits := subout.dataOut.asBools.reverse
     
     // make output valid as a chunk
     out.valid := Mux(subout.valid && subout.ready, subout.dataLength, 0.U)
