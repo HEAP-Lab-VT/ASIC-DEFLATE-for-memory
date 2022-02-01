@@ -22,13 +22,24 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // size of a uncompressed character (in bits)
-  val characterBits = characterBitsParam
+  val characterBits = huffman.characterBits
   
   // Size of a unit of compressed bits
   val compressedCharBits = 1
   
-  // This is equal to the number of ways -- one channel per way
-  val channelCount: Int
+  // number of ways -- one channel per way
+  val channelCount = huffman.compressionParallelism
+  
+  // the maximum number of characters that can be handled by the sub-module
+  val maxCompressionLimit = huffman.characters
+  
+  
+  //============================================================================
+  // COUNTER PARAMETERS
+  //----------------------------------------------------------------------------
+  
+  // bus width of the character frequency counter i.e. the first pass
+  val counterCharsIn = huffman.characterFrequencyParallelism
   
   
   //============================================================================
@@ -36,21 +47,21 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of the compressor (in characters)
-  val compressorCharsIn = compressorCharsInParam
+  val compressorCharsIn = huffman.compressionParallelism
   
-  // output bus width of the compressor (in characters)
-  val compressorCharsOut = compressorCharsOutParam
+  // output bus width of one way of the compressor (in characters)
+  val compressorCharsOut = huffman.dictionaryEntryMaxBits
   
   
   //============================================================================
   // DECOMPRESSOR PARAMETERS
   //----------------------------------------------------------------------------
   
-  // input bus width of the decompressor (in characters)
-  val decompressorCharsIn = decompressorCharsInParam
+  // input bus width of one way of the decompressor (in characters)
+  val decompressorCharsIn = huffman.dictionaryEntryMaxBits
   
   // output bus width of the decompressor (in characters)
-  val decompressorCharsOut = decompressorCharsOutParam
+  val decompressorCharsOut = huffman.compressionParallelism
   
   //============================================================================
   // ASSERTIONS
@@ -90,7 +101,7 @@ object Parameters {
     file.close
     
     val params = new Parameters(
-      huffmanParam = huffmanParameters.getHuffmanFromCSV
+      huffmanParam = new huffmanParameters.getHuffmanFromCSV()
         .getHuffmanFromCSV(map("sub-huffman")))
       
     System.err.println("Getting from CSV was successful")
