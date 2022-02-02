@@ -68,18 +68,18 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   huffman.io.compressionInputs.foreach(_.dataIn(0) := DontCare)
   huffman.io.compressionInputs.foreach(_.valid := DontCare)
-  val waymodulus = Reg(UInt(params.channelCount.idxBits.W))
+  val waymodulus = RegInit(UInt(params.channelCount.idxBits.W), 0.U)
   var ready = true.B
   io.in_compressor.ready := 0.U
   for(i <- 0 until params.channelCount) {
-    val way = (waymodulus + i.U).div(params.channelCount)._2
+    val way = (waymodulus +& i.U).div(params.channelCount)._2
     
     // connect data
     huffman.io.compressionInputs(way).dataIn(0) := io.in_compressor.bits(i)
     
     // assert valid when valid is at least i and all previous are ready
-    huffman.io.compressionInputs(way).valid := io.in_compressor.valid > i.U &&
-      ready
+    huffman.io.compressionInputs(way).valid :=
+      io.in_compressor.valid > i.U && ready
     
     when(ready && io.in_compressor.valid <= i.U) {
       waymodulus := way
