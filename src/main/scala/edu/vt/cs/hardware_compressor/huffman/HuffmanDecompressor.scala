@@ -96,6 +96,8 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   // DECOMPRESSOR OUTPUT
   //============================================================================
   
+  huffman.io.dataOut.foreach(_.ready := DontCare)
+  
   val waymodulus = Reg(UInt(params.channelCount.idxBits.W))
   var valid = true.B
   io.out.valid := 0.U
