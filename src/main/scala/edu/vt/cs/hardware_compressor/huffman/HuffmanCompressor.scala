@@ -79,7 +79,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // places a hold on some channels that have already consumed their data
   val hold = RegInit(VecInit(Seq.fill(params.channelCount)(false.B)))
   // true iff all previously processed channels are ready
-  var ready = true.B
+  var allPrevReady = true.B
   // in case the first channel is not ready, report zero
   io.in_compressor.ready := 0.U
   // loop over input characters
@@ -90,30 +90,31 @@ class HuffmanCompressor(params: Parameters) extends Module {
     // pass this input character to the proper channel
     huffman.io.compressionInputs(way).dataIn(0) := io.in_compressor.bits(i)
     
+    val ready = huffman.io.compressionInputs(way).ready
     // true iff this input character is valid
     val valid = i.U <= io.in_compressor.valid
     // valid if the input character is valid and there is no hold
     huffman.io.compressionInputs(way).valid := valid && !hold(way)
     // if this input character is accepted, update the hold
-    when(valid && huffman.io.compressionInputs(way).ready) {
+    when(valid && ready) {
       // if we are progressing past this input character, clear hold
       // if we will receive this input character again, set hold
-      hold(way) := !ready
+      hold(way) := !allPrevReady
     }
     
     // if up to this character is accepted, then set waymodulus to this channel
     // will be overridden if this input character is accepted
     if(i != 0)
-    when(ready && i.U < io.in_compressor.valid) {
+    when(allPrevReady && i.U < io.in_compressor.valid) {
       waymodulus := way
     }
     
     // generate new ready signal that reflects this channel
     // ready is true iff all previously processed channels are ready
-    ready &&= huffman.io.compressionInputs(way).ready
+    allPrevReady &&= ready
     // if this channel and all previous channels are ready, set ready count
     // will be overridden if the next channel is ready
-    when(ready) {
+    when(allPrevReady) {
       io.in_compressor.ready := (i + 1).U
     }
     
@@ -132,7 +133,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   }
   
   // if all channels consumed input, waymodulus stays the same
-  when(ready && io.in_compressor.valid <= params.channelCount.U) {
+  when(allPrevReady && params.channelCount.U === io.in_compressor.valid) {
     waymodulus := waymodulus
   }
   
