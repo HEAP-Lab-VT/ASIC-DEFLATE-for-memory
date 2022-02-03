@@ -82,7 +82,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     // the nested decompressor. Instead we must infer when the output is
     // finished based on when the input is finished. This can be done easily
     // because the nested decompressor always outputs the decompressed data in
-    // the same cycle at it was input the corresponding compressed data. In any
+    // the same cycle as it was input the corresponding compressed data. In any
     // case, this is why we need this 'inputLast' wire; it is used later to
     // infer when the output is finished.
     when(!io.in(i).finished || (bufferLength - advance +& io.in(i).valid) >

@@ -66,42 +66,72 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // COMPRESSOR INPUT
   //============================================================================
   
-  huffman.io.compressionInputs.foreach(_.dataIn(0) := DontCare)
-  huffman.io.compressionInputs.foreach(_.valid := DontCare)
+  // make a DontCare fallback to please firrtl
+  huffman.io.compressionInputs.foreach{input =>
+    input.dataIn(0) := DontCare
+    input.valid := DontCare
+    if(params.huffman.variableCompression)
+    input.compressionLimit.get := params.maxCompressionLimit.U
+  }
+  
+  // the way index to start at
   val waymodulus = RegInit(UInt(params.channelCount.idxBits.W), 0.U)
+  // places a hold on some channels that have already consumed their data
+  val hold = RegInit(VecInit(Seq.fill(params.channelCount)(false.B)))
+  // true iff all previously processed channels are ready
   var ready = true.B
+  // in case the first channel is not ready, report zero
   io.in_compressor.ready := 0.U
+  // loop over input characters
   for(i <- 0 until params.channelCount) {
+    // channel index corresponding to this input character
     val way = (waymodulus +& i.U).div(params.channelCount)._2
     
-    // connect data
+    // pass this input character to the proper channel
     huffman.io.compressionInputs(way).dataIn(0) := io.in_compressor.bits(i)
     
-    // assert valid when valid is at least i and all previous are ready
-    huffman.io.compressionInputs(way).valid :=
-      io.in_compressor.valid > i.U && ready
+    // true iff this input character is valid
+    val valid = i.U <= io.in_compressor.valid
+    // valid if the input character is valid and there is no hold
+    huffman.io.compressionInputs(way).valid := valid && !hold(way)
+    // if this input character is accepted, update the hold
+    when(valid && huffman.io.compressionInputs(way).ready) {
+      // if we are progressing past this input character, clear hold
+      // if we will receive this input character again, set hold
+      hold(way) := !ready
+    }
     
-    when(ready && io.in_compressor.valid <= i.U) {
+    // if up to this character is accepted, then set waymodulus to this channel
+    // will be overridden if this input character is accepted
+    if(i != 0)
+    when(ready && i.U < io.in_compressor.valid) {
       waymodulus := way
     }
     
+    // generate new ready signal that reflects this channel
+    // ready is true iff all previously processed channels are ready
     ready &&= huffman.io.compressionInputs(way).ready
+    // if this channel and all previous channels are ready, set ready count
+    // will be overridden if the next channel is ready
     when(ready) {
       io.in_compressor.ready := (i + 1).U
     }
     
-    if(params.huffman.variableCompression)
-    when(io.in_compressor.finished) {
-      // stop by setting the compression limit to the current byte
-      huffman.io.compressionInputs(way).compressionLimit.get :=
-        huffman.io.compressionInputs(way).currentByteOut + io.in_compressor.valid
-    } otherwise {
-      // set the compression limit as high as possible
-      huffman.io.compressionInputs(way).compressionLimit.get :=
-        params.maxCompressionLimit.U
-    }
+    // // handle termination
+    // if(params.huffman.variableCompression)
+    // when(io.in_compressor.finished) {
+    //   // stop by setting the compression limit to the current byte
+    //   huffman.io.compressionInputs(way).compressionLimit.get :=
+    //     huffman.io.compressionInputs(way).currentByteOut +
+    //     io.in_compressor.valid - i.U
+    // } otherwise {
+    //   // set the compression limit as high as possible
+    //   huffman.io.compressionInputs(way).compressionLimit.get :=
+    //     params.maxCompressionLimit.U
+    // }
   }
-
+  
+  // if all channels consumed input, waymodulus stays the same
   when(ready && io.in_compressor.valid <= params.channelCount.U) {
     waymodulus := waymodulus
   }
@@ -124,9 +154,17 @@ class HuffmanCompressor(params: Parameters) extends Module {
     // make output valid as a chunk
     out.valid := Mux(subout.valid && subout.ready, subout.dataLength, 0.U)
     
-    subout.ready := out.ready >= subout.dataLength
+    // NOTE: This causes ready to depend on valid on the input side.
+    // Internally, output dataLength depends on input valid. This is a fault of
+    // the huffman submodule.
+    subout.ready :=
+      out.ready.mul(params.compressedCharBits) >= subout.dataLength
     
-    out.finished := huffman.io.finished
+    // We do not want to have to count bytes in order to set the compression
+    // limit, so we just leave the nested compressor hanging and assert finished
+    // on the output when the input is finished. This works because the nested
+    // compressor processes data same-cycle.
+    out.finished := io.in_compressor.finished
   }
 }
 
