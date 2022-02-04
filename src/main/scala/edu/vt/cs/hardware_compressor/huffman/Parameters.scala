@@ -58,7 +58,7 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of one way of the decompressor (in characters)
-  val decompressorCharsIn = huffman.dictionaryEntryMaxBits
+  val decompressorCharsIn = huffman.decompressorInputBits
   
   // output bus width of the decompressor (in characters)
   val decompressorCharsOut = huffman.compressionParallelism
