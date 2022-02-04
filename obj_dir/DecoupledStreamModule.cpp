@@ -249,6 +249,8 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 		cycles++;
 	} while((!module->io_out_finished || outBufIdx)
 		&& !TIMEOUT);
+	
+	module->final();
 
 #if !YUQING_MODE
 	if(inf != stdin)
