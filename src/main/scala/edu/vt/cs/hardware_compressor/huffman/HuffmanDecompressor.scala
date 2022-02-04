@@ -96,29 +96,47 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   // DECOMPRESSOR OUTPUT
   //============================================================================
   
-  huffman.io.dataOut.foreach(_.ready := DontCare)
+  huffman.io.dataOut.foreach{output =>
+    output.ready := DontCare
+  }
   
   val waymodulus = Reg(UInt(params.channelCount.idxBits.W))
-  var valid = true.B
+  val hold = RegInit(VecInit(Seq.fill(params.channelCount)(false.B)))
+  val holdData = Reg(Vec(params.channelCount, UInt(params.characterBits.W)))
+  
+  var allPrevValid = true.B
   io.out.valid := 0.U
   for(i <- 0 until params.channelCount) {
     val way = (waymodulus +& i.U).div(params.channelCount)._2
     
-    io.out.data(i) := huffman.io.dataOut(way).bits
+    when(!hold(way)) {
+      io.out.data(i) := huffman.io.dataOut(way).bits
+      holdData(way) := huffman.io.dataOut(way).bits
+    } otherwise {
+      io.out.data(i) := holdData(way)
+    }
     
-    huffman.io.dataOut(way).ready := io.out.ready > i.U && valid
+    val ready = i.U <= io.out.ready
+    val valid = huffman.io.dataOut(way).valid || hold(way)
     
-    when(valid && io.out.ready <= i.U) {
+    huffman.io.dataOut(way).ready := ready && !hold(way)
+    
+    when(ready && valid) {
+      hold(way) := !allPrevValid
+    }
+    
+    if(i != 0)
+    when(allPrevValid && i.U < io.out.ready) {
       waymodulus := way
     }
     
-    valid &&= huffman.io.dataOut(way).valid
-    when(valid) {
+    allPrevValid &&= valid
+    when(allPrevValid) {
       io.out.valid := (i + 1).U
     }
   }
   
-  when(valid && io.out.ready === params.channelCount.U) {
+  when(allPrevValid && params.channelCount.U === io.out.ready) {
     waymodulus := waymodulus
   }
   
