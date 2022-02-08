@@ -95,7 +95,7 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 	module->clock = 1;
 	module->eval();
 	module->reset = 0;
-	module->io_in_finished = 0;
+	module->io_in_last = 0;
 	
 	int cycles = 0;
 	int idle = 0;
@@ -107,12 +107,12 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 		// read bytes from input stream to input buffer
 #if !YUQING_MODE
 		size_t bytesRead = fread(inBuf + inBufIdx, 1, IN_CHARS - inBufIdx, inf);
-		module->io_in_finished = module->io_in_finished || feof(inf);
+		module->io_in_last = module->io_in_last || feof(inf);
 		inBufIdx += bytesRead;
 #else
 		while(true) {
 			if(!inlen) {
-				module->io_in_finished = true;
+				module->io_in_last = true;
 				break;
 			}
 			else if(IN_CHARS == inBufIdx) {
@@ -190,7 +190,7 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 #endif
 		
 		cycles++;
-	} while((!module->io_out_finished || outBufIdx)
+	} while((!module->io_out_last || outBufIdx)
 		&& !TIMEOUT);
 	
 	module->final();
