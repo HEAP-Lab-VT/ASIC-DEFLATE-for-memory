@@ -6,8 +6,6 @@ import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.ArithmeticOps._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
-import huffmanCompressor.huffmanCompressor
-
 
 // Note: This module uses push input and pull output to facilitate block-style
 //  input and output, so one or more universal connectors may be necessary to
@@ -22,7 +20,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
       params.compressorCharsOut, UInt(params.compressedCharBits.W)))
   })
   
-  val huffman = Module(new huffmanCompressor(params.huffman))
+  val huffman = Module(new huffmanCompressor.huffmanCompressor(params.huffman))
   
   // generate a rising edge
   huffman.io.start := RegNext(true.B, false.B);
