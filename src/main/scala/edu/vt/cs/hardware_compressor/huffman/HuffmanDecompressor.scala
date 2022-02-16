@@ -32,7 +32,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   // DECOMPRESSOR INPUT
   //============================================================================
   
-  val inputLast = WireDefault(Bool(), true.B)
+  val inputDone = WireDefault(Bool(), true.B)
   for(i <- 0 until params.channelCount) {
     
     // We do not know how many bits were consumed by the decompressor until one
@@ -55,7 +55,13 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       UInt(params.compressedCharBits.W)))
     
     val currentAddress = huffman.io.currentBit(i)
-    val advance = currentAddress - bufferBase
+    val advance = WireDefault(currentAddress - bufferBase)
+    when(currentAddress === 0.U && bufferBase =/= 0.U) {
+      // This is a workaround because Chandler's decompressor resets
+      // `currentBit` to 0 after processing metadata. So we must guess how many
+      // bits were consumed on the last cycle to processing metadata.
+      advance := params.huffman.decompressorInputBits.U
+    }
     for(j <- 0 until params.decompressorCharsIn) {
       val bufIdx = advance + j.U
       current(j) := Mux(bufIdx < bufferLength, buffer(bufIdx),
@@ -64,13 +70,13 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     io.in(i).ready := params.decompressorCharsIn.U - bufferLength + advance
     
     buffer := current
-    bufferLength := (bufferLength - advance +& io.in(i).valid) min
-      params.decompressorCharsIn.U
+    val allValid = bufferLength - advance +& io.in(i).valid
+    bufferLength := allValid min params.decompressorCharsIn.U
     bufferBase := currentAddress
     
     huffman.io.dataIn(i).bits := current.reduce(_ ## _)
-    huffman.io.dataIn(i).valid := (bufferLength - advance +& io.in(i).valid) >=
-      params.decompressorCharsIn.U | io.in(i).finished
+    huffman.io.dataIn(i).valid := allValid >= params.decompressorCharsIn.U ||
+      (io.in(i).finished && allValid =/= 0.U)
     
     
     // Because the compressor does not know the number of characters to compress
@@ -84,9 +90,8 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     // the same cycle as it was input the corresponding compressed data. In any
     // case, this is why we need this 'inputLast' wire; it is used later to
     // infer when the output is finished.
-    when(!io.in(i).finished || (bufferLength - advance +& io.in(i).valid) >
-        params.decompressorCharsIn.U) {
-      inputLast := false.B
+    when(!io.in(i).finished || allValid =/= 0.U) {
+      inputDone := false.B
     }
   }
   
@@ -103,6 +108,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   val hold = RegInit(VecInit(Seq.fill(params.channelCount)(false.B)))
   val holdData = Reg(Vec(params.channelCount, UInt(params.characterBits.W)))
   
+  io.out.last := inputDone
   var allPrevValid = true.B
   io.out.valid := 0.U
   for(i <- 0 until params.channelCount) {
@@ -129,6 +135,10 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       waymodulus := way
     }
     
+    when(valid && !allPrevValid) {
+      io.out.last := false.B
+    }
+    
     allPrevValid &&= valid
     when(allPrevValid) {
       io.out.valid := (i + 1).U
@@ -138,8 +148,6 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   when(allPrevValid && params.channelCount.U === io.out.ready) {
     waymodulus := waymodulus
   }
-  
-  io.out.last := inputLast
 }
 
 object HuffmanDecompressor extends App {

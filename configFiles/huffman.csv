@@ -1,7 +1,7 @@
 characters, 4096
 characterBits, 8
 huffmanTreeCharacters, 16
-codewordMaxBits, 10
+codewordMaxBits, 11
 outputRegisters, false
 inputRegister, false
 treeNormalizerInputRegister, false
@@ -10,7 +10,7 @@ treeDesiredMaxDepth, 10
 treeDepthInputBits, 8
 characterFrequencyParallelism, 8
 compressionParallelism, 8
-decompressorCharacterBufferSize, 4
+decompressorCharacterBufferSize, 3
 compressorParallelInput, false
 compressorParallelOutput, false
 compressorInputRegister, false

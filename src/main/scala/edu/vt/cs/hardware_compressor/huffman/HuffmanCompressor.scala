@@ -40,9 +40,12 @@ class HuffmanCompressor(params: Parameters) extends Module {
   huffman.io.characterFrequencyInputs.dataIn := io.in_counter.bits
   
   // only assert valid when all inputs are valid
+  // Chandler's module requires that valid is asserted at EOF because the
+  // frequency counter can only change to the finished state when valid is
+  // asserted.
   huffman.io.characterFrequencyInputs.valid :=
     io.in_counter.valid === params.counterCharsIn.U ||
-    (io.in_counter.finished && io.in_counter.valid =/= 0.U)
+    (io.in_counter.finished /*&& io.in_counter.valid =/= 0.U*/)
   
   // We do not know soon enough how many bytes are consumed, so we make the
   // (rather liberal) assumption that when ready and valid are asserted, all
@@ -140,7 +143,8 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // COMPRESSOR OUTPUT
   //============================================================================
   
-  io.out.zip(huffman.io.outputs).foreach{case (out, subout) =>
+  io.out.zip(huffman.io.outputs zip huffman.io.compressionInputs)
+      .foreach {case (out, (subout, subin)) =>
     
     // packed starting from most-significant bit (1234xxxx)
     Iterator.from(0)
@@ -163,7 +167,9 @@ class HuffmanCompressor(params: Parameters) extends Module {
     // limit, so we just leave the nested compressor hanging and assert finished
     // on the output when the input is finished. This works because the nested
     // compressor processes data same-cycle.
-    out.finished := io.in_compressor.finished
+    out.finished := io.in_compressor.finished &&
+      (subin.ready || !subin.valid) &&
+      (subout.ready || !subout.valid)
   }
 }
 
