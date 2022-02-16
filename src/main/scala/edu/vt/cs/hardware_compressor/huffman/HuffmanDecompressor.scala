@@ -32,6 +32,53 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   // DECOMPRESSOR INPUT
   //============================================================================
   
+  // This is a workaround. We must detect escape codewords and artificially
+  // advance the input when one occures. In order to do that, we must
+  // partially parse the metadata in order to know what the escape codeword
+  // is.
+  val hsWaiting :: hsLoadingCompressionLength :: hsLoadingMetadata :: hsDecompressing :: Nil = Enum(4)
+  val huffmanStateReg = RegInit(hsWaiting);
+  val huffmanState = WireDefault(huffmanStateReg)
+  huffmanStateReg := huffmanState
+  when(huffmanStateReg === hsWaiting && huffman.io.start) {
+    huffmanStateReg := (
+      if(params.huffman.variableCompression)
+        hsLoadingCompressionLength
+      else
+        hsLoadingMetadata
+    )
+  }
+  if(params.huffman.variableCompression)
+  when(huffmanStateReg === hsLoadingCompressionLength &&
+      huffman.io.dataIn(0).valid) {
+    huffmanStateReg := hsLoadingMetadata
+  }
+  val prevCurrentBit = RegNext(huffman.io.currentBit(0))
+  when(huffmanStateReg === hsLoadingMetadata &&
+      huffman.io.currentBit(0) === 0.U && prevCurrentBit =/= 0.U) {
+    huffmanState := hsDecompressing
+  }
+  
+  val escapeCodeword = Reg(UInt(params.huffman.codewordMaxBits.W))
+  val escapeCodewordMask = Reg(UInt(params.huffman.codewordMaxBits.W))
+  when(huffmanState === hsLoadingMetadata && huffman.io.dataIn(0).valid &&
+      huffman.io.dataIn(0).bits(params.huffman.decompressorInputBits - 1)) {
+    val maxLen = params.huffman.codewordMaxBits
+    val len =
+      huffman.io.dataIn(0).bits(params.huffman.codewordLengthMaxBits - 1, 0)
+    val shift = maxLen.U - len
+    escapeCodeword := huffman.io.dataIn(0).bits
+      .>>(params.huffman.codewordLengthMaxBits)
+      .<<(shift)
+    escapeCodewordMask := ((1.U << len) - 1.U) << shift
+  }
+  def isEscapeCodeword(input: UInt,
+      width: Int = params.huffman.decompressorInputBits): Bool =
+    huffmanState === hsDecompressing &&
+    (escapeCodeword === (escapeCodewordMask &
+      (input >> (width - params.huffman.codewordMaxBits))))
+  
+  
   val inputDone = WireDefault(Bool(), true.B)
   for(i <- 0 until params.channelCount) {
     
@@ -56,11 +103,18 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     
     val currentAddress = huffman.io.currentBit(i)
     val advance = WireDefault(currentAddress - bufferBase)
+    if(i == 0)
     when(currentAddress === 0.U && bufferBase =/= 0.U) {
       // This is a workaround because Chandler's decompressor resets
       // `currentBit` to 0 after processing metadata. So we must guess how many
       // bits were consumed on the last cycle of processing metadata.
       advance := params.huffman.decompressorInputBits.U
+    }
+    when(currentAddress =/= bufferBase &&
+        isEscapeCodeword(buffer.reduce(_ ## _))) {
+      // This is a workaround because Chandler's decompressor does not properly
+      // advance `currentBit` for escape sequences.
+      advance := currentAddress - bufferBase + params.huffman.characterBits.U
     }
     for(j <- 0 until params.decompressorCharsIn) {
       val bufIdx = advance + j.U
