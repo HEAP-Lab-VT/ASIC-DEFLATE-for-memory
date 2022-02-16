@@ -199,7 +199,7 @@ int main(int argc, char **argv, char **env) {
       pass2BufInIdx++;
       inBufLast = inBufLast || (pass2BufInIdx == pass2BufIdx && feof(inf));
     }
-    while(countBufIdx <= A_COUNT_CHARS && pass2BufCountIdx <= A_PASS2_BUF &&
+    while(countBufIdx < A_COUNT_CHARS && pass2BufCountIdx <= A_PASS2_BUF &&
         !countBufLast) {
       countBuf[countBufIdx] = pass2Buf[pass2BufCountIdx];
       countBufIdx++;
