@@ -47,9 +47,9 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     
     val buffer = Reg(Vec(params.decompressorCharsIn,
       UInt(params.compressedCharBits.W)))
-    val bufferLength = Reg(UInt(params.decompressorCharsIn.valBits.W))
+    val bufferLength = RegInit(UInt(params.decompressorCharsIn.valBits.W), 0.U)
     val bufferBase =
-      Reg(UInt(params.huffman.parallelCharactersBitAddressBits.W))
+      RegInit(UInt(params.huffman.parallelCharactersBitAddressBits.W), 0.U)
     
     val current = Wire(Vec(params.decompressorCharsIn,
       UInt(params.compressedCharBits.W)))
