@@ -59,7 +59,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     when(currentAddress === 0.U && bufferBase =/= 0.U) {
       // This is a workaround because Chandler's decompressor resets
       // `currentBit` to 0 after processing metadata. So we must guess how many
-      // bits were consumed on the last cycle to processing metadata.
+      // bits were consumed on the last cycle of processing metadata.
       advance := params.huffman.decompressorInputBits.U
     }
     for(j <- 0 until params.decompressorCharsIn) {
