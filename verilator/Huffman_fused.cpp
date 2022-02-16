@@ -52,7 +52,7 @@
 #define CHANNELS 8
 #endif
 
-#define A_PASS2_BUF 4096
+#define A_PASS2_BUF 8192
 
 #ifndef A_IN_CHARS
 #define A_IN_CHARS 8
@@ -210,15 +210,14 @@ int main(int argc, char **argv, char **env) {
     
     
     // decide whether module A should take a step
-    bool go_a = true;
+    bool go_a = false;
+    // enough space in output
+    for(int chan = 0; chan < CHANNELS; chan++) {
+      go_a = go_a || (midBufIdx[chan] <= MID_CHARS - A_OUT_CHARS);
+    }
     // enough input
     go_a = go_a && (inBufIdx == A_IN_CHARS || inBufLast);
     go_a = go_a && (countBufIdx == A_IN_CHARS || countBufLast);
-    // enough space in output
-    for(int chan = 0; chan < CHANNELS; chan++) {
-      go_a = go_a &&
-        (midBufIdx[chan] <= MID_CHARS - A_OUT_CHARS || midBufLast[chan]);
-    }
     // not finished
     for(int chan = 0; true; chan++) {
       if(chan == CHANNELS) {
