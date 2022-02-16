@@ -90,7 +90,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
     
     val ready = huffman.io.compressionInputs(way).ready
     // true iff this input character is valid
-    val valid = i.U <= io.in_compressor.valid
+    val valid = i.U < io.in_compressor.valid
     // valid if the input character is valid and there is no hold
     huffman.io.compressionInputs(way).valid := valid && !hold(way)
     // if this input character is accepted, update the hold
