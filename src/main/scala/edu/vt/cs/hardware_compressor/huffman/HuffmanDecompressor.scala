@@ -25,7 +25,9 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   // generate a rising edge
   // huffman.io.start := RegNext(true.B, false.B);
   // actually, the decompressor doesn't need a rising edge
-  huffman.io.start := true.B
+  // instead, it is important that this is not asserted when we are done,
+  // otherwise the sub-module will restart, which messes up some things
+  huffman.io.start := RegNext(false.B, true.B)
   
   
   //============================================================================
@@ -59,8 +61,10 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     huffmanState := hsDecompressing
   }
   
-  val escapeCodeword = Reg(UInt(params.huffman.codewordMaxBits.W))
-  val escapeCodewordMask = Reg(UInt(params.huffman.codewordMaxBits.W))
+  // initial values for escapeCodeword and escapeCodewordMask ensure that if the
+  // escape is not included in the tree, then there will never be a match.
+  val escapeCodeword = RegInit(UInt(params.huffman.codewordMaxBits.W), 1.U)
+  val escapeCodewordMask = RegInit(UInt(params.huffman.codewordMaxBits.W), 0.U)
   when(huffmanState === hsLoadingMetadata && huffman.io.dataIn(0).valid &&
       huffman.io.dataIn(0).bits(params.huffman.decompressorInputBits - 1)) {
     val maxLen = params.huffman.codewordMaxBits
@@ -147,6 +151,16 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     when(!io.in(i).finished || allValid =/= 0.U) {
       inputDone := false.B
     }
+    
+    // suggest names for some wires to make the generated Verilog more readable
+    advance.suggestName(s"advance_$i")
+    allValid.suggestName(s"allValid_$i")
+    bufferLength.suggestName(s"bufferLength_$i")
+  }
+  
+  // shut everything down when the submodule stops working
+  when(huffman.io.finished && !huffman.io.start) {
+    inputDone := true.B
   }
   
   
