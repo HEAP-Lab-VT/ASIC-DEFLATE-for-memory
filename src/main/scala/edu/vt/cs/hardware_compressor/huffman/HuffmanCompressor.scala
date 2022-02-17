@@ -56,7 +56,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   if(params.huffman.variableCompression)
   when(io.in_counter.finished) {
     huffman.io.characterFrequencyInputs.compressionLimit.get :=
-      huffman.io.characterFrequencyInputs.currentByteOut + io.in_counter.valid
+      huffman.io.characterFrequencyInputs.currentByteOut +& io.in_counter.valid
   } otherwise {
     huffman.io.characterFrequencyInputs.compressionLimit.get :=
       params.maxCompressionLimit.U
