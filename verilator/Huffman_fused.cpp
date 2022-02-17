@@ -71,7 +71,7 @@
 #define B_OUT_CHARS 8
 #endif
 
-#define MID_CHARS (A_OUT_CHARS + B_IN_CHARS)
+#define MID_CHARS ((A_OUT_CHARS + B_IN_CHARS) * 2)
 
 #ifndef TIMEOUT
 #define TIMEOUT ( \
@@ -113,8 +113,10 @@ static bool outBufLast = false;
 static int iterations = 0;
 static int a_cycles = 0;
 static int a_idle = 0;
+static int a_idle_suspend = 0;
 static int b_cycles = 0;
 static int b_idle = 0;
+static int b_idle_suspend = 0;
 
 #if TRACE_ENABLE
 static bool a_trace_enable;
@@ -218,6 +220,8 @@ int main(int argc, char **argv, char **env) {
     // enough input
     go_a = go_a && (inBufIdx == A_IN_CHARS || inBufLast);
     go_a = go_a && (countBufIdx == A_IN_CHARS || countBufLast);
+    // b is moving
+    go_a = go_a || b_idle_suspend >= 3;
     // not finished
     for(int chan = 0; true; chan++) {
       if(chan == CHANNELS) {
@@ -241,10 +245,18 @@ int main(int argc, char **argv, char **env) {
       go_b = go_b || (midBufIdx[chan] >= B_IN_CHARS);
     // enough space in output
     go_b = go_b && (outBufIdx == 0 || outBufLast);
+    // a is moving
+    go_b = go_b || a_idle_suspend >= 3;
     // not finished
     go_b = go_b && !outBufLast;
     
     if(go_b) {
+      b_step();
+    }
+    
+    // if neither 
+    if(!go_a && !go_b) {
+      a_step();
       b_step();
     }
     
@@ -277,10 +289,9 @@ int main(int argc, char **argv, char **env) {
   delete a_module;
   delete b_module;
   
-  if(!TIMEOUT)
-    fprintf(stderr, "cycles: %5d %5d\n", a_cycles, b_cycles);
-  else
-    fprintf(stderr, "cycles: %5d %5d (timeout)\n", a_cycles, b_cycles);
+  fprintf(stderr, "cycles: %5d %5d %s\n",
+    a_cycles, b_cycles,
+    TIMEOUT ? "(timeout)" : "");
   
   return 0;
 }
@@ -308,6 +319,7 @@ static void a_step() {
   
   a_cycles++;
   a_idle++;
+  a_idle_suspend++;
   
   // make sure any external changes are evaluated
   a_module->eval();
@@ -335,13 +347,13 @@ static void a_step() {
   // shift input buffer by number of characters consumed by module input
   size_t c =
     min(a_module->io_in_compressor_valid, a_module->io_in_compressor_ready);
-  if(c) a_idle = 0;
+  if(c) a_idle_suspend = a_idle = 0;
   inBufIdx -= c;
   for(int i = 0; i < inBufIdx; i++)
     inBuf[i] = inBuf[i + c];
   
   c = min(a_module->io_in_counter_valid, a_module->io_in_counter_ready);
-  if(c) a_idle = 0;
+  if(c) a_idle_suspend = a_idle = 0;
   countBufIdx -= c;
   for(int i = 0; i < countBufIdx; i++)
     countBuf[i] = countBuf[i + c];
@@ -349,7 +361,7 @@ static void a_step() {
   // push module output onto the end of output buffer
   for(int chan = 0; chan < CHANNELS; chan++) {
     c = min(a_out[chan].valid, a_out[chan].ready);
-    if(c) a_idle = 0;
+    if(c) b_idle_suspend = a_idle_suspend = a_idle = 0;
     for(int i = 0; i < c; i++)
       midBuf[chan][i + midBufIdx[chan]] = a_out[chan].data[i];
     midBufIdx[chan] += c;
@@ -380,6 +392,7 @@ static void b_step() {
   
   b_cycles++;
   b_idle++;
+  b_idle_suspend++;
   
   // make sure any external changes are evaluated
   b_module->eval();
@@ -400,7 +413,7 @@ static void b_step() {
   // shift input buffer by number of characters consumed by module input
   for(int chan = 0; chan < CHANNELS; chan++) {
     size_t c = min(b_in[chan].valid, b_in[chan].ready);
-    if(c) b_idle = 0;
+    if(c) a_idle_suspend = b_idle_suspend = b_idle = 0;
     midBufIdx[chan] -= c;
     for(int i = 0; i < midBufIdx[chan]; i++)
       midBuf[chan][i] = midBuf[chan][i + c];
@@ -408,7 +421,7 @@ static void b_step() {
   
   // push module output onto the end of output buffer
   size_t c = min(b_module->io_out_valid, b_module->io_out_ready);
-  if(c) b_idle = 0;
+  if(c) b_idle_suspend = b_idle = 0;
   for(int i = 0; i < c; i++)
     outBuf[i + outBufIdx] = (&b_module->io_out_data_0)[i];
   outBufIdx += c;
