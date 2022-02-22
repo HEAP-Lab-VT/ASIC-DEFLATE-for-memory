@@ -1,6 +1,7 @@
 #include "verilated.h"
 #include <stdio.h>
 #include <stdbool.h>
+#include "BitQueue.h"
 
 // /<editor-fold> ugly pre-processor macros
 #define _STR(s) #s
@@ -52,7 +53,7 @@
 #define CHANNELS 8
 #endif
 
-#define A_PASS2_BUF 8192
+#define A_PASS2_BUF (4096 + 1)
 
 #ifndef A_IN_CHARS
 #define A_IN_CHARS 8
@@ -70,8 +71,6 @@
 #ifndef B_OUT_CHARS
 #define B_OUT_CHARS 8
 #endif
-
-#define MID_CHARS ((A_OUT_CHARS + B_IN_CHARS) * 2)
 
 #ifndef TIMEOUT
 #define TIMEOUT ( \
@@ -103,8 +102,7 @@ static bool inBufLast = false;
 static char countBuf[A_COUNT_CHARS];
 static size_t countBufIdx = 0;
 static bool countBufLast = false;
-static char midBuf[CHANNELS][MID_CHARS];
-static size_t midBufIdx[CHANNELS];
+static struct BitQueue midBuf[CHANNELS];
 static bool midBufLast[CHANNELS];
 static char outBuf[B_OUT_CHARS];
 static size_t outBufIdx = 0;
@@ -113,10 +111,8 @@ static bool outBufLast = false;
 static int iterations = 0;
 static int a_cycles = 0;
 static int a_idle = 0;
-static int a_idle_suspend = 0;
 static int b_cycles = 0;
 static int b_idle = 0;
-static int b_idle_suspend = 0;
 
 #if TRACE_ENABLE
 static bool a_trace_enable;
@@ -163,7 +159,7 @@ int main(int argc, char **argv, char **env) {
   
   
   for(int chan = 0; chan < CHANNELS; chan++) {
-    midBufIdx[chan] = 0;
+    bq_init(&midBuf[chan]);
     midBufLast[chan] = false;
   }
   
@@ -195,13 +191,13 @@ int main(int argc, char **argv, char **env) {
         fread(pass2Buf + pass2BufIdx, 1, A_PASS2_BUF - pass2BufIdx, inf);
     }
     
-    while(inBufIdx < A_IN_CHARS && pass2BufInIdx < A_PASS2_BUF && !inBufLast) {
+    while(inBufIdx < A_IN_CHARS && pass2BufInIdx < pass2BufIdx && !inBufLast) {
       inBuf[inBufIdx] = pass2Buf[pass2BufInIdx];
       inBufIdx++;
       pass2BufInIdx++;
       inBufLast = inBufLast || (pass2BufInIdx == pass2BufIdx && feof(inf));
     }
-    while(countBufIdx < A_COUNT_CHARS && pass2BufCountIdx <= A_PASS2_BUF &&
+    while(countBufIdx < A_COUNT_CHARS && pass2BufCountIdx < pass2BufIdx &&
         !countBufLast) {
       countBuf[countBufIdx] = pass2Buf[pass2BufCountIdx];
       countBufIdx++;
@@ -210,18 +206,15 @@ int main(int argc, char **argv, char **env) {
         (pass2BufCountIdx == pass2BufIdx && feof(inf));
     }
     
-    
     // decide whether module A should take a step
     bool go_a = false;
-    // enough space in output
-    for(int chan = 0; chan < CHANNELS; chan++) {
-      go_a = go_a || (midBufIdx[chan] <= MID_CHARS - A_OUT_CHARS);
-    }
+    // not enough output
+    for(int chan = 0; chan < CHANNELS; chan++)
+      go_a = go_a ||
+        !(bq_size(&midBuf[chan]) >= B_IN_CHARS || midBufLast[chan]);
     // enough input
     go_a = go_a && (inBufIdx == A_IN_CHARS || inBufLast);
     go_a = go_a && (countBufIdx == A_IN_CHARS || countBufLast);
-    // b is moving
-    go_a = go_a || b_idle_suspend >= 3;
     // not finished
     for(int chan = 0; true; chan++) {
       if(chan == CHANNELS) {
@@ -240,13 +233,10 @@ int main(int argc, char **argv, char **env) {
     bool go_b = true;
     // enough input
     for(int chan = 0; chan < CHANNELS; chan++)
-      go_b = go_b && (midBufLast[chan]);
-    for(int chan = 0; chan < CHANNELS; chan++)
-      go_b = go_b || (midBufIdx[chan] >= B_IN_CHARS);
+      go_b = go_b &&
+        (bq_size(&midBuf[chan]) >= B_IN_CHARS || midBufLast[chan]);
     // enough space in output
     go_b = go_b && (outBufIdx == 0 || outBufLast);
-    // a is moving
-    go_b = go_b || a_idle_suspend >= 3;
     // not finished
     go_b = go_b && !outBufLast;
     
@@ -289,8 +279,7 @@ int main(int argc, char **argv, char **env) {
   delete a_module;
   delete b_module;
   
-  fprintf(stderr, "cycles: %5d %5d %s\n",
-    a_cycles, b_cycles,
+  fprintf(stderr, "cycles: %5d %5d %s\n", a_cycles, b_cycles,
     TIMEOUT ? "(timeout)" : "");
   
   return 0;
@@ -319,7 +308,6 @@ static void a_step() {
   
   a_cycles++;
   a_idle++;
-  a_idle_suspend++;
   
   // make sure any external changes are evaluated
   a_module->eval();
@@ -339,7 +327,7 @@ static void a_step() {
   a_module->io_in_counter_valid = countBufIdx;
   a_module->io_in_counter_last = countBufLast;
   for(int chan = 0; chan < CHANNELS; chan++)
-    a_out[chan].ready = min(MID_CHARS - midBufIdx[chan], A_OUT_CHARS);
+    a_out[chan].ready = A_OUT_CHARS;
   
   // update module outputs based on new inputs
   a_module->eval();
@@ -347,13 +335,13 @@ static void a_step() {
   // shift input buffer by number of characters consumed by module input
   size_t c =
     min(a_module->io_in_compressor_valid, a_module->io_in_compressor_ready);
-  if(c) a_idle_suspend = a_idle = 0;
+  if(c) a_idle = 0;
   inBufIdx -= c;
   for(int i = 0; i < inBufIdx; i++)
     inBuf[i] = inBuf[i + c];
   
   c = min(a_module->io_in_counter_valid, a_module->io_in_counter_ready);
-  if(c) a_idle_suspend = a_idle = 0;
+  if(c) a_idle = 0;
   countBufIdx -= c;
   for(int i = 0; i < countBufIdx; i++)
     countBuf[i] = countBuf[i + c];
@@ -361,10 +349,11 @@ static void a_step() {
   // push module output onto the end of output buffer
   for(int chan = 0; chan < CHANNELS; chan++) {
     c = min(a_out[chan].valid, a_out[chan].ready);
-    if(c) b_idle_suspend = a_idle_suspend = a_idle = 0;
-    for(int i = 0; i < c; i++)
-      midBuf[chan][i + midBufIdx[chan]] = a_out[chan].data[i];
-    midBufIdx[chan] += c;
+    if(c) a_idle = 0;
+    for(int i = 0; i < c; i++) {
+      if(bq_pushTail(&midBuf[chan], a_out[chan].data[i]))
+        {fprintf(stderr,"bq_pushTail failed\n");abort();}
+    }
     
     midBufLast[chan] = a_out[chan].last && c == a_out[chan].valid;
   }
@@ -392,17 +381,19 @@ static void b_step() {
   
   b_cycles++;
   b_idle++;
-  b_idle_suspend++;
   
   // make sure any external changes are evaluated
   b_module->eval();
   
   for(int chan = 0; chan < CHANNELS; chan++) {
-    b_in[chan].valid = min(midBufIdx[chan], B_IN_CHARS);
-    b_in[chan].last = midBufLast[chan] && midBufIdx[chan] <= B_IN_CHARS;
+    b_in[chan].valid = B_IN_CHARS;
     for(int i = 0; i < B_IN_CHARS; i++) {
-      b_in[chan].data[i] = midBuf[chan][i];
+      if(bq_pop(&midBuf[chan], (bool*)&b_in[chan].data[i])) {
+        b_in[chan].valid = i;
+        break;
+      }
     }
+    b_in[chan].last = midBufLast[chan] && bq_isEmpty(&midBuf[chan]);
   }
   
   b_module->io_out_ready = B_OUT_CHARS - outBufIdx;
@@ -410,18 +401,18 @@ static void b_step() {
   // update module outputs based on new inputs
   b_module->eval();
   
-  // shift input buffer by number of characters consumed by module input
+  // push back input characters that were not consumed
   for(int chan = 0; chan < CHANNELS; chan++) {
-    size_t c = min(b_in[chan].valid, b_in[chan].ready);
-    if(c) a_idle_suspend = b_idle_suspend = b_idle = 0;
-    midBufIdx[chan] -= c;
-    for(int i = 0; i < midBufIdx[chan]; i++)
-      midBuf[chan][i] = midBuf[chan][i + c];
+    if(b_in[chan].valid != 0 || b_in[chan].ready != 0) b_idle = 0;
+    for(int i = b_in[chan].valid; i > b_in[chan].ready; i--) {
+      if(bq_pushHead(&midBuf[chan], b_in[chan].data[i-1]))
+        {fprintf(stderr,"bq_pushHead failed\n");abort();}
+    }
   }
   
   // push module output onto the end of output buffer
   size_t c = min(b_module->io_out_valid, b_module->io_out_ready);
-  if(c) b_idle_suspend = b_idle = 0;
+  if(c) b_idle = 0;
   for(int i = 0; i < c; i++)
     outBuf[i + outBufIdx] = (&b_module->io_out_data_0)[i];
   outBufIdx += c;
