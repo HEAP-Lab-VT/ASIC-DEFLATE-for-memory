@@ -286,18 +286,19 @@ int main(int argc, char **argv, char **env) {
 }
 
 
+// define struct to match module inputs/outputs
+// uses verilator types so the sizes match
 struct a_out_decoupledstream {
-  decltype(A_VMODNAME::io_out_0_ready) ready;
-  decltype(A_VMODNAME::io_out_0_valid) valid;
-  decltype(A_VMODNAME::io_out_0_data_0) data[A_OUT_CHARS];
-  decltype(A_VMODNAME::io_out_0_last) last;
+  CData ready;
+  CData valid;
+  CData data[A_OUT_CHARS];
+  CData last;
 };
-
 struct b_in_decoupledstream {
-  decltype(B_VMODNAME::io_in_0_ready) ready;
-  decltype(B_VMODNAME::io_in_0_valid) valid;
-  decltype(B_VMODNAME::io_in_0_data_0) data[B_IN_CHARS];
-  decltype(B_VMODNAME::io_in_0_last) last;
+  CData ready;
+  CData valid;
+  CData data[B_IN_CHARS];
+  CData last;
 };
 
 static void a_step() {
