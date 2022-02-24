@@ -106,20 +106,18 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       UInt(params.compressedCharBits.W)))
     
     val currentAddress = huffman.io.currentBit(i)
-    val advance = WireDefault(currentAddress - bufferBase)
+    var advance = currentAddress - bufferBase
+    // This is a workaround because Chandler's decompressor does not properly
+    // advance `currentBit` for escape sequences.
+    advance = Mux(currentAddress =/= bufferBase &&
+        isEscapeCodeword(buffer.reduce(_ ## _)),
+      advance + params.huffman.characterBits.U, advance)
+    // This is a workaround because Chandler's decompressor resets
+    // `currentBit` to 0 after processing metadata. So we must guess how many
+    // bits were consumed on the last cycle of processing metadata.
     if(i == 0)
-    when(currentAddress === 0.U && bufferBase =/= 0.U) {
-      // This is a workaround because Chandler's decompressor resets
-      // `currentBit` to 0 after processing metadata. So we must guess how many
-      // bits were consumed on the last cycle of processing metadata.
-      advance := params.huffman.decompressorInputBits.U
-    }
-    when(currentAddress =/= bufferBase &&
-        isEscapeCodeword(buffer.reduce(_ ## _))) {
-      // This is a workaround because Chandler's decompressor does not properly
-      // advance `currentBit` for escape sequences.
-      advance := currentAddress - bufferBase + params.huffman.characterBits.U
-    }
+    advance = Mux(currentAddress === 0.U && bufferBase =/= 0.U,
+      params.huffman.decompressorInputBits.U, advance)
     for(j <- 0 until params.decompressorCharsIn) {
       val bufIdx = advance + j.U
       current(j) := Mux(bufIdx < bufferLength, buffer(bufIdx),
