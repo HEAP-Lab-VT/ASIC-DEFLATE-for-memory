@@ -108,6 +108,8 @@ static char outBuf[B_OUT_CHARS];
 static size_t outBufIdx = 0;
 static bool outBufLast = false;
 
+static size_t compressedSize = 0;
+
 static int iterations = 0;
 static int a_cycles = 0;
 static int a_idle = 0;
@@ -279,8 +281,9 @@ int main(int argc, char **argv, char **env) {
   delete a_module;
   delete b_module;
   
-  fprintf(stderr, "cycles: %5d %5d %s\n", a_cycles, b_cycles,
-    TIMEOUT ? "(timeout)" : "");
+  fprintf(stderr, "cycles = %5d %5d%s\n", a_cycles, b_cycles,
+    TIMEOUT ? " (timeout)" : "");
+  fprintf(stderr, "compressed size = %5lu\n", compressedSize / 8);
   
   return 0;
 }
@@ -354,6 +357,7 @@ static void a_step() {
     for(int i = 0; i < c; i++) {
       if(bq_pushTail(&midBuf[chan], a_out[chan].data[i]))
         {fprintf(stderr,"bq_pushTail failed\n");abort();}
+      compressedSize++;
     }
     
     midBufLast[chan] = a_out[chan].last && c == a_out[chan].valid;
