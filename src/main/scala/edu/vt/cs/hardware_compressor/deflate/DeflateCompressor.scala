@@ -1,27 +1,38 @@
 package edu.vt.cs.hardware_compressor.deflate
 
-import edu.vt.cs.hardware_compressor.util._
-import edu.vt.cs.hardware_compressor.util.WidthOps._
-import edu.vt.cs.hardware_compressor.lz77._
 import chisel3._
 import chisel3.util._
-// each class in a seperate package SMH
-// import huffmanCompressor.huffmanCompressor
+import edu.vt.cs.hardware_compressor.huffman._
+import edu.vt.cs.hardware_compressor.lz77._
+import edu.vt.cs.hardware_compressor.util._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 
 class DeflateCompressor(params: Parameters) extends Module {
-  val io = IO(new StreamBundle(
-    params.compressorCharsIn, UInt(params.characterBits.W),
-    params.compressorCharsOut, UInt(params.characterBits.W)))
+  val io = IO(new Bundle{
+    val in = Flipped(DecoupledStream(params.compressorCharsIn,
+      UInt(params.plnCharBits.W)))
+    val out = Vec(params.encChannels,
+      DecoupledStream(params.compressorCharsOut,
+        UInt(params.encCharBits.W)))
+  })
   
   
   val lz = Module(new LZ77Compressor(params.lz))
-  val huffman = Module(new huffmanCompressor(params.huffman))
-  val serializer = Module(new Serializer(params))
-  val intermediateBuffer = Module(new StreamBuffer(lz.compressorCharsIn,
-    /*huffman input characters*/, /*chars to compress*/,
-    UInt(params.characterBits.W), true))
+  val huffman = Module(new HuffmanCompressor(params.huffman))
+  // val serializer = Module(new Serializer(params))
+  val tee = Module(new StreamTee(
+    params.lz.compressorCharsOut,
+    Array(
+      params.huffman.counterCharsIn,
+      params.huffman.compressorCharsIn),
+    params.compressorIntBufSize,
+    UInt(params.intCharBits.W),
+    true))
   
-  io.in <> lz.io.in
-  lz.out <> intermediateBuffer.in
+  lz.io.in <> io.in
+  tee.io.in <> lz.io.out
+  huffman.io.in_counter <> tee.io.out(0)
+  huffman.io.in_compressor <> tee.io.out(1)
+  io.out <> huffman.io.out
 }

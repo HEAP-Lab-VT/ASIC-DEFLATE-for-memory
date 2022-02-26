@@ -6,7 +6,8 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
     lzParam: edu.vt.cs.hardware_compressor.lz77.Parameters,
-    huffmanParam: huffmanParameters.huffmanParameters
+    huffmanParam: edu.vt.cs.hardware_compressor.huffman.Parameters,
+    compressorIntBufSizeParam: Int
 ) {
   
   //============================================================================
@@ -18,12 +19,20 @@ class Parameters(
   
   
   //============================================================================
-  // INPUT-OUTPUT PARAMETERS
+  // GENERAL PARAMETERS
   //----------------------------------------------------------------------------
   
+  val plnCharBits = lz.characterBits
+  val encCharBits = huffman.compressedCharBits
+  val encChannels = huffman.channelCount
+  val intCharBits = lz.characterBits
   val compressorCharsIn = lz.compressorCharsIn
-  val compressorCharsOut = 6/*this is a placeholder*/
-  val characterBits = lz.characterBits
+  val compressorCharsOut = huffman.compressorCharsOut
+  val compressorIntBufSize = compressorIntBufSizeParam
+  val decompressorCharsIn = huffman.decompressorCharsIn
+  val decompressorCharsOut = lz.decompressorCharsOut
+  val decompressorIntBufferSize =
+    lz.decompressorCharsIn max huffman.decompressorCharsOut
   
   
   //============================================================================
@@ -35,40 +44,6 @@ class Parameters(
     throw new IllegalArgumentException(s"LZ characterBits " +
       "(${lz.characterBits}) is not same as Huffman characterBits " +
       "(${huffman.characterBits}).")
-  
-  // if(camCharacters < 2)
-  //   // idk
-  //   throw new IllegalArgumentException("camCharacters cannot be less than 2")
-  
-  if(escapeCharacter >= (1 << characterBits) || escapeCharacter < 0)
-    // out of range of character
-    throw new IllegalArgumentException(
-      "escapeCharacter not representable in a character")
-  
-  if(camCharsIn < minCharsToEncode)
-    // may cause deadlock as CAM waits for enough literals to ensure non-match
-    throw new IllegalArgumentException(
-      "compressorCharsIn must be at least minCharsToEncode")
-  
-  if(decompressorCharsIn < minEncodingChars)
-    // may cause deadlock as decompressor cannot see encoding header all at once
-    throw new IllegalArgumentException(
-      "decompressorCharsIn must be at least minEncodingChars")
-  
-  if(!camBufSize.isPow2)
-    // may require more complex logic including dividers
-    System.err.println(s"warning: CAM buffer size not a power of 2" +
-      " ($camBufSize); may cause decreased performance")
-  
-  if(camBufSize > camSize + camCharsPerCycle)
-    // CAM buffer is larger than necessary
-    System.err.println("warning: CAM buffer not fully utilized." +
-      s" (${camSize + camCharsPerCycle} of $camBufSize elements utilized.)")
-  
-  if(camBufSize < camSize + camCharsPerCycle)
-    // CAM buffer is too small
-    throw new IllegalArgumentException(
-      "CAM buffer too small")
 }
 
 object Parameters {
@@ -100,7 +75,8 @@ object Parameters {
       lzParam = edu.vt.cs.hardware_compressor
         .lz77.Parameters.fromCSV(map("lz")),
       huffmanParam = huffmanParameters.getHuffmanFromCSV
-        .getHuffmanFromCSV(map("huffman")))
+        .getHuffmanFromCSV(map("huffman")),
+      compressorIntBufSizeParam = map("compressorIntBufSize").toInt)
       
     System.err.println("Getting from CSV was successful")
     return lz77ParametersOutput
