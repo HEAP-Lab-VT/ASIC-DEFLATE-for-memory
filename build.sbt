@@ -71,9 +71,9 @@ unmanagedSources / excludeFilter := HiddenFileFilter ||
   // new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
   //   "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" /
   //   "huffman" getCanonicalPath)) ||
-  new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-    "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" /
-    "deflate" getCanonicalPath)) ||
+  // new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
+  //   "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" /
+  //   "deflate" getCanonicalPath)) ||
   new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
     "src" / "main" / "scala" / "huffman" / "buffer" / "cacheLineStitcher.scala"
     getCanonicalPath))

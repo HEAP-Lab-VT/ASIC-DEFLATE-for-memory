@@ -22,7 +22,7 @@ class DeflateDecompressor(params: Parameters) extends Module {
   val huffman = Module(new HuffmanDecompressor(params.huffman))
   // val serializer = Module(new Serializer(params))
   val buffer = Module(new StreamBuffer(
-    params.huffman.decompressorCharsOut
+    params.huffman.decompressorCharsOut,
     params.lz.decompressorCharsIn,
     params.decompressorIntBufferSize,
     UInt(params.intCharBits.W),

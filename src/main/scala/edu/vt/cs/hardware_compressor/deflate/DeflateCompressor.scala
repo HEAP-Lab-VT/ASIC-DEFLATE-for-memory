@@ -36,3 +36,9 @@ class DeflateCompressor(params: Parameters) extends Module {
   huffman.io.in_compressor <> tee.io.out(1)
   io.out <> huffman.io.out
 }
+
+object DeflateCompressor extends App {
+  val params = Parameters.fromCSV("configFiles/deflate.csv")
+  new chisel3.stage.ChiselStage()
+    .emitVerilog(new DeflateCompressor(params), args)
+}

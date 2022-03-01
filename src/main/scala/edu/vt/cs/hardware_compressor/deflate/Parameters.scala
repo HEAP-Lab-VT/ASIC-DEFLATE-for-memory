@@ -6,8 +6,7 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
     lzParam: edu.vt.cs.hardware_compressor.lz77.Parameters,
-    huffmanParam: edu.vt.cs.hardware_compressor.huffman.Parameters,
-    compressorIntBufSizeParam: Int
+    huffmanParam: edu.vt.cs.hardware_compressor.huffman.Parameters
 ) {
   
   //============================================================================
@@ -28,7 +27,7 @@ class Parameters(
   val intCharBits = lz.characterBits
   val compressorCharsIn = lz.compressorCharsIn
   val compressorCharsOut = huffman.compressorCharsOut
-  val compressorIntBufSize = compressorIntBufSizeParam
+  val compressorIntBufSize = huffman.huffman.characters
   val decompressorCharsIn = huffman.decompressorCharsIn
   val decompressorCharsOut = lz.decompressorCharsOut
   val decompressorIntBufferSize =
@@ -50,7 +49,8 @@ object Parameters {
   
   def apply(
     lz: edu.vt.cs.hardware_compressor.lz77.Parameters,
-    huffman: huffmanParameters.huffmanParameters): Parameters =
+    huffman: edu.vt.cs.hardware_compressor.huffman.Parameters
+  ): Parameters =
     new Parameters(
       lzParam = lz,
       huffmanParam = huffman)
@@ -74,9 +74,8 @@ object Parameters {
     val lz77ParametersOutput = new Parameters(
       lzParam = edu.vt.cs.hardware_compressor
         .lz77.Parameters.fromCSV(map("lz")),
-      huffmanParam = huffmanParameters.getHuffmanFromCSV
-        .getHuffmanFromCSV(map("huffman")),
-      compressorIntBufSizeParam = map("compressorIntBufSize").toInt)
+      huffmanParam = edu.vt.cs.hardware_compressor
+        .huffman.Parameters.fromCSV(map("huffman")))
       
     System.err.println("Getting from CSV was successful")
     return lz77ParametersOutput

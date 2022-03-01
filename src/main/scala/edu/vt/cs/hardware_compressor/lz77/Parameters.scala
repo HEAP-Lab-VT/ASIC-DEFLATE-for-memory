@@ -186,7 +186,7 @@ object Parameters {
     }
     file.close
 
-    System.err.println("Getting from CSV test was successful")
+    System.err.println("Getting from CSV was successful")
     val lz77ParametersOutput = new Parameters(
       characterBitsParam = intMap("characterBits"),
       compressorCharsInParam = intMap("compressorCharsIn"),
