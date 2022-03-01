@@ -149,9 +149,7 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
     io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
   
   for(i <- 0 until bufSize)
-    if(delay)
-      buffer(i) := buffer(i.U + progression)
-    else when(i.U +& progression < bufferLength) {
+    when(i.U +& progression < bufferLength) {
       buffer(i) := buffer(i.U + progression)
     } otherwise {
       buffer(i) := io.in.bits(i.U + progression - bufferLength)
@@ -161,16 +159,15 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
     (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
   
   io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
-    val forward = bufferLength - off;
+    val adjBufLen = bufferLength - off;
     
     for(i <- 0 until siz)
-      out.bits(i) := (if(delay) buffer(i.U + off) else
-        Mux(i.U < forward, buffer(i.U + off),
-          io.in.bits(i.U - forward)))
+      out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
+        if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
     
-    val outUnbound = if(delay) forward else (forward +& io.in.valid)
-    when(outUnbound <= siz.U) {
-      out.valid := outUnbound
+    val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
+    when(validUnbound <= siz.U) {
+      out.valid := validUnbound
       out.last := io.in.last
     } otherwise {
       out.valid := siz.U
