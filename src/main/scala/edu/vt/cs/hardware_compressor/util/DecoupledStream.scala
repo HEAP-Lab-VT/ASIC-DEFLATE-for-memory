@@ -155,7 +155,7 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
       buffer(i) := io.in.bits(i.U + progression - bufferLength)
     }
   
-  bufferLength := Mux(bufferLength +& io.in.valid > progression,
+  bufferLength := Mux(bufferLength +& io.in.valid >= progression,
     (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
   
   io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
@@ -164,6 +164,57 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
     for(i <- 0 until siz)
       out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
         if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
+    
+    off := off + (out.valid min out.ready) - progression
+    
+    val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
+    when(validUnbound <= siz.U) {
+      out.valid := validUnbound
+      out.last := io.in.last
+    } otherwise {
+      out.valid := siz.U
+      out.last := false.B
+    }
+  }
+  
+  io.in.ready := (bufSize.U - bufferLength) min inSize.U
+}
+
+
+class SimpleStreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
+    gen: T, delay: Boolean = false) extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(DecoupledStream(inSize, gen))
+    val out = MixedVec(outSizes.map(s => DecoupledStream(s, gen)))
+  })
+  
+  val buffer = Reg(Vec(bufSize, gen))
+  val bufferLength = RegInit(0.U(bufSize.valBits.W))
+  val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
+  
+  // This is the amount that the buffer shifts in a cycle
+  // NOTE: progression width assumes at least one offset must be zero
+  // TODO: use a treeified min-reduction
+  val progression = 0.U
+  
+  for(i <- 0 until bufSize)
+    when(i.U +& progression < bufferLength) {
+      buffer(i) := buffer(i.U + progression)
+    } otherwise {
+      buffer(i) := io.in.bits(i.U + progression - bufferLength)
+    }
+  
+  bufferLength := Mux(bufferLength +& io.in.valid >= progression,
+    (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
+  
+  io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
+    val adjBufLen = bufferLength - off;
+    
+    for(i <- 0 until siz)
+      out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
+        if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
+    
+    off := off + (out.valid min out.ready) - progression
     
     val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
     when(validUnbound <= siz.U) {
