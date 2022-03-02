@@ -165,7 +165,7 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
       out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
         if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
     
-    off := off + (out.valid min out.ready) - progression
+    off := ((off +& out.ready) min (bufferLength +& io.in.valid)) - progression
     
     val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
     when(validUnbound <= siz.U) {
@@ -214,7 +214,7 @@ class SimpleStreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
       out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
         if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
     
-    off := off + (out.valid min out.ready) - progression
+    off := ((off +& out.ready) min (bufferLength +& io.in.valid)) - progression
     
     val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
     when(validUnbound <= siz.U) {
