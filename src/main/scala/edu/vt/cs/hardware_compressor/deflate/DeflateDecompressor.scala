@@ -33,3 +33,9 @@ class DeflateDecompressor(params: Parameters) extends Module {
   lz.io.in <> buffer.io.out
   io.out <> lz.io.out
 }
+
+object DeflateDecompressor extends App {
+  val params = Parameters.fromCSV("configFiles/deflate.csv")
+  new chisel3.stage.ChiselStage()
+    .emitVerilog(new DeflateDecompressor(params), args)
+}
