@@ -106,13 +106,19 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
   val buffer = Reg(Vec(bufSize, gen))
   val bufferLength = RegInit(0.U(bufSize.valBits.W))
   
-  for(i <- 0 until bufSize)
-    if(delay)
-      buffer(i) := buffer(i.U + io.out.ready)
-    else when(i.U +& io.out.ready < bufferLength) {
-      buffer(i) := buffer(i.U + io.out.ready)
+  buffer
+    .tails
+    .map(_.take(outSize))
+    .map(_.padTo(outSize, DontCare))
+    .map(v => VecInit(v)(io.out.ready))
+    .zip(buffer.iterator) // idk why iterator, Seq extends IterableOnce
+    .foreach{case (h, b) => b := h}
+  
+  for(i <- 0 until inSize)
+    when(bufferLength + (if(delay) 0 else i).U >= io.out.ready) {
+      buffer(i.U + bufferLength - io.out.ready) := io.in.bits(i)
     } otherwise {
-      buffer(i) := io.in.bits(i.U + io.out.ready - bufferLength)
+      buffer(i) := (if(delay) io.in.bits(i) else DontCare)
     }
   
   bufferLength := Mux(bufferLength +& io.in.valid > io.out.ready,
@@ -143,66 +149,21 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
   // This is the amount that the buffer shifts in a cycle
   // NOTE: progression width assumes at least one offset must be zero
   // TODO: use a treeified min-reduction
-  val progression = Wire(UInt(
-    (((if(delay) 0 else inSize) + bufSize) min outSizes.max).valBits.W))
+  val maxProgression = ((if(delay) 0 else inSize) + bufSize) min outSizes.max
+  val progression = Wire(UInt(maxProgression.valBits.W))
   progression := (if(delay) bufferLength else (bufferLength +& io.in.valid)) min
     io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
   
-  for(i <- 0 until bufSize)
-    when(i.U +& progression < bufferLength) {
-      buffer(i) := buffer(i.U + progression)
-    } otherwise {
-      buffer(i) := io.in.bits(i.U + progression - bufferLength)
-    }
+  buffer
+    .tails
+    .map(_.take(maxProgression))
+    .map(_.padTo(maxProgression, DontCare))
+    .map(v => VecInit(v)(progression))
+    .zip(buffer.iterator) // idk why iterator, Seq extends IterableOnce
+    .foreach{case (h, b) => b := h}
   
-  bufferLength := Mux(bufferLength +& io.in.valid >= progression,
-    (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
-  
-  io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
-    val adjBufLen = bufferLength - off;
-    
-    for(i <- 0 until siz)
-      out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
-        if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
-    
-    off := ((off +& out.ready) min (bufferLength +& io.in.valid)) - progression
-    
-    val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
-    when(validUnbound <= siz.U) {
-      out.valid := validUnbound
-      out.last := io.in.last
-    } otherwise {
-      out.valid := siz.U
-      out.last := false.B
-    }
-  }
-  
-  io.in.ready := (bufSize.U - bufferLength) min inSize.U
-}
-
-
-class SimpleStreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
-    gen: T, delay: Boolean = false) extends Module {
-  val io = IO(new Bundle{
-    val in = Flipped(DecoupledStream(inSize, gen))
-    val out = MixedVec(outSizes.map(s => DecoupledStream(s, gen)))
-  })
-  
-  val buffer = Reg(Vec(bufSize, gen))
-  val bufferLength = RegInit(0.U(bufSize.valBits.W))
-  val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
-  
-  // This is the amount that the buffer shifts in a cycle
-  // NOTE: progression width assumes at least one offset must be zero
-  // TODO: use a treeified min-reduction
-  val progression = 0.U
-  
-  for(i <- 0 until bufSize)
-    when(i.U +& progression < bufferLength) {
-      buffer(i) := buffer(i.U + progression)
-    } otherwise {
-      buffer(i) := io.in.bits(i.U + progression - bufferLength)
-    }
+  for(i <- 0 until inSize)
+    buffer(i.U + bufferLength - progression) := io.in.bits(i)
   
   bufferLength := Mux(bufferLength +& io.in.valid >= progression,
     (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)

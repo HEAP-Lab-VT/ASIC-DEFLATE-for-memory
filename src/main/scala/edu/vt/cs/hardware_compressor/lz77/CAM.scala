@@ -47,7 +47,7 @@ class CAM(params: Parameters) extends Module {
   // write data to history
   when(!stall) {
     (camBuffer ++ io.charsIn.data)
-      .sliding(params.camCharsPerCycle + 1)
+      .sliding(params.camCharsPerCycle + 1) // TODO: why +1?
       .map(v => VecInit(v)(charsToProcess))
       .zip(camBuffer.iterator) // idk why iterator, Seq extends IterableOnce
       .foreach{case (h, b) => b := h}
