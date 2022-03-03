@@ -165,6 +165,7 @@ object Parameters {
       maxCharsToEncodeParam = maxCharsToEncode)
   
   def fromCSV(csvPath: String): Parameters = {
+    System.err.println(s"getting LZ77 parameters from $csvPath...")
     var boolMap: Map[String, Boolean] = Map()
     var intMap: Map[String, Int] = Map()
     val file = io.Source.fromFile(csvPath)
@@ -186,7 +187,6 @@ object Parameters {
     }
     file.close
 
-    System.err.println("Getting from CSV was successful")
     val lz77ParametersOutput = new Parameters(
       characterBitsParam = intMap("characterBits"),
       compressorCharsInParam = intMap("compressorCharsIn"),
@@ -197,7 +197,8 @@ object Parameters {
       escapeCharacterParam = intMap("escapeCharacter"),
       minCharsToEncodeParam = intMap("minCharsToEncode"),
       maxCharsToEncodeParam = intMap("maxCharsToEncode"))
-
+      
+    System.err.println(s"finished getting LZ77 parameters from $csvPath.")
     return lz77ParametersOutput
   }
 }

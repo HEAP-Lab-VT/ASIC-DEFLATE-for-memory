@@ -85,6 +85,7 @@ object Parameters {
     new Parameters(huffmanParam = huffman)
   
   def fromCSV(csvPath: String): Parameters = {
+    System.err.println(s"getting huffman parameters from $csvPath...")
     var map: Map[String, String] = Map()
     val file = io.Source.fromFile(csvPath)
     for (line <- file.getLines) {
@@ -104,7 +105,7 @@ object Parameters {
       huffmanParam = new huffmanParameters.getHuffmanFromCSV()
         .getHuffmanFromCSV(map("sub-huffman")))
       
-    System.err.println("Getting from CSV was successful")
+    System.err.println(s"finished getting LZ77 parameters from $csvPath.")
     return params
   }
 }
