@@ -187,7 +187,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       io.out.data(i) := holdData(way)
     }
     
-    val ready = i.U <= io.out.ready
+    val ready = i.U < io.out.ready
     val valid = huffman.io.dataOut(way).valid || hold(way)
     
     huffman.io.dataOut(way).ready := ready && !hold(way)
