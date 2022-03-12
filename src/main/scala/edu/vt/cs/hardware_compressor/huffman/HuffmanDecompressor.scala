@@ -175,7 +175,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   val holdData = Reg(Vec(params.channelCount, UInt(params.characterBits.W)))
   
   io.out.last := inputDone
-  var allPrevValid = true.B
+  var allPrevValid = WireDefault(true.B)
   io.out.valid := 0.U
   for(i <- 0 until params.channelCount) {
     val way = (waymodulus +& i.U).div(params.channelCount)._2
@@ -197,7 +197,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     }
     
     if(i != 0)
-    when(allPrevValid && i.U < io.out.ready) {
+    when(allPrevValid && i.U <= io.out.ready) {
       waymodulus := way
     }
     
@@ -205,11 +205,18 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       io.out.last := false.B
     }
     
+    dontTouch apply allPrevValid.suggestName(s"allPrevValid_$i")
+    dontTouch apply way.suggestName(s"way_$i")
+    dontTouch apply ready.suggestName(s"ready_$i")
+    dontTouch apply valid.suggestName(s"valid_$i")
+    
     allPrevValid &&= valid
     when(allPrevValid) {
       io.out.valid := (i + 1).U
     }
   }
+  
+  dontTouch apply allPrevValid.suggestName(s"allPrevValid_${params.channelCount}")
   
   when(allPrevValid && params.channelCount.U === io.out.ready) {
     waymodulus := waymodulus

@@ -165,7 +165,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
         //  3) output not ready
         // Loop backward so first (most recent) stop condition is used.
         // matchLength is residual length from already processed characters
-        for(index <- 0 until maxInChars reverse) {
+        for(index <- 0 to maxInChars reverse) {
           // valid out chars up to (but not including) current index
           val whole = matchLength +&
             (index * params.extraCharacterLengthIncrease).U
@@ -173,7 +173,7 @@ class LZ77Decompressor(params: Parameters) extends Module {
           when(!io.in.bits(index).andR) {
             // current character is incomplete
             // consume current, and de-assert continue
-            var outvalid = whole +& io.in.bits(index)
+            val outvalid = whole +& io.in.bits(index)
             io.out.valid := outvalid min io.out.bits.length.U
             io.in.ready := (index + 1).U
             matchLength := outvalid - io.out.ready

@@ -78,7 +78,7 @@ object DecoupledStream {
  * facilitate such a consumer
  */
 class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
-    extends StreamBuffer[T](inSize, outSize, outSize, gen, false) {}
+    extends StreamBuffer[T](inSize, outSize, outSize, gen, false, true) {}
 
 object UniversalConnector {
   def apply[T <: Data](
@@ -90,102 +90,111 @@ object UniversalConnector {
 }
 
 
-class StreamBundle[I <: Data, O <: Data](inC: Int, inGen: I, outC: Int, outGen: O) extends Bundle {
-  val in = Flipped(DecoupledStream(inC, inGen))
-  val out = DecoupledStream(outC, outGen)
+class StreamBundle[I <: Data, O <: Data](inSize: Int, inGen: I, outSize: Int,
+    outGen: O) extends Bundle {
+  val in = Flipped(DecoupledStream(inSize, inGen))
+  val out = DecoupledStream(outSize, outGen)
   
   override def cloneType: this.type =
-    new StreamBundle(inC, inGen, outC, outGen).asInstanceOf[this.type]
+    new StreamBundle(inSize, inGen, outSize, outGen).asInstanceOf[this.type]
 }
 
 
 class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
-    delay: Boolean) extends Module {
-  val io = IO(new StreamBundle(inSize, gen, outSize, gen))
+    delayValid: Boolean = false, delayReady: Boolean = false)
+    extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(DecoupledStream(inSize, gen))
+    val out = DecoupledStream(outSize, gen)
+  })
   
-  val buffer = Reg(Vec(bufSize, gen))
-  val bufferLength = RegInit(0.U(bufSize.valBits.W))
+  val tee = Module(new StreamTee[T](inSize, Seq(outSize), bufSize, gen,
+    delayValid, delayReady))
   
-  buffer
-    .tails
-    .map(_.take(outSize))
-    .map(_.padTo(outSize, DontCare))
-    .map(v => VecInit(v)(io.out.ready))
-    .zip(buffer.iterator) // idk why iterator, Seq extends IterableOnce
-    .foreach{case (h, b) => b := h}
-  
-  for(i <- 0 until inSize)
-    when(bufferLength + (if(delay) 0 else i).U >= io.out.ready) {
-      buffer(i.U + bufferLength - io.out.ready) := io.in.bits(i)
-    } otherwise {
-      buffer(i) := (if(delay) io.in.bits(i) else DontCare)
-    }
-  
-  bufferLength := Mux(bufferLength +& io.in.valid > io.out.ready,
-    (bufferLength +& io.in.valid - io.out.ready) min bufSize.U, 0.U)
-  
-  for(i <- 0 until outSize)
-    io.out.bits(i) := (if(delay) buffer(i) else
-      Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength)))
-  
-  val outUnbound = if(delay) bufferLength else (bufferLength +& io.in.valid)
-  io.out.valid := outUnbound min outSize.U
-  io.in.ready := (bufSize.U - bufferLength) min inSize.U
-  io.out.last := io.in.last && outUnbound <= outSize.U
+  io.in <> tee.io.in
+  io.out <> tee.io.out(0)
 }
 
 
 class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
-    gen: T, delay: Boolean = false) extends Module {
+    gen: T, delayValid: Boolean = false, delayReady: Boolean = false)
+    extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(inSize, gen))
     val out = MixedVec(outSizes.map(s => DecoupledStream(s, gen)))
   })
   
+  if(outSizes.isEmpty) throw new IllegalArgumentException("no outputs")
+  val singleOut = outSizes.length == 1
+  
   val buffer = Reg(Vec(bufSize, gen))
   val bufferLength = RegInit(0.U(bufSize.valBits.W))
   val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
   
+  val offReady =
+    io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
+  val validLength =
+    if(delayReady)
+      (bufferLength +& io.in.valid) min bufSize.U
+    else
+      bufferLength +& io.in.valid
+  
   // This is the amount that the buffer shifts in a cycle
   // NOTE: progression width assumes at least one offset must be zero
   // TODO: use a treeified min-reduction
-  val maxProgression = ((if(delay) 0 else inSize) + bufSize) min outSizes.max
+  val maxProgression =
+    ((if(delayValid) 0 else inSize) + bufSize) min outSizes.max
   val progression = Wire(UInt(maxProgression.valBits.W))
-  progression := (if(delay) bufferLength else (bufferLength +& io.in.valid)) min
-    io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
+  progression := offReady min (if(delayValid) bufferLength else validLength)
   
   buffer
     .tails
-    .map(_.take(maxProgression))
-    .map(_.padTo(maxProgression, DontCare))
+    .map(_.take(maxProgression + 1))
+    .map(_.padTo(maxProgression + 1, DontCare))
     .map(v => VecInit(v)(progression))
-    .zip(buffer.iterator) // idk why iterator, Seq extends IterableOnce
+    .zip(buffer.iterator)
     .foreach{case (h, b) => b := h}
   
   for(i <- 0 until inSize)
-    buffer(i.U + bufferLength - progression) := io.in.bits(i)
+    when((delayValid.B || i.U +& bufferLength >= progression) &&
+        i.U +& bufferLength - progression < bufSize.U) {
+      buffer(i.U + bufferLength - progression) := io.in.bits(i)
+    }
   
-  bufferLength := Mux(bufferLength +& io.in.valid >= progression,
-    (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
+  bufferLength := Mux(delayValid.B || validLength >= progression,
+    if(delayReady)
+      validLength - progression // validLength is already min-ed
+    else
+      (validLength - progression) min bufSize.U,
+    0.U)
   
-  io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
-    val adjBufLen = bufferLength - off;
+  (io.out zip outSizes zip offsets zipWithIndex)
+      .foreach{case (((out, siz), off), i) =>
+    val adjBufferLen = bufferLength - off
+    val adjValidLen = validLength - off
     
     for(i <- 0 until siz)
-      out.bits(i) := Mux(i.U < adjBufLen, buffer(i.U + off),
-        if(delay) io.in.bits(i.U - adjBufLen) else DontCare)
+      out.bits(i) := Mux(i.U < adjBufferLen, buffer(i.U + off),
+        if(delayValid) DontCare else io.in.bits(i.U - adjBufferLen))
     
-    off := ((off +& out.ready) min (bufferLength +& io.in.valid)) - progression
+    if(!singleOut) // offset stays zero with only one output
+    off := ((off +& out.ready) min validLength) - progression
     
-    val validUnbound = if(delay) adjBufLen else (adjBufLen +& io.in.valid)
-    when(validUnbound <= siz.U) {
-      out.valid := validUnbound
-      out.last := io.in.last
+    val valid = if(delayValid) adjBufferLen else adjValidLen
+    when(valid <= siz.U) {
+      out.valid := valid
+      out.last := io.in.last && (!delayValid.B || io.in.valid === 0.U)
     } otherwise {
       out.valid := siz.U
       out.last := false.B
     }
+    
+    // suggest names for some wires
+    adjBufferLen.suggestName(s"adjBufferLen_$i")
+    adjValidLen.suggestName(s"adjValidLen_$i")
+    valid.suggestName(s"valid_$i")  
   }
   
-  io.in.ready := (bufSize.U - bufferLength) min inSize.U
+  io.in.ready := inSize.U min (bufSize.U - bufferLength +&
+    (if(delayReady) 0.U else offReady))
 }

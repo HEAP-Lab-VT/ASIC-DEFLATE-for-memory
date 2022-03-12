@@ -54,7 +54,7 @@
 #endif
 
 #ifndef A_IN_CHARS
-#define A_IN_CHARS 8
+#define A_IN_CHARS 11
 #endif
 #ifndef A_OUT_CHARS
 #define A_OUT_CHARS 24

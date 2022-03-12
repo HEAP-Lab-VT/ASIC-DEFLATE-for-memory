@@ -26,7 +26,8 @@ class DeflateDecompressor(params: Parameters) extends Module {
     params.lz.decompressorCharsIn,
     params.decompressorIntBufferSize,
     UInt(params.intCharBits.W),
-    true))
+    true,
+    false))
   
   huffman.io.in <> io.in
   buffer.io.in <> huffman.io.out

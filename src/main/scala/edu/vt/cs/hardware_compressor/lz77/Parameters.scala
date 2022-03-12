@@ -139,6 +139,11 @@ class Parameters(
     // CAM buffer is too small
     throw new IllegalArgumentException(
       "CAM buffer too small")
+  
+  if(minCharsToEncode < 1)
+    // must encode at least one character
+    throw new IllegalArgumentException(
+      "must encode at least one character")
 }
 
 object Parameters {

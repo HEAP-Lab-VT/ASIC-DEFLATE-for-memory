@@ -28,7 +28,8 @@ class DeflateCompressor(params: Parameters) extends Module {
       params.huffman.compressorCharsIn),
     params.compressorIntBufSize,
     UInt(params.intCharBits.W),
-    true))
+    true,
+    false))
   
   lz.io.in <> io.in
   tee.io.in <> lz.io.out

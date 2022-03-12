@@ -105,7 +105,7 @@ object Parameters {
       huffmanParam = new huffmanParameters.getHuffmanFromCSV()
         .getHuffmanFromCSV(map("sub-huffman")))
       
-    System.err.println(s"finished getting LZ77 parameters from $csvPath.")
+    System.err.println(s"finished getting huffman parameters from $csvPath.")
     return params
   }
 }

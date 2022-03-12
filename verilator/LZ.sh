@@ -2,7 +2,6 @@
 
 # argument parsing from https://stackoverflow.com/a/14203146/8353152
 traceargs=""
-j=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
   key="$1"
@@ -38,21 +37,13 @@ done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 
-er() {
-  echo "$@"
-  $@
-}
+rm obj_dir/V*
+rm obj_dir/*.{o,d}
+mod=LZ77Compressor
+verilator -Wno-WIDTH --cc $mod.v --exe DecoupledStreamModule.cpp -CFLAGS "-D 'MODNAME=$mod' -D 'IN_CHARS=11' -D 'OUT_CHARS=8'" $traceargs &&
+make $j -C obj_dir/ -f V$mod.mk V$mod
 
-amod=DeflateCompressor
-verilator -Wno-WIDTH --cc $amod.v $traceargs &&
-make $j -C obj_dir/ -f V$amod.mk V${amod}__ALL.a
-
-bmod=DeflateDecompressor
-verilator -Wno-WIDTH --cc $bmod.v --exe V${amod}__ALL.a ../verilator/Deflate_fused.cpp ../verilator/BitQueue.c -CFLAGS '-ggdb' $traceargs &&
-make $j -C obj_dir/ -f V$bmod.mk V${bmod} &&
-cp obj_dir/VDeflateDecompressor obj_dir/VDeflate_fused
-
-# make -C obj_dir -f ../verilator/Huffman_fused.mk
-
-#er g++ -c -I. -I${VERILATOR_ROOT}/include ../verilator/Huffman_fused.cpp -o VHuffman_fused.o
-#er g++ Huffman_fused.o V${amod}__ALL.a V${bmod}__ALL.a -o VHuffman_fused
+rm obj_dir/DecoupledStreamModule.{o,d}
+mod=LZ77Decompressor
+verilator -Wno-WIDTH --cc $mod.v --exe DecoupledStreamModule.cpp -CFLAGS "-D 'MODNAME=$mod' -D 'IN_CHARS=8' -D 'OUT_CHARS=8'" $traceargs &&
+make $j -C obj_dir/ -f V$mod.mk V$mod

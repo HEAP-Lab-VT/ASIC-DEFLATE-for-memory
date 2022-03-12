@@ -22,11 +22,12 @@ class CAM(params: Parameters) extends Module {
     val finished = Output(Bool())
   })
   
-  
   // pipeline variables
   var stall = WireDefault(false.B)
   var pushbackprev = WireDefault(false.B)
   var pushbacknext = WireDefault(false.B)
+  dontTouch apply stall.suggestName("stall_S1")
+  dontTouch apply pushbackprev.suggestName("pushbackprev_S1")
   
   
   // stores the byte history of the CAM.
@@ -57,6 +58,9 @@ class CAM(params: Parameters) extends Module {
   
   // merge camBuffer and charsIn for easy matching
   val history = camBuffer.takeRight(params.camSize) ++ io.charsIn.bits
+  
+  // TODO: use matchValids when computing matchLengths
+  // TODO: do not stall when a match ends on the last character to process
   
   // find the length of every possible match
   val equalityArray = io.charsIn.bits
@@ -105,6 +109,10 @@ class CAM(params: Parameters) extends Module {
     pushbackprev := true.B
   }
   
+  dontTouch apply charsToProcess.suggestName("charsToProcess_S1")
+  dontTouch apply allLengths.suggestName("allLengths_S1")
+  dontTouch apply matchLengths.suggestName("matchLengths_S1")
+  
   
   
   //============================================================================
@@ -126,6 +134,8 @@ class CAM(params: Parameters) extends Module {
   stall = WireDefault(false.B)
   pushbackprev = pushbacknext
   pushbacknext = WireDefault(false.B)
+  dontTouch apply stall.suggestName("stall_S2")
+  dontTouch apply pushbackprev.suggestName("pushbackprev_S2")
   //============================================================================
   
   
@@ -229,12 +239,12 @@ class CAM(params: Parameters) extends Module {
       .map(_ === charsToProcess)
       .zip(continues)
       .map(c => c._1 && c._2)
-    
-    // don't save the continueLength if it is end of input
-    when(io_charsIn_finished && matchLength === 0.U) {
-      continueLength := 0.U
-      continues := DontCare
-    }
+  }
+  
+  // don't save the continue if it is end of input
+  when(io_charsIn_finished && charsToProcess === io_charsIn_valid) {
+    continueLength := 0.U
+    continues := DontCare
   }
   
   intracycleIndex := 0.U
@@ -253,6 +263,18 @@ class CAM(params: Parameters) extends Module {
     continues := continues
     intracycleIndex := intracycleIndex
   }
+  
+  dontTouch apply matchLengths.suggestName("matchLengths_S2")
+  dontTouch apply allLengths.suggestName("allLengths_S2")
+  dontTouch apply charsToProcess.suggestName("charsToProcess_S2")
+  dontTouch apply intracycleIndex.suggestName("intracycleIndex_S2")
+  dontTouch apply matchIndex.suggestName("matchIndex_S2")
+  dontTouch apply matchLength.suggestName("matchLength_S2")
+  dontTouch apply matchLengthFull.suggestName("matchLengthFull_S2")
+  dontTouch apply matchCAMAddress.suggestName("matchCAMAddress_S2")
+  dontTouch apply io_charsIn_bits.suggestName("io_charsIn_bits_S2")
+  dontTouch apply io_charsIn_valid.suggestName("io_charsIn_valid_S2")
+  dontTouch apply io_charsIn_finished.suggestName("io_charsIn_finished_S2")
   
   
   
@@ -275,6 +297,8 @@ class CAM(params: Parameters) extends Module {
   stall = WireDefault(false.B)
   pushbackprev = pushbacknext
   pushbacknext = WireDefault(false.B)
+  dontTouch apply stall.suggestName("stall_S3")
+  dontTouch apply pushbackprev.suggestName("pushbackprev_S3")
   //============================================================================
   
   
@@ -311,4 +335,14 @@ class CAM(params: Parameters) extends Module {
   io.finished := io_charsIn_finished &&
     matchIndex + matchLength >= io_charsIn_valid
   io.litOut.finished := io.finished // not used
+  
+  dontTouch apply intracycleIndex.suggestName("intracycleIndex_S3")
+  dontTouch apply matchIndex.suggestName("matchIndex_S3")
+  dontTouch apply matchLength.suggestName("matchLength_S3")
+  dontTouch apply matchLengthFull.suggestName("matchLengthFull_S3")
+  dontTouch apply matchCAMAddress.suggestName("matchCAMAddress_S3")
+  dontTouch apply charsToProcess.suggestName("charsToProcess_S3")
+  dontTouch apply io_charsIn_bits.suggestName("io_charsIn_bits_S3")
+  dontTouch apply io_charsIn_valid.suggestName("io_charsIn_valid_S3")
+  dontTouch apply io_charsIn_finished.suggestName("io_charsIn_finished_S3")
 }
