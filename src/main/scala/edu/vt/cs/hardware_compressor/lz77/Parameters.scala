@@ -93,6 +93,7 @@ class Parameters(
   val extraCharacterLengthIncrease = characterBits.space.intValue - 1
   
   // maximum characters that can be in a sequence of the minimum encoding length
+  // TODO: rename to `maxCharsInMinPattern` or `maxCharsInMinSequence`
   val maxCharsInMinEncoding =
     minCharsToEncode + minEncodingLengthBits.maxVal.intValue - 1
   
