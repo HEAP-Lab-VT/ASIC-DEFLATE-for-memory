@@ -157,16 +157,8 @@ class HuffmanCompressor(params: Parameters) extends Module {
     // make output valid as a chunk
     out.valid := Mux(subout.valid && subout.ready, subout.dataLength, 0.U)
     
-    // NOTE: This causes ready to depend on valid on the input side.
-    // Internally, output dataLength depends on input valid. This is a fault of
-    // the huffman submodule.
-    subout.ready :=
-      out.ready.mul(params.compressedCharBits) >= subout.dataLength
+    subout.ready := out.ready * params.compressedCharBits.U >= subout.dataLength
     
-    // We do not want to have to count bytes in order to set the compression
-    // limit, so we just leave the nested compressor hanging and assert finished
-    // on the output when the input is finished. This works because the nested
-    // compressor processes data same-cycle.
     out.finished := io.in_compressor.finished &&
       (subin.ready || !subin.valid) &&
       (subout.ready || !subout.valid)
