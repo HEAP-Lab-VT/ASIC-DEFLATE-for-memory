@@ -9,10 +9,6 @@ import huffmanParameters._
 
 // Note, this needs to be named "decompressorWrapped" to work with the things in the huffman tree
 class huffmanDecompressor(params: huffmanParameters) extends Module {
-  def checkIfThreadFinished(iterations: UInt, index: Int, compressionLimit: UInt): Bool = {
-    iterations * params.compressionParallelism.U + index.U >= compressionLimit
-  }
-
   // This function creates the hardware necessary to test if a given member of the huffman tree is equal to the input data.
   def treeCharacterEqualsInput(
       inputData: UInt,
@@ -45,10 +41,10 @@ class huffmanDecompressor(params: huffmanParameters) extends Module {
       params.compressionParallelism,
       Flipped(Decoupled(UInt(params.decompressorInputBits.W)))
     )
-    val currentBit = Output(
+    val inReady = Output(
       Vec(
         params.compressionParallelism,
-        UInt(params.parallelCharactersBitAddressBits.W)
+        UInt(log2Ceil(params.decompressorInputBits + 1).W)
       )
     )
     val dataOut = Vec(
@@ -64,19 +60,6 @@ class huffmanDecompressor(params: huffmanParameters) extends Module {
     Enum(numberOfStates)
   val state = RegInit(UInt(log2Ceil(numberOfStates + 1).W), waiting)
 
-  val iterations = Reg(
-    Vec(
-      params.compressionParallelism,
-      UInt(params.parallelCharactersNumberBits.W)
-    )
-  )
-  val currentBit = Reg(
-    Vec(
-      params.compressionParallelism,
-      UInt(params.parallelCharactersBitAddressBits.W)
-    )
-  )
-
   val unencodedCharacters = Reg(
     Vec(
       params.huffmanTreeCharacters,
@@ -89,6 +72,8 @@ class huffmanDecompressor(params: huffmanParameters) extends Module {
   val encodedLength = Reg(
     Vec(params.huffmanTreeCharacters, UInt(params.codewordLengthMaxBits.W))
   )
+  val isEscape = unencodedCharacters
+    .map(_(params.characterRepresentationBits - 1))
 
   // This will help to choose which tree character matches the input
   val matchingEncoding = Wire(
@@ -146,38 +131,20 @@ class huffmanDecompressor(params: huffmanParameters) extends Module {
     io.dataOut(index).valid := false.B
     io.dataOut(index).bits := 0.U
     io.dataIn(index).ready := false.B
-    io.currentBit(index) := currentBit(index)
+    io.inReady(index) := 0.U
   }
 
   switch(state) {
     is(waiting) {
       when(io.start === true.B) {
-        if (params.variableCompression) {
-          state := loadingCompressionLength
-        } else {
-          state := loadingMetadata
-        }
-        for (index <- 0 until params.compressionParallelism) {
-          iterations(index) := 0.U
-          currentBit(index) := 0.U
-        }
-      }
-    }
-
-    is(loadingCompressionLength) {
-      io.dataIn(0).ready := true.B
-
-      when(io.dataIn(0).valid) {
-        if (params.variableCompression) {
-          compressionLimit.get := io.dataIn(0).bits(params.decompressorInputBits - 1, params.decompressorInputBits - params.inputCharacterBits)
-        }
         state := loadingMetadata
-        currentBit(0) := currentBit(0) + params.inputCharacterBits.U
       }
     }
 
     is(loadingMetadata) {
       io.dataIn(0).ready := true.B
+      val iterations =
+        Seq(RegInit(UInt(log2Ceil(params.huffmanTreeCharacters).W), 0.U))
       when(io.dataIn(0).valid) {
         unencodedCharacters(iterations(0)) := io
           .dataIn(0)
@@ -198,15 +165,10 @@ class huffmanDecompressor(params: huffmanParameters) extends Module {
             params.decompressorInputBits - params.characterRepresentationBits - params.codewordMaxBits - params.codewordLengthMaxBits
           )
 
-        currentBit(0) := currentBit(0) + params.decompressorInputBits.U
-        iterations(0) := iterations(0) + 1.U
-        when(iterations(0) + 1.U >= params.huffmanTreeCharacters.U) {
+        io.inReady(0) := params.decompressorInputBits.U
+        when(when.cond){iterations(0) := iterations(0) + 1.U}
+        when(iterations(0) === (params.huffmanTreeCharacters - 1).U) {
           state := decompressing
-          for (index <- 0 until params.compressionParallelism) {
-            iterations(index) := 0.U
-            // TODO: Fix this. This is not right, it needs to read in the addresses from the module supplying the data somehow.
-            currentBit(index) := (index * params.parallelCharacters * params.characterBits).U
-          }
         }
       }
     }
@@ -215,40 +177,21 @@ class huffmanDecompressor(params: huffmanParameters) extends Module {
       // This generates the hardware once for each of the parallel compressors. If all their data is
       // valid, they output the necessary data and go to the next iteration.
       for (index <- 0 until params.compressionParallelism) {
-        io.dataOut(index).valid := false.B
-        io.dataOut(index).bits := 0.U
-        val continueIterating = Wire(Bool())
-        if(params.variableCompression){
-          continueIterating := !checkIfThreadFinished(iterations(index), index, compressionLimit.get)
-        }else{
-          continueIterating := iterations(index) < params.parallelCharacters.U
-        }
-        when(continueIterating) {
-          io.dataIn(index).ready := true.B
-          when(io.dataIn(index).valid) {
-            io.dataOut(index).valid := true.B
-            io.dataOut(index).bits := Mux1H(
-              matchingEncoding(index),
-              matchingCharacter(index)
-            )
-            when(io.dataOut(index).ready) {
-              currentBit(index) := currentBit(index) + Mux1H(
-                matchingEncoding(index),
-                encodedLength
-              )
-              iterations(index) := iterations(index) + 1.U
-            }
-          }
-        }
-      }
-
-      if (params.variableCompression) {
-        when(iterations.zipWithIndex.map({case (value, index) => checkIfThreadFinished(value, index, compressionLimit.get)}).reduce(_&&_)) {
-          state := waiting
-        }
-      } else {
-        when(iterations.map(_ >= params.parallelCharacters.U).reduce(_ && _)) {
-          state := waiting
+        io.dataIn(index).ready := io.dataOut(index).ready
+        io.dataOut(index).valid := io.dataIn(index).valid
+        io.dataOut(index).bits := Mux1H(
+          matchingEncoding(index),
+          matchingCharacter(index)
+        )
+        when(io.dataOut(index).ready) {
+          io.inReady(index) := Mux1H(
+            matchingEncoding(index),
+            encodedLength
+              .zip(isEscape.map(e => Mux(e, params.characterBits.U, 0.U)))
+              .map(l => l._1 +& l._2)
+          )
+        } otherwise {
+          io.inReady(index) := 0.U
         }
       }
     }
