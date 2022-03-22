@@ -22,143 +22,19 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   val huffman =
     Module(new huffmanDecompressor.huffmanDecompressor(params.huffman))
   
-  // generate a rising edge
-  // huffman.io.start := RegNext(true.B, false.B);
-  // actually, the decompressor doesn't need a rising edge
-  // instead, it is important that this is not asserted when we are done,
-  // otherwise the sub-module will restart, which messes up some things
-  huffman.io.start := RegNext(false.B, true.B)
+  huffman.io.start := true.B
   
   
   //============================================================================
   // DECOMPRESSOR INPUT
   //============================================================================
   
-  // This is a workaround. We must detect escape codewords and artificially
-  // advance the input when one occures. In order to do that, we must
-  // partially parse the metadata in order to know what the escape codeword
-  // is.
-  val hsWaiting :: hsLoadingCompressionLength :: hsLoadingMetadata :: hsDecompressing :: Nil = Enum(4)
-  val huffmanStateReg = RegInit(hsWaiting);
-  val huffmanState = WireDefault(huffmanStateReg)
-  huffmanStateReg := huffmanState
-  when(huffmanStateReg === hsWaiting && huffman.io.start) {
-    huffmanStateReg := (
-      if(params.huffman.variableCompression)
-        hsLoadingCompressionLength
-      else
-        hsLoadingMetadata
-    )
-  }
-  if(params.huffman.variableCompression)
-  when(huffmanStateReg === hsLoadingCompressionLength &&
-      huffman.io.dataIn(0).valid) {
-    huffmanStateReg := hsLoadingMetadata
-  }
-  val prevCurrentBit = RegNext(huffman.io.currentBit(0))
-  when(huffmanStateReg === hsLoadingMetadata &&
-      huffman.io.currentBit(0) === 0.U && prevCurrentBit =/= 0.U) {
-    huffmanState := hsDecompressing
-  }
-  
-  // initial values for escapeCodeword and escapeCodewordMask ensure that if the
-  // escape is not included in the tree, then there will never be a match.
-  val escapeCodeword = RegInit(UInt(params.huffman.codewordMaxBits.W), 1.U)
-  val escapeCodewordMask = RegInit(UInt(params.huffman.codewordMaxBits.W), 0.U)
-  when(huffmanState === hsLoadingMetadata && huffman.io.dataIn(0).valid &&
-      huffman.io.dataIn(0).bits(params.huffman.decompressorInputBits - 1)) {
-    val maxLen = params.huffman.codewordMaxBits
-    val len =
-      huffman.io.dataIn(0).bits(params.huffman.codewordLengthMaxBits - 1, 0)
-    val shift = maxLen.U - len
-    escapeCodeword := huffman.io.dataIn(0).bits
-      .>>(params.huffman.codewordLengthMaxBits)
-      .<<(shift)
-    escapeCodewordMask := ((1.U << len) - 1.U) << shift
-  }
-  def isEscapeCodeword(input: UInt,
-      width: Int = params.huffman.decompressorInputBits): Bool =
-    huffmanState === hsDecompressing &&
-    (escapeCodeword === (escapeCodewordMask &
-      (input >> (width - params.huffman.codewordMaxBits))))
-  
-  
-  val inputDone = WireDefault(Bool(), true.B)
   for(i <- 0 until params.channelCount) {
-    
-    // We do not know how many bits were consumed by the decompressor until one
-    // cycle later. So we have to consume the maximum amount and buffer whatever
-    // the decompressor does not accept. This complicates the processing of
-    // ready-valid.
-    
-    // 'buffer' holds the characters that were input to the decompressor in the
-    // previous cycle. In the current cycle, we can see how many of those were
-    // consumed in the previous cycle and re-input the ones that have not yet
-    // been consumed.
-    
-    val buffer = Reg(Vec(params.decompressorCharsIn,
-      UInt(params.compressedCharBits.W)))
-    val bufferLength = RegInit(UInt(params.decompressorCharsIn.valBits.W), 0.U)
-    val bufferBase =
-      RegInit(UInt(params.huffman.parallelCharactersBitAddressBits.W), 0.U)
-    
-    val current = Wire(Vec(params.decompressorCharsIn,
-      UInt(params.compressedCharBits.W)))
-    
-    val currentAddress = huffman.io.currentBit(i)
-    var advance = currentAddress - bufferBase
-    // This is a workaround because Chandler's decompressor does not properly
-    // advance `currentBit` for escape sequences.
-    advance = Mux(currentAddress =/= bufferBase &&
-        isEscapeCodeword(buffer.reduce(_ ## _)),
-      advance + params.huffman.characterBits.U, advance)
-    // This is a workaround because Chandler's decompressor resets
-    // `currentBit` to 0 after processing metadata. So we must guess how many
-    // bits were consumed on the last cycle of processing metadata.
-    if(i == 0)
-    advance = Mux(currentAddress === 0.U && bufferBase =/= 0.U,
-      params.huffman.decompressorInputBits.U, advance)
-    for(j <- 0 until params.decompressorCharsIn) {
-      val bufIdx = advance + j.U
-      current(j) := Mux(bufIdx < bufferLength, buffer(bufIdx),
-        io.in(i).data(bufIdx - bufferLength))
-    }
-    io.in(i).ready := params.decompressorCharsIn.U - bufferLength + advance
-    
-    buffer := current
-    val allValid = bufferLength - advance +& io.in(i).valid
-    bufferLength := allValid min params.decompressorCharsIn.U
-    bufferBase := currentAddress
-    
-    huffman.io.dataIn(i).bits := current.reduce(_ ## _)
-    huffman.io.dataIn(i).valid := allValid >= params.decompressorCharsIn.U ||
-      (io.in(i).finished && allValid =/= 0.U)
-    
-    
-    // Because the compressor does not know the number of characters to compress
-    // in advance, the variable compression length is not properly encoded. This
-    // causes the nested decompressor to hang (and wait for more data) even
-    // after all the data is processed. So we cannot report the
-    // 'last'/'finished' signal on the output based on the 'finished' signal of
-    // the nested decompressor. Instead we must infer when the output is
-    // finished based on when the input is finished. This can be done easily
-    // because the nested decompressor always outputs the decompressed data in
-    // the same cycle as it was input the corresponding compressed data. In any
-    // case, this is why we need this 'inputLast' wire; it is used later to
-    // infer when the output is finished.
-    when(!io.in(i).finished || allValid =/= 0.U) {
-      inputDone := false.B
-    }
-    
-    // suggest names for some wires to make the generated Verilog more readable
-    advance.suggestName(s"advance_$i")
-    allValid.suggestName(s"allValid_$i")
-    bufferLength.suggestName(s"bufferLength_$i")
-  }
-  
-  // shut everything down when the submodule stops working
-  when(huffman.io.finished && !huffman.io.start) {
-    inputDone := true.B
+    io.in(i).ready := huffman.io.inReady(i)
+    huffman.io.dataIn(i).bits := io.in(i).data.reduce(_ ## _)
+    huffman.io.dataIn(i).valid :=
+      io.in(i).valid >= params.decompressorCharsIn.U ||
+      (io.in(i).finished && io.in(i).valid =/= 0.U)
   }
   
   
@@ -174,7 +50,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   val hold = RegInit(VecInit(Seq.fill(params.channelCount)(false.B)))
   val holdData = Reg(Vec(params.channelCount, UInt(params.characterBits.W)))
   
-  io.out.last := inputDone
+  io.out.last := io.in.map(i => i.last && i.valid === 0.U).reduce(_ && _)
   var allPrevValid = WireDefault(true.B)
   io.out.valid := 0.U
   for(i <- 0 until params.channelCount) {

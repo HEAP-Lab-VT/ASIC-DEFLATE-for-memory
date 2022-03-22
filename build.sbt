@@ -59,24 +59,19 @@ javacOptions ++= javacOptionsVersion(scalaVersion.value)
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross
   CrossVersion.full)
 
-// ignore broken glue logic caused by change to lz77 interface
-// todo: fix the broken glue logic
-unmanagedSources / excludeFilter := HiddenFileFilter ||
-  new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-    "src" / "main" / "scala" / "combinations" getCanonicalPath)) ||
-  // new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-  //   "src" / "main" / "scala" / "huffman" getCanonicalPath)) ||
-  new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-    "src" / "main" / "scala" / "lzw" getCanonicalPath)) ||
-  // new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-  //   "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" /
-  //   "huffman" getCanonicalPath)) ||
-  // new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-  //   "src" / "main" / "scala" / "edu" / "vt" / "cs" / "hardware_compressor" /
-  //   "deflate" getCanonicalPath)) ||
-  new SimpleFileFilter(_.getCanonicalPath contains (baseDirectory.value /
-    "src" / "main" / "scala" / "huffman" / "buffer" / "cacheLineStitcher.scala"
-    getCanonicalPath))
+// exclude some unused stuff from compilation
+unmanagedSources / excludeFilter := {
+  val src = baseDirectory.value / "src" / "main" / "scala"
+  HiddenFileFilter ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (src / "combinations" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (src / "lzw" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (src / "huffman" / "buffers" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (src / "huffman" / "wrappers" getCanonicalPath))
+}
 
 // workaround for sbt bug that causes a hang when killing test execution
 Global / cancelable := false
