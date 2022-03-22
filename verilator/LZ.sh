@@ -39,11 +39,11 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 rm obj_dir/V*
 rm obj_dir/*.{o,d}
-mod=LZ77Compressor
+mod=LZCompressor
 verilator -Wno-WIDTH --cc $mod.v --exe DecoupledStreamModule.cpp -CFLAGS "-D 'MODNAME=$mod' -D 'IN_CHARS=11' -D 'OUT_CHARS=8'" $traceargs &&
 make $j -C obj_dir/ -f V$mod.mk V$mod
 
 rm obj_dir/DecoupledStreamModule.{o,d}
-mod=LZ77Decompressor
+mod=LZDecompressor
 verilator -Wno-WIDTH --cc $mod.v --exe DecoupledStreamModule.cpp -CFLAGS "-D 'MODNAME=$mod' -D 'IN_CHARS=8' -D 'OUT_CHARS=8'" $traceargs &&
 make $j -C obj_dir/ -f V$mod.mk V$mod

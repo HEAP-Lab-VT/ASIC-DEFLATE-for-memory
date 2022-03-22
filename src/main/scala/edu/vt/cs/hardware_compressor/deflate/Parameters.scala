@@ -5,7 +5,7 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
-    lzParam: edu.vt.cs.hardware_compressor.lz77.Parameters,
+    lzParam: edu.vt.cs.hardware_compressor.lz.Parameters,
     huffmanParam: edu.vt.cs.hardware_compressor.huffman.Parameters
 ) {
   
@@ -48,7 +48,7 @@ class Parameters(
 object Parameters {
   
   def apply(
-    lz: edu.vt.cs.hardware_compressor.lz77.Parameters,
+    lz: edu.vt.cs.hardware_compressor.lz.Parameters,
     huffman: edu.vt.cs.hardware_compressor.huffman.Parameters
   ): Parameters =
     new Parameters(
@@ -72,13 +72,13 @@ object Parameters {
     }
     file.close
     
-    val lz77ParametersOutput = new Parameters(
+    val lzParametersOutput = new Parameters(
       lzParam = edu.vt.cs.hardware_compressor
-        .lz77.Parameters.fromCSV(map("lz")),
+        .lz.Parameters.fromCSV(map("lz")),
       huffmanParam = edu.vt.cs.hardware_compressor
         .huffman.Parameters.fromCSV(map("huffman")))
       
     System.err.println(s"finished getting deflate parameters from $csvPath.")
-    return lz77ParametersOutput
+    return lzParametersOutput
   }
 }

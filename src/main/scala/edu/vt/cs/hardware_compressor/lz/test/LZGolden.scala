@@ -1,16 +1,15 @@
-package edu.vt.cs.hardware_compressor.lz77.test
+package edu.vt.cs.hardware_compressor.lz.test
 
-import edu.vt.cs.hardware_compressor.lz77.Parameters
+import edu.vt.cs.hardware_compressor.lz.Parameters
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import scala.util.control.Breaks._
 import java.io._
 
 // Note: This can be compiled into a jar by using the following sbt command:
 // set assembly / mainClass :=
-// Some("edu.vt.cs.hardware_compressor.lz77.test.LZ77HashCompress"); assembly
-// compiles to target/scala-2.12/hardware-compressor-assembly-3.2.0.jar
+// Some("edu.vt.cs.hardware_compressor.lz.test.LZGoldenCompress"); assembly
 
-object LZ77Hash {
+object LZGolden {
   def encode(address: Int, length: Int, params: Parameters): Seq[Int] = {
     
     var encoding : BigInt = 0
@@ -62,9 +61,6 @@ object LZ77Hash {
           .map(_.length)
           .zipWithIndex
           .reverse
-          .filter(_._1 >= 5)
-          .take(8)
-          .padTo(1, (0, 0)) // ensure non-empty for maxBy
           .maxBy(_._1))
         .filter(_._1 >= params.minCharsToEncode)
         .map{case (l, i) => (l, i, data.splitAt(l))}
@@ -125,8 +121,8 @@ object LZ77Hash {
 }
 
 
-object LZ77HashCompress extends App {
-  val params = Parameters.fromCSV("configFiles/lz77.csv")
+object LZGoldenCompress extends App {
+  val params = Parameters.fromCSV("configFiles/lz.csv")
   val in =
     if(args.length >= 1 && args(0) != "-")
       new BufferedInputStream(new FileInputStream(args(0)))
@@ -138,7 +134,7 @@ object LZ77HashCompress extends App {
     else
       System.out
   try {
-    LZ77Hash.compress(Stream.continually(in.read).takeWhile(_ != -1), params)
+    LZGolden.compress(Stream.continually(in.read).takeWhile(_ != -1), params)
       .foreach(b => out.write(b))
     out.flush
   } finally {

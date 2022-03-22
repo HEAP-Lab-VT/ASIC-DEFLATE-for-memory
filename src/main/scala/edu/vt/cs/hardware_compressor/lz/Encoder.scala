@@ -1,4 +1,4 @@
-package edu.vt.cs.hardware_compressor.lz77
+package edu.vt.cs.hardware_compressor.lz
 
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._

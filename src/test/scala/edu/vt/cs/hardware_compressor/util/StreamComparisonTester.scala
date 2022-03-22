@@ -36,7 +36,7 @@ class StreamComparisonTester[T <: Module {def io : StreamBundle[UInt, UInt]}](
     
     poke(module.io.out.ready, module.io.out.bits.length)
     
-    // println(s"out valid = ${peek(lz77.io.out.valid)}; in ready = ${peek(lz77.io.in.ready)}")
+    // println(s"out valid = ${peek(lz.io.out.valid)}; in ready = ${peek(lz.io.in.ready)}")
     
     inidx += (peek(module.io.in.ready) min (peek(module.io.in.valid))).intValue
     

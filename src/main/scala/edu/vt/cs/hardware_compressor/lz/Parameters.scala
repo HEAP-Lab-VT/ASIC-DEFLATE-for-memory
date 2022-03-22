@@ -1,4 +1,4 @@
-package edu.vt.cs.hardware_compressor.lz77
+package edu.vt.cs.hardware_compressor.lz
 
 import chisel3._
 import chisel3.util._
@@ -70,7 +70,7 @@ class Parameters(
   // ENCODING PARAMETERS
   //----------------------------------------------------------------------------
   
-  // character that is used to escape a LZ77 encoding
+  // character that is used to escape a LZ encoding
   val escapeCharacter = escapeCharacterParam
   
   // minimum number of characters to compress to an encoding
@@ -171,7 +171,7 @@ object Parameters {
       maxCharsToEncodeParam = maxCharsToEncode)
   
   def fromCSV(csvPath: String): Parameters = {
-    System.err.println(s"getting LZ77 parameters from $csvPath...")
+    System.err.println(s"getting LZ parameters from $csvPath...")
     var boolMap: Map[String, Boolean] = Map()
     var intMap: Map[String, Int] = Map()
     val file = io.Source.fromFile(csvPath)
@@ -193,7 +193,7 @@ object Parameters {
     }
     file.close
 
-    val lz77ParametersOutput = new Parameters(
+    val lzParametersOutput = new Parameters(
       characterBitsParam = intMap("characterBits"),
       compressorCharsInParam = intMap("compressorCharsIn"),
       compressorCharsOutParam = intMap("compressorCharsOut"),
@@ -204,7 +204,7 @@ object Parameters {
       minCharsToEncodeParam = intMap("minCharsToEncode"),
       maxCharsToEncodeParam = intMap("maxCharsToEncode"))
       
-    System.err.println(s"finished getting LZ77 parameters from $csvPath.")
-    return lz77ParametersOutput
+    System.err.println(s"finished getting LZ parameters from $csvPath.")
+    return lzParametersOutput
   }
 }

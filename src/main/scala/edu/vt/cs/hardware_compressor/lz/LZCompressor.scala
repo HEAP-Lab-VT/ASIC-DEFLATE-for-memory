@@ -1,11 +1,11 @@
-package edu.vt.cs.hardware_compressor.lz77
+package edu.vt.cs.hardware_compressor.lz
 
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import chisel3._
 import chisel3.util._
 
-class LZ77Compressor(params: Parameters) extends Module {
+class LZCompressor(params: Parameters) extends Module {
   
   val io = IO(new StreamBundle(
     params.compressorCharsIn, UInt(params.characterBits.W),
@@ -87,8 +87,8 @@ class LZ77Compressor(params: Parameters) extends Module {
     outLitCount +& encoder.io.out.valid <= params.compressorCharsOut.U
 }
 
-object LZ77Compressor extends App {
-  val params = Parameters.fromCSV("configFiles/lz77.csv")
+object LZCompressor extends App {
+  val params = Parameters.fromCSV("configFiles/lz.csv")
   new chisel3.stage.ChiselStage()
-    .emitVerilog(new LZ77Compressor(params), args)
+    .emitVerilog(new LZCompressor(params), args)
 }

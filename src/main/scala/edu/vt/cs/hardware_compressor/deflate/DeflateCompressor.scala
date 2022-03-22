@@ -3,7 +3,7 @@ package edu.vt.cs.hardware_compressor.deflate
 import chisel3._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.huffman._
-import edu.vt.cs.hardware_compressor.lz77._
+import edu.vt.cs.hardware_compressor.lz._
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
@@ -18,7 +18,7 @@ class DeflateCompressor(params: Parameters) extends Module {
   })
   
   
-  val lz = Module(new LZ77Compressor(params.lz))
+  val lz = Module(new LZCompressor(params.lz))
   val huffman = Module(new HuffmanCompressor(params.huffman))
   // val serializer = Module(new Serializer(params))
   val tee = Module(new StreamTee(

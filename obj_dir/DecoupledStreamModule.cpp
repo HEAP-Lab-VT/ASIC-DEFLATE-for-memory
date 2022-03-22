@@ -9,7 +9,7 @@
 // </editor-fold>
 
 #ifndef MODNAME
-// #define MODNAME LZ77Compressor
+// #define MODNAME LZCompressor
 #endif
 #define VMODNAME CAT(V,MODNAME)
 #include STR(VMODNAME.h)
