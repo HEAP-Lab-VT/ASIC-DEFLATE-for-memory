@@ -3,7 +3,6 @@ package edu.vt.cs.hardware_compressor.huffman
 import chisel3._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util._
-import edu.vt.cs.hardware_compressor.util.ArithmeticOps._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 
