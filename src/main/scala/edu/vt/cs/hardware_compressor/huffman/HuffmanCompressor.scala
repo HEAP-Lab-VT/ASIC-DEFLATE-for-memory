@@ -49,6 +49,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // We do not know soon enough how many bytes are consumed, so we make the
   // (rather liberal) assumption that when ready and valid are asserted, all
   // inputs are consumed.
+  // TODO: assert ready when frequency counting is finished
   io.in_counter.ready := Mux(huffman.io.characterFrequencyInputs.ready &&
     huffman.io.characterFrequencyInputs.valid, params.counterCharsIn.U, 0.U)
   
