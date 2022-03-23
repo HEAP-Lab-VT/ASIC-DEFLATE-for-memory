@@ -53,7 +53,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   var allPrevValid = WireDefault(true.B)
   io.out.valid := 0.U
   for(i <- 0 until params.channelCount) {
-    val way = (waymodulus +& i.U).div(params.channelCount)._2
+    val way = (waymodulus +& i.U) % params.channelCount.U
     
     when(!hold(way)) {
       io.out.data(i) := huffman.io.dataOut(way).bits

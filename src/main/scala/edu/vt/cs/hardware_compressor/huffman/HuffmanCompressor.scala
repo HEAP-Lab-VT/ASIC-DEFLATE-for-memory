@@ -86,7 +86,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // loop over input characters
   for(i <- 0 until params.channelCount) {
     // channel index corresponding to this input character
-    val way = (waymodulus +& i.U).div(params.channelCount)._2
+    val way = (waymodulus +& i.U) % params.channelCount.U
     
     // pass this input character to the proper channel
     huffman.io.compressionInputs(way).dataIn(0) := io.in_compressor.bits(i)
