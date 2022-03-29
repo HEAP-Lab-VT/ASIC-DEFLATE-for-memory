@@ -95,6 +95,8 @@ $(build)/VHuffman_fused: $(build)/vlmakefile $(build)/HuffmanCompressor.v $(buil
 $(build)/VDeflate_fused: $(build)/vlmakefile $(build)/DeflateCompressor.v $(build)/DeflateDecompressor.v
 	$(MAKE) -C $(build) -f vlmakefile VDeflate_fused TARGET=VDeflate_fused MODULES='DeflateCompressor DeflateDecompressor' OBJS='Deflate_fused.o BitQueue.o'
 
+.PHONY: $(build)/VLZCompressor $(build)/VLZDecompressor $(build)/VHuffman_fused $(build)/VDeflate_fused
+
 
 # copy c++ sources into build directory
 # $(patsubst $(cppsrc)/%,$(build)/%,$(wildcard $(cppsrc)/*)): $(build)/%: $(cppsrc)/%

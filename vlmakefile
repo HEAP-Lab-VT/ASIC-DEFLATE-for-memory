@@ -6,21 +6,35 @@
 # CPP_HEADER = C++ header prerequisites
 # CFLAGS = additional g++ flags
 
+ifeq ($(findstring --trace,$(TRACE)),--trace)
+ifeq ($(findstring --trace-underscore,$(TRACE)),--trace-underscore)
+TRACE_SUFFIX := _trace-underscore
+else
+TRACE_SUFFIX := _trace
+endif
+TRACE_SIMPLESUFFIX := _trace
+else
+TRACE_SUFFIX := _
+TRACE_SIMPLESUFFIX := _
+endif
+
 INCLUDES = -I$(VERILATOR_ROOT)/include -I.
 VLFLAGS := -Wno-WIDTH -Mdir .
 
-$(TARGET):
+$(TARGET): $(TARGET)$(TRACE_SUFFIX)
+	cp $(TARGET)$(TRACE_SUFFIX) $(TARGET)
 
-V%.mk: %.v
+V%$(TRACE_SUFFIX).mk: %.v
 	verilator $(VLFLAGS) $(TRACE) -cc $<
+	cp V$*.mk V$*$(TRACE_SUFFIX).mk
 
-include $(MODULES:%=V%.mk) # sets VK_GLOBAL_OBJS and VERILATOR_ROOT
+include $(MODULES:%=V%$(TRACE_SUFFIX).mk) # sets VK_GLOBAL_OBJS and VERILATOR_ROOT
 
 # not sure why we need this; it's included by the verilator-generated makefile
 # $(MODS:%=V%__ALL.a): V%__ALL.a: V%.mk
 # 	$(MAKE) -f $< $@
 
-$(TARGET): $(OBJS) $(MODULES:%=V%__ALL.a) $(VK_GLOBAL_OBJS) $(notdir $(CPP_SOURCE:%.cpp=%.o))
+$(TARGET)$(TRACE_SUFFIX): $(OBJS:%.o=%$(TRACE_SIMPLESUFFIX).o) $(MODULES:%=V%__ALL.a) $(VK_GLOBAL_OBJS)
 	g++ $^ -o $@
 
 
@@ -29,39 +43,43 @@ OBJ_FLAGS := -c
 DEP_FLAGS := -MM -MG
 
 ifeq ($(findstring --trace,$(TRACE)),--trace)
-TRACE_FLAGS := -CFLAGS "-DTRACE_ENABLE=true"
+TRACE_FLAGS := -DTRACE_ENABLE=true
 else
 TRACE_FLAGS := 
 endif
 
-LZCOMPRESSOR_CFLAGS := -DMODNAME=LZCompressor -DIN_CHARS=11 -DOUT_CHARS=8
-LZCompressor.o: $(cppsrc)/DecoupledStreamModule.cpp
+LZCOMPRESSOR_CFLAGS := -DMODNAME=LZCompressor \
+	-DIN_CHARS=$(shell sed -E 's/^compressorCharsIn\s*,\s*([0-9]+)$$/\1/; t; d' $(root)/configFiles/lz.csv) \
+	-DOUT_CHARS=$(shell sed -E 's/^compressorCharsOut\s*,\s*([0-9]+)$$/\1/; t; d' $(root)/configFiles/lz.csv)
+LZCompressor$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/DecoupledStreamModule.cpp $(root)/configFiles/lz.csv
 	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZCOMPRESSOR_CFLAGS) $< -o $@
-LZCompressor.d: $(cppsrc)/DecoupledStreamModule.cpp
+LZCompressor$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/DecoupledStreamModule.cpp $(root)/configFiles/lz.csv
 	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZCOMPRESSOR_CFLAGS) $< -o $@
-include LZCompressor.d
+include LZCompressor$(TRACE_SIMPLESUFFIX).d
 
-LZDECOMPRESSOR_CFLAGS := -DMODNAME=LZDecompressor -DIN_CHARS=8 -DOUT_CHARS=8
-LZDecompressor.o: $(cppsrc)/DecoupledStreamModule.cpp
+LZDECOMPRESSOR_CFLAGS := -DMODNAME=LZDecompressor \
+	-DIN_CHARS=$(shell sed -E 's/^decompressorCharsIn\s*,\s*([0-9]+)$$/\1/; t; d' $(root)/configFiles/lz.csv) \
+	-DOUT_CHARS=$(shell sed -E 's/^decompressorCharsOut\s*,\s*([0-9]+)$$/\1/; t; d' $(root)/configFiles/lz.csv)
+LZDecompressor$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/DecoupledStreamModule.cpp $(root)/configFiles/lz.csv
 	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZDECOMPRESSOR_CFLAGS) $< -o $@
-LZDecompressor.d: $(cppsrc)/DecoupledStreamModule.cpp
+LZDecompressor$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/DecoupledStreamModule.cpp $(root)/configFiles/lz.csv
 	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZDECOMPRESSOR_CFLAGS) $< -o $@
-include LZDecompressor.d
+include LZDecompressor$(TRACE_SIMPLESUFFIX).d
 
-Huffman_fused.o: $(cppsrc)/Huffman_fused.cpp
+Huffman_fused$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/Huffman_fused.cpp
 	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
-Huffman_fused.d: $(cppsrc)/Huffman_fused.cpp
+Huffman_fused$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/Huffman_fused.cpp
 	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
-include Huffman_fused.d
+include Huffman_fused$(TRACE_SIMPLESUFFIX).d
 
-Deflate_fused.o: $(cppsrc)/Deflate_fused.cpp
+Deflate_fused$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/Deflate_fused.cpp
 	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
-Deflate_fused.d: $(cppsrc)/Deflate_fused.cpp
+Deflate_fused$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/Deflate_fused.cpp
 	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
-include Deflate_fused.d
+include Deflate_fused$(TRACE_SIMPLESUFFIX).d
 
-BitQueue.o: $(cppsrc)/BitQueue.c
+BitQueue$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/BitQueue.c
 	g++ $(OBJ_FLAGS) $< -o $@
-BitQueue.d: $(cppsrc)/BitQueue.c
+BitQueue$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/BitQueue.c
 	g++ $(DEP_FLAGS) $< -o $@
-include BitQueue.d
+include BitQueue$(TRACE_SIMPLESUFFIX).d
