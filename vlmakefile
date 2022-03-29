@@ -1,0 +1,67 @@
+# variables to be set by user
+# TARGET = target executable
+# MODULES = fully-qualified scala class name of each module
+# SCALA_SOURCE = Scala prerequisites
+# CPP_SOURCE = C++ source prerequisites
+# CPP_HEADER = C++ header prerequisites
+# CFLAGS = additional g++ flags
+
+INCLUDES = -I$(VERILATOR_ROOT)/include -I.
+VLFLAGS := -Wno-WIDTH -Mdir .
+
+$(TARGET):
+
+V%.mk: %.v
+	verilator $(VLFLAGS) $(TRACE) -cc $<
+
+include $(MODULES:%=V%.mk) # sets VK_GLOBAL_OBJS and VERILATOR_ROOT
+
+# not sure why we need this; it's included by the verilator-generated makefile
+# $(MODS:%=V%__ALL.a): V%__ALL.a: V%.mk
+# 	$(MAKE) -f $< $@
+
+$(TARGET): $(OBJS) $(MODULES:%=V%__ALL.a) $(VK_GLOBAL_OBJS) $(notdir $(CPP_SOURCE:%.cpp=%.o))
+	g++ $^ -o $@
+
+
+
+OBJ_FLAGS := -c
+DEP_FLAGS := -MM -MG
+
+ifeq ($(findstring --trace,$(TRACE)),--trace)
+TRACE_FLAGS := -CFLAGS "-DTRACE_ENABLE=true"
+else
+TRACE_FLAGS := 
+endif
+
+LZCOMPRESSOR_CFLAGS := -DMODNAME=LZCompressor -DIN_CHARS=11 -DOUT_CHARS=8
+LZCompressor.o: $(cppsrc)/DecoupledStreamModule.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZCOMPRESSOR_CFLAGS) $< -o $@
+LZCompressor.d: $(cppsrc)/DecoupledStreamModule.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZCOMPRESSOR_CFLAGS) $< -o $@
+include LZCompressor.d
+
+LZDECOMPRESSOR_CFLAGS := -DMODNAME=LZDecompressor -DIN_CHARS=8 -DOUT_CHARS=8
+LZDecompressor.o: $(cppsrc)/DecoupledStreamModule.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZDECOMPRESSOR_CFLAGS) $< -o $@
+LZDecompressor.d: $(cppsrc)/DecoupledStreamModule.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $(LZDECOMPRESSOR_CFLAGS) $< -o $@
+include LZDecompressor.d
+
+Huffman_fused.o: $(cppsrc)/Huffman_fused.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
+Huffman_fused.d: $(cppsrc)/Huffman_fused.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
+include Huffman_fused.d
+
+Deflate_fused.o: $(cppsrc)/Deflate_fused.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
+Deflate_fused.d: $(cppsrc)/Deflate_fused.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
+include Deflate_fused.d
+
+BitQueue.o: $(cppsrc)/BitQueue.c
+	g++ $(OBJ_FLAGS) $< -o $@
+BitQueue.d: $(cppsrc)/BitQueue.c
+	g++ $(DEP_FLAGS) $< -o $@
+include BitQueue.d
