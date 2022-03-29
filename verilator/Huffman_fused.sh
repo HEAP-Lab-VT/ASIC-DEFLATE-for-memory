@@ -38,7 +38,7 @@ verilator -Wno-WIDTH --cc $amod.v $traceargs &&
 make -j -C obj_dir/ -f V$amod.mk V${amod}__ALL.a
 
 bmod=HuffmanDecompressor
-verilator -Wno-WIDTH --cc $bmod.v --exe V${amod}__ALL.a ../verilator/Huffman_fused.cpp ../verilator/BitQueue.c -CFLAGS '-ggdb' $traceargs &&
+verilator -Wno-WIDTH --cc $bmod.v --exe V${amod}__ALL.a ../verilator/Huffman_fused.cpp ../verilator/BitQueue.c $traceargs &&
 make -j -C obj_dir/ -f V$bmod.mk V${bmod} &&
 cp obj_dir/VHuffmanDecompressor obj_dir/VHuffman_fused
 
