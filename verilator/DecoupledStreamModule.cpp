@@ -29,10 +29,6 @@
 #define OUT_CHARS 8
 #endif
 
-#ifndef YUQING_MODE
-#define YUQING_MODE false
-#endif
-
 #ifndef TIMEOUT
 #define TIMEOUT (idle >= 1000)
 #endif
@@ -41,47 +37,27 @@ static size_t min(size_t a, size_t b) {return a <= b ? a : b;}
 static size_t max(size_t a, size_t b) {return a >= b ? a : b;}
 
 
-#if !YUQING_MODE
-int main(int argc, char **argv, char **env)
-#else
-int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
-	const char *tracefile)
-#endif
-{
+int main(int argc, char **argv, char **env) {
 	Verilated::commandArgs(argc, argv);
 	VMODNAME *module = new VMODNAME;
 	
 #if TRACE_ENABLE
-#if !YUQING_MODE
 	char trace_enable = argc > 3 && (argv[3][0] != '-' || argv[3][1] != '\0');
-#else
-	char trace_enable = tracefile != NULL && tracefile[0] != '\0' &&
-		(tracefile[0] != '-' || tracefile[1] != '\0');
-#endif
 	VerilatedVcdC* trace;
 	if(trace_enable) {
 		Verilated::traceEverOn(true);
 		trace = new VerilatedVcdC;
 		module->trace(trace, 99);
-#if !YUQING_MODE
 		trace->open(argv[3]);
-#else
-		trace->open(tracefile);
-#endif
 	}
 #endif
 	
-#if !YUQING_MODE
 	FILE *inf = stdin;
 	FILE *outf = stdout;
 	if(argc > 1 && (argv[1][0] != '-' || argv[1][1] != '\0'))
 		inf = fopen(argv[1], "r");
 	if(argc > 2 && (argv[2][0] != '-' || argv[2][1] != '\0'))
 		outf = fopen(argv[2], "w");
-#else
-	size_t outbuflen = *outlen;
-	*outlen = 0;
-#endif
 	
 	char inBuf[IN_CHARS];
 	size_t inBufIdx = 0;
@@ -105,25 +81,9 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 		module->eval();
 		
 		// read bytes from input stream to input buffer
-#if !YUQING_MODE
 		size_t bytesRead = fread(inBuf + inBufIdx, 1, IN_CHARS - inBufIdx, inf);
 		module->io_in_last = module->io_in_last || feof(inf);
 		inBufIdx += bytesRead;
-#else
-		while(true) {
-			if(!inlen) {
-				module->io_in_last = true;
-				break;
-			}
-			else if(IN_CHARS == inBufIdx) {
-				break;
-			}
-			*(inBuf + inBufIdx) = *input;
-			inBufIdx++;
-			input++;
-			inlen--;
-		}
-#endif
 		
 		// expose input buffer to module
 		// module input is not in array form, so must use ugly cast
@@ -156,15 +116,7 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 		outBufIdx += c;
 		
 		// write output buffer to output stream
-#if !YUQING_MODE
 		c = fwrite(outBuf, 1, outBufIdx, outf);
-#else
-		for(c = 0; c < outBufIdx && *outlen < outbuflen; c++) {
-			output[outlen] = outBuf[c];
-			*outlen++;
-		}
-		c = outBufIdx;
-#endif
 		for(int i = c; i < outBufIdx; i++)
 			outBuf[i + c] = outBuf[i];
 		outBufIdx -= c;
@@ -194,13 +146,11 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 		&& !TIMEOUT);
 	
 	module->final();
-
-#if !YUQING_MODE
+	
 	if(inf != stdin)
 		fclose(inf);
 	if(outf != stdout)
 		fclose(outf);
-#endif
 	
 #if TRACE_ENABLE
 		if(trace_enable) {
@@ -210,17 +160,10 @@ int MODNAME(const char *input, size_t inlen, char *output, size_t *outlen,
 	
 	delete module;
 	
-#if !YUQING_MODE
 	if(!TIMEOUT)
 		fprintf(stderr, "cycles: %d\n", cycles);
 	else
 		fprintf(stderr, "cycles: %d (timeout)\n", cycles);
 	
 	return 0;
-#else
-	if(!TIMEOUT)
-		return cycles;
-	else
-		return -1;
-#endif
 }
