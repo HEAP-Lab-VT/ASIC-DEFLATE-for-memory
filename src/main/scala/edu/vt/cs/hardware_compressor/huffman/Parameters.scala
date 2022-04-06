@@ -5,7 +5,9 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
-    huffmanParam: huffmanParameters.huffmanParameters
+    huffmanParam: huffmanParameters.huffmanParameters,
+    decompressorBitsInParam: Int,
+    decompressorCharsOutParam: Int
 ) {
   
   //============================================================================
@@ -24,14 +26,11 @@ class Parameters(
   // size of a uncompressed character (in bits)
   val characterBits = huffman.characterBits
   
-  // Size of a unit of compressed bits
-  val compressedCharBits = 1
+  // maximum number of bits in a huffman code
+  val maxCodeLength = huffman.codewordMaxBits
   
-  // number of ways -- one channel per way
-  val channelCount = huffman.compressionParallelism
-  
-  // the maximum number of characters that can be handled by the sub-module
-  val maxCompressionLimit = huffman.characters
+  // the number of huffman codes
+  val codeCount = huffman.huffmanTreeCharacters
   
   
   //============================================================================
@@ -50,7 +49,7 @@ class Parameters(
   val compressorCharsIn = huffman.compressionParallelism
   
   // output bus width of one way of the compressor (in characters)
-  val compressorCharsOut = huffman.dictionaryEntryMaxBits
+  val compressorBitsOut = maxCodeLength * huffman.compressionParallelism
   
   
   //============================================================================
@@ -58,24 +57,53 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of one way of the decompressor (in characters)
-  val decompressorCharsIn = huffman.decompressorInputBits
+  val decompressorBitsIn = decompressorBitsInParam
   
   // output bus width of the decompressor (in characters)
-  val decompressorCharsOut = huffman.compressionParallelism
+  val decompressorCharsOut = decompressorCharsOutParam
   
   //============================================================================
   // ASSERTIONS
   //----------------------------------------------------------------------------
   
-  if(characterBits <= 0)
-    // altogether doesn't make sense
+  if(characterBits < 1)
     throw new IllegalArgumentException(
       s"characterBits: ${characterBits}")
   
-  if(compressedCharBits <= 0)
-    // altogether doesn't make sense
+  if(maxCodeLength < 1)
     throw new IllegalArgumentException(
-      s"compressedCharBits: ${compressedCharBits}")
+      s"maxCodeLength: ${maxCodeLength}")
+  
+  if(codeCount < 1)
+    throw new IllegalArgumentException(
+      s"codeCount: ${codeCount}")
+  
+  if(counterCharsIn < 1)
+    throw new IllegalArgumentException(
+      s"counterCharsIn: ${counterCharsIn}")
+  
+  if(compressorCharsIn < 1)
+    throw new IllegalArgumentException(
+      s"compressorCharsIn: ${compressorCharsIn}")
+  
+  if(compressorBitsOut < 1)
+    throw new IllegalArgumentException(
+      s"compressorBitsOut: ${compressorBitsOut}")
+  
+  if(decompressorBitsIn < maxCodeLength + characterBits)
+    // deadlock
+    throw new IllegalArgumentException(
+      s"codeCount: ${codeCount}")
+  
+  if(decompressorBitsIn < 1 + characterBits + maxCodeLength +
+      maxCodeLength.valBits)
+    // cannot load metadata
+    throw new IllegalArgumentException(
+      s"codeCount: ${codeCount}")
+  
+  if(decompressorCharsOut < 1)
+    throw new IllegalArgumentException(
+      s"codeCount: ${codeCount}")
 }
 
 object Parameters {
