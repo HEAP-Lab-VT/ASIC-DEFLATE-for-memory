@@ -280,7 +280,8 @@ class CAM(params: Parameters) extends Module {
   
   //============================================================================
   // PIPELINE STAGE 3
-  matchIndex = WireDefault(RegEnable(matchIndex, !stall))
+  matchIndex = WireDefault(RegEnable(matchIndex,
+    0.U(params.camCharsPerCycle.valBits.W), !stall))
   matchLength = WireDefault(RegEnable(matchLength,
     0.U(params.camCharsPerCycle.valBits.W), !stall))
   matchLengthFull = WireDefault(RegEnable(matchLengthFull,
