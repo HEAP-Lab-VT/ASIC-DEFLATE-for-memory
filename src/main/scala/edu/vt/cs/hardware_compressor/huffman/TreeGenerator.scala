@@ -48,29 +48,47 @@ class TreeGenerator(params: Parameters) extends Module {
   
   // finds the two roots with the lowest frequency
   val least = Iterator.iterate(
-    rootsInit.map(_.freq).:+(0.U(params.passOneSize.valBits.W))
-    .map(_ -% 1.U).zipWithIndex.map{r =>
+    rootsInit
+    .map(_.freq)
+    // add a dummy in case there are an odd number of candidate roots
+    .:+(0.U(params.passOneSize.valBits.W))
+    // invoke unsigned integer underflow to make 0-frequency (i.e. invalid)
+    // characters not be chosen
+    .map(_ -% 1.U)
+    .zipWithIndex.map{r =>
       val b = Wire(new IndexedRoot())
       b.freq := r._1
       b.idx := r._2.U
       b
-    }.grouped(2).filter(_.length == 2).map{r2 =>
+    }
+    // group candidates in pairs
+    .grouped(2)
+    // drop the last (dummy) element if it was not paired
+    .filter(_.length == 2)
+    // order elements within each pair by frequency 
+    .map{r2 =>
       Seq(
-        Mux(r2(0).freq >= r2(1).freq, r2(0), r2(1)),
-        Mux(r2(0).freq >= r2(1).freq, r2(1), r2(0))
+        Mux(r2(0).freq <= r2(1).freq, r2(0), r2(1)),
+        Mux(r2(0).freq <= r2(1).freq, r2(1), r2(0))
       )
     }.toSeq
   ){r2 =>
     r2.grouped(2).map(_.reduce{(a, b) =>
+      // merge two pairs by selecting the two with lowest frequency
       Seq(
-        Mux(a(0).freq >= b(0).freq, a(0), b(0)),
-        Mux(a(0).freq >= b(0).freq,
-          Mux(a(1).freq >= b(0).freq, a(1), b(0)),
-          Mux(a(0).freq >= b(1).freq, a(0), b(1))
+        Mux(a(0).freq <= b(0).freq, a(0), b(0)),
+        Mux(a(0).freq <= b(0).freq,
+          Mux(a(1).freq <= b(0).freq, a(1), b(0)),
+          Mux(a(0).freq <= b(1).freq, a(0), b(1))
         )
       )
     }).toSeq
-  }.take(20).find(_.length == 1).get.head.map(r => {
+  }
+  .take(20)
+  .find(_.length == 1)
+  .get.head
+  // correct subtraction by 1 from before
+  .map(r => {
     val ir = WireDefault(r)
     ir.freq := r.freq + 1.U
     ir

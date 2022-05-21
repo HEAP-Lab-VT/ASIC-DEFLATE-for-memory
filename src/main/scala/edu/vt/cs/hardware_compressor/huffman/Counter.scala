@@ -80,7 +80,13 @@ class Counter(params: Parameters) extends Module {
     r.char := h.char
     r.freq := h.freq
   }
-  io.result.escapeFreq := total - highChars.map(_.freq).fold(0.U)(_ + _)
+  val highTotal = highChars.map(_.freq).fold(0.U)(_ + _)
+  io.result.escapeFreq := Mux(highTotal =/= total,
+    total - highTotal,
+    // if no characters need an escape, set escape frequency to 1 to ensure
+    // allocation of escape character in the huffman tree.
+    1.U
+  )
   io.finished := io.in.last && io.in.valid === 0.U &&
     promotionChar === frequencies.length.U &&
     demotionIdx === (highChars.length - 1).U
