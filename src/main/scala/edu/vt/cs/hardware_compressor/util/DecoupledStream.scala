@@ -60,8 +60,40 @@ class DecoupledStream[T <: Data](count: Int, gen: T)
 }
 
 object DecoupledStream {
-  def apply[T <: Data](count: Int = 0, gen: T = new Bundle {}):
+  def apply[T <: Data](count: Int = 0, gen: T = new Bundle{}):
     DecoupledStream[T] = new DecoupledStream(count, gen)
+}
+
+
+/**
+ * A DecoupledStream which allows a new stream to be started after a stream has
+ * finished.
+ * 
+ * This is accomplished by adding a `restart` Bool signal from consumer to
+ * producer. When `restart` is asserted, `last` is asserted, and `ready` is
+ * greater than or equal to `valid`, then the consumer will be ready for the
+ * next stream on the next cycle and the next cycle will start a new stream.
+ * The `restart` signal has no effect if `last` is deasserted or `ready` is
+ * less than `valid`.
+ * 
+ * If the producer is not yet ready to produce the next stream when a restart
+ * occures, then it may assert `last := false.B` and `valid := 0.U` until it is
+ * ready to produce. To avoid terminating the new stream prematurely, the
+ * producer should take care to deassert `last` on the cycle following a
+ * `restart` assertion (unless of course the stream is so short that it should
+ * be terminated at that point).
+ */
+class RestartableDecoupledStream[T <: Data](count: Int, gen: T)
+    extends DecoupledStream[T](count: Int, gen: T) {
+  val restart = Input(Bool())
+  
+  override def cloneType: this.type =
+    new RestartableDecoupledStream(count, gen).asInstanceOf[this.type]
+}
+
+object RestartableDecoupledStream {
+  def apply[T <: Data](count: Int = 0, gen: T = new Bundle{}):
+    RestartableDecoupledStream[T] = new RestartableDecoupledStream(count, gen)
 }
 
 

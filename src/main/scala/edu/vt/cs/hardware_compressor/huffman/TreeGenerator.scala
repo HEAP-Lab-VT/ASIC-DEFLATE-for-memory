@@ -1,0 +1,127 @@
+package edu.vt.cs.hardware_compressor.huffman
+
+import chisel3._
+import chisel3.util._
+import edu.vt.cs.hardware_compressor.util._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
+import edu.vt.cs.hardware_compressor.util.StrongWhenOps._
+
+
+class TreeGenerator(params: Parameters) extends Module {
+  val io = IO(new Bundle{
+    val counterResult = Input(new CounterResult(params))
+    val result = Output(new TreeGeneratorResult(params))
+    val finished = Output(Bool())
+  })
+  
+  class Root extends Bundle {
+    val freq = UInt(params.passOneSize.valBits.W)
+  }
+  class Leaf extends Bundle {
+    val code = UInt(params.maxCodeLength.W)
+    val codeLength = UInt(params.maxCodeLength.valBits.W)
+    val root = UInt(params.codeCount.idxBits.W)
+  }
+  class IndexedRoot extends Root {
+    val idx = UInt(params.codeCount.valBits.W)
+  }
+  
+  val leaves = RegInit(VecInit((0 until params.codeCount).map{i =>
+    val l = Wire(new Leaf())
+    l.code := 0.U
+    l.codeLength := 0.U
+    l.root := i.U
+    l
+  }))
+  val roots = Reg(Vec(params.codeCount, new Root()))
+  
+  val leavesNext = WireDefault(leaves)
+  leaves := leavesNext
+  val rootsInit = Mux(RegNext(true.B, false.B), roots, VecInit(
+    io.counterResult.highChars.map(_.freq).:+(io.counterResult.escapeFreq)
+      .map{f =>
+        val r = Wire(new Root())
+        r.freq := f
+        r
+      }
+  ))
+  
+  // finds the two roots with the lowest frequency
+  val least = Iterator.iterate(
+    rootsInit.map(_.freq).:+(0.U(params.passOneSize.valBits.W))
+    .map(_ -% 1.U).zipWithIndex.map{r =>
+      val b = Wire(new IndexedRoot())
+      b.freq := r._1
+      b.idx := r._2.U
+      b
+    }.grouped(2).filter(_.length == 2).map{r2 =>
+      Seq(
+        Mux(r2(0).freq >= r2(1).freq, r2(0), r2(1)),
+        Mux(r2(0).freq >= r2(1).freq, r2(1), r2(0))
+      )
+    }.toSeq
+  ){r2 =>
+    r2.grouped(2).map(_.reduce{(a, b) =>
+      Seq(
+        Mux(a(0).freq >= b(0).freq, a(0), b(0)),
+        Mux(a(0).freq >= b(0).freq,
+          Mux(a(1).freq >= b(0).freq, a(1), b(0)),
+          Mux(a(0).freq >= b(1).freq, a(0), b(1))
+        )
+      )
+    }).toSeq
+  }.take(20).find(_.length == 1).get.head.map(r => {
+    val ir = WireDefault(r)
+    ir.freq := r.freq + 1.U
+    ir
+  })
+  
+  // merge the two roots into one
+  val newRoot = Wire(new Root())
+  newRoot.freq := least(0).freq + least(1).freq
+  roots(least(0).idx) := newRoot
+  roots(least(1).idx).freq := 0.U
+  
+  // update the leaves of the two roots
+  leaves.zip(leavesNext).foreach{case (l, n) =>
+    when(l.root === least(0).idx) {
+      n.code := l.code << 1
+      n.codeLength := l.codeLength + 1.U
+    }
+    when(l.root === least(1).idx) {
+      n.code := l.code << 1 | 1.U
+      n.codeLength := l.codeLength + 1.U
+      n.root := least(0).idx
+    }
+  }
+  
+  
+  // output
+  (io.result.codes, leavesNext, io.counterResult.highChars).zipped
+  .foreach{(r, l, h) =>
+    r.char := h.char
+    r.code := l.code
+    r.codeLength := l.codeLength
+  }
+  io.result.escapeCode := leavesNext.last.code
+  io.result.escapeCodeLength := leavesNext.last.codeLength
+  io.finished := PopCount(roots.map(_.freq =/= 0.U)) === 2.U
+}
+
+
+class TreeGeneratorResult(params: Parameters) extends Bundle {
+  class Code extends Bundle {
+    val char = UInt(params.characterBits.W)
+    val code = UInt(params.maxCodeLength.W)
+    val codeLength = UInt(params.maxCodeLength.valBits.W)
+    
+    // override def cloneType: this.type =
+    //   new Code().asInstanceOf[this.type]
+  }
+  val codes = Vec(params.codeCount - 1, new Code())
+  val escapeCode = UInt(params.maxCodeLength.W)
+  val escapeCodeLength = UInt(params.maxCodeLength.valBits.W)
+  
+  override def cloneType: this.type =
+    new TreeGeneratorResult(params).asInstanceOf[this.type]
+}

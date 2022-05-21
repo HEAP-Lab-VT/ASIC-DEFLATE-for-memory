@@ -5,40 +5,24 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
-    huffmanParam: huffmanParameters.huffmanParameters,
     decompressorBitsInParam: Int,
     decompressorCharsOutParam: Int
 ) {
   
   //============================================================================
-  // SUB-MODULE PARAMETERS
-  //----------------------------------------------------------------------------
-  
-  // These are the parameters for the wrapped huffman module from Chandler
-  // Most of the other parameters should be based on these.
-  val huffman = huffmanParam
-  
-  
-  //============================================================================
   // GENERAL PARAMETERS
   //----------------------------------------------------------------------------
   
-  // size of a uncompressed character (in bits)
-  val characterBits = huffman.characterBits
+  // number of bits in an uncompressed character
+  val characterBits = 8
   
-  // maximum number of bits in a huffman code
-  val maxCodeLength = huffman.codewordMaxBits
+  val characterSpace = characterBits.space.toInt
   
   // the number of huffman codes
-  val codeCount = huffman.huffmanTreeCharacters
+  val codeCount = 16
   
-  
-  //============================================================================
-  // COUNTER PARAMETERS
-  //----------------------------------------------------------------------------
-  
-  // bus width of the character frequency counter i.e. the first pass
-  val counterCharsIn = huffman.characterFrequencyParallelism
+  // maximum number of bits in a huffman code
+  val maxCodeLength = 16
   
   
   //============================================================================
@@ -46,10 +30,21 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of the compressor (in characters)
-  val compressorCharsIn = huffman.compressionParallelism
+  val compressorCharsIn = 8
   
   // output bus width of one way of the compressor (in characters)
-  val compressorBitsOut = maxCodeLength * huffman.compressionParallelism
+  val compressorBitsOut = 32
+  
+  // bus width of the character frequency counter i.e. the first pass
+  val counterCharsIn = compressorCharsIn
+  
+  val encoderParallelism = 8
+  
+  // maximum number of charaters to compress in a single run
+  val maxInputSize = 8192
+  
+  // limit on the number of characters to count during the first pass
+  val passOneSize = 4096
   
   
   //============================================================================
@@ -57,10 +52,10 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of one way of the decompressor (in characters)
-  val decompressorBitsIn = decompressorBitsInParam
+  val decompressorBitsIn = 32
   
   // output bus width of the decompressor (in characters)
-  val decompressorCharsOut = decompressorCharsOutParam
+  val decompressorCharsOut = 8
   
   //============================================================================
   // ASSERTIONS
@@ -90,6 +85,11 @@ class Parameters(
     throw new IllegalArgumentException(
       s"compressorBitsOut: ${compressorBitsOut}")
   
+  if(compressorBitsOut < maxCodeLength.valBits + characterBits + maxCodeLength)
+    // a metadata chunk does not fit in output
+    throw new IllegalArgumentException(
+      s"compressorBitsOut: ${compressorBitsOut}")
+  
   if(decompressorBitsIn < maxCodeLength + characterBits)
     // deadlock
     throw new IllegalArgumentException(
@@ -109,8 +109,13 @@ class Parameters(
 object Parameters {
   
   def apply(
-    huffman: huffmanParameters.huffmanParameters): Parameters =
-    new Parameters(huffmanParam = huffman)
+    decompressorBitsIn: Int,
+    decompressorCharsOut: Int
+  ): Parameters =
+    new Parameters(
+      decompressorBitsInParam = decompressorBitsIn,
+      decompressorCharsOutParam = decompressorCharsOut
+    )
   
   def fromCSV(csvPath: String): Parameters = {
     System.err.println(s"getting huffman parameters from $csvPath...")
@@ -130,8 +135,7 @@ object Parameters {
     file.close
     
     val params = new Parameters(
-      huffmanParam = new huffmanParameters.getHuffmanFromCSV()
-        .getHuffmanFromCSV(map("sub-huffman")))
+      32, 8)
       
     System.err.println(s"finished getting huffman parameters from $csvPath.")
     return params

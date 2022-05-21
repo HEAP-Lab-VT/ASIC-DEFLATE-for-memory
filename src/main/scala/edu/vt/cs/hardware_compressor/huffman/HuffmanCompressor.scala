@@ -11,158 +11,186 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 //  avoid deadlock and/or circular logic. See documentation for DecoupledStream.
 class HuffmanCompressor(params: Parameters) extends Module {
   val io = IO(new Bundle{
-    val in_counter = Flipped(DecoupledStream(params.counterCharsIn,
+    val in = Flipped(RestartableDecoupledStream(params.compressorCharsIn,
       UInt(params.characterBits.W)))
-    val in_compressor = Flipped(DecoupledStream(params.compressorCharsIn,
-      UInt(params.characterBits.W)))
-    val out = Vec(params.channelCount, DecoupledStream(
-      params.compressorCharsOut, UInt(params.compressedCharBits.W)))
+    val out = RestartableDecoupledStream(params.compressorBitsOut, Bool())
   })
   
-  val huffman = Module(new huffmanCompressor.huffmanCompressor(params.huffman))
   
-  // generate a rising edge
-  huffman.io.start := RegNext(true.B, false.B);
-  
-  
-  //============================================================================
-  // COUNTER INPUT
-  //============================================================================
-  
-  // This register only stores the least significant bits of the index because
-  // we assume that the index only advances by small amounts, and we only need
-  // it to determine how many characters were consumed per cycle.
-  // val counterIdx = RegInit(UInt(params.counterCharsIn.idxBits.W), 0.U)
-  // counterIdx := huffman.io.characterFrequencyInputs.currentByteOut
-  
-  // Thankfully, data translates directly.
-  huffman.io.characterFrequencyInputs.dataIn := io.in_counter.bits
-  
-  // only assert valid when all inputs are valid
-  // Chandler's module requires that valid is asserted at EOF because the
-  // frequency counter can only change to the finished state when valid is
-  // asserted.
-  huffman.io.characterFrequencyInputs.valid :=
-    io.in_counter.valid === params.counterCharsIn.U ||
-    (io.in_counter.finished /*&& io.in_counter.valid =/= 0.U*/)
-  
-  // We do not know soon enough how many bytes are consumed, so we make the
-  // (rather liberal) assumption that when ready and valid are asserted, all
-  // inputs are consumed.
-  // TODO: assert ready when frequency counting is finished
-  io.in_counter.ready := Mux(huffman.io.characterFrequencyInputs.ready &&
-    huffman.io.characterFrequencyInputs.valid, params.counterCharsIn.U, 0.U)
-  
-  if(params.huffman.variableCompression)
-  when(io.in_counter.finished) {
-    huffman.io.characterFrequencyInputs.compressionLimit.get :=
-      huffman.io.characterFrequencyInputs.currentByteOut +& io.in_counter.valid
-  } otherwise {
-    huffman.io.characterFrequencyInputs.compressionLimit.get :=
-      params.maxCompressionLimit.U
+  // DECLARE PIPELINE INFRASTRUCTURE
+  var active: Bool = null
+  var activePrev: Bool = null
+  var activeNext: Bool = Wire(Bool())
+  var finished: Bool = null
+  var finishedPrev: Bool = null
+  var finishedNext: Bool = Wire(Bool())
+  var transfer: Bool = null
+  var transferPrev: Bool = null
+  var transferNext: Bool = Wire(Bool())
+  def nextStage(activeInit: Bool = false.B): Unit = {
+    activePrev = WireDefault(active)
+    active = RegInit(Bool(), false.B)
+    activeNext := active
+    activeNext = WireDefault(Bool(), DontCare)
+    
+    finishedPrev = WireDefault(finished)
+    finished = Wire(Bool())
+    finishedNext := finished
+    finishedNext = WireDefault(Bool(), DontCare)
+    
+    transferPrev = WireDefault(transfer)
+    transfer = Wire(Bool())
+    transferNext := transfer
+    transferNext = WireDefault(Bool(), DontCare)
+    
+    transfer := finishedPrev && activePrev && (!active || transferNext)
+    when(transferNext){active := false.B}
+    when(transfer){active := true.B}
   }
   
   
-  //============================================================================
-  // COMPRESSOR INPUT
-  //============================================================================
+  // BEGIN PIPELINE
+  active = true.B
+  finished = io.in.last && io.in.valid <= io.in.ready
+  transfer = WireDefault(Bool(), DontCare)
   
-  // make a DontCare fallback to please firrtl
-  huffman.io.compressionInputs.foreach{input =>
-    input.dataIn(0) := DontCare
-    input.valid := DontCare
-    if(params.huffman.variableCompression)
-    input.compressionLimit.get := params.maxCompressionLimit.U
+  
+  // STAGE 1: Counter
+  nextStage(true.B)
+  var counterResult = Wire(new CounterResult(params))
+  var data = Wire(Vec(params.passOneSize, UInt(params.characterBits.W)))
+  var dataLength = Wire(UInt(params.passOneSize.valBits.W))
+  var dataComplete = Wire(Bool())
+  io.in.restart := transfer
+  withReset(transfer || reset.asBool) {
+    
+    // fetch input data
+    val dataReg = Reg(chiselTypeOf(data))
+    val dataLengthReg = RegInit(chiselTypeOf(dataLength), 0.U)
+    val dataCompleteReg = RegInit(chiselTypeOf(dataComplete), false.B)
+    data := dataReg
+    dataLength := dataLengthReg
+    dataComplete := dataCompleteReg
+    for(i <- 0 until params.compressorCharsIn) {
+      when(i.U < io.in.ready) {
+        dataReg(dataLengthReg + i.U) := io.in.data(i)
+      }
+    }
+    dataLengthReg := dataLengthReg + (io.in.valid min io.in.ready)
+    when(io.in.last && io.in.valid <= io.in.ready) {
+      dataCompleteReg := true.B
+    }
+    io.in.ready := (params.passOneSize.U - dataLengthReg) min
+      params.compressorCharsIn.U
+    
+    // count input data
+    val counter = Module(new Counter(params))
+    
+    val dataIndex = RegInit(UInt(params.passOneSize.valBits.W), 0.U)
+    dataIndex := dataIndex + (counter.io.in.valid min counter.io.in.ready)
+    for(i <- 0 until params.counterCharsIn) {
+      counter.io.in.data(i) := dataReg(dataIndex + i.U)
+    }
+    counter.io.in.valid := (dataLengthReg - dataIndex) min
+      params.counterCharsIn.U
+    counter.io.in.last :=
+      (dataCompleteReg &&
+        dataLengthReg - dataIndex <= params.counterCharsIn.U) ||
+      (dataLengthReg >= params.passOneSize.U &&
+        dataIndex >= ((params.passOneSize - params.counterCharsIn) max 0).U)
+    
+    counterResult := counter.io.result
+    finished := counter.io.finished
   }
   
-  // the way index to start at
-  val waymodulus = RegInit(UInt(params.channelCount.idxBits.W), 0.U)
-  // places a hold on some channels that have already consumed their data
-  val hold = RegInit(VecInit(Seq.fill(params.channelCount)(false.B)))
-  // true iff all previously processed channels are ready
-  var allPrevReady = true.B
-  // in case the first channel is not ready, report zero
-  io.in_compressor.ready := 0.U
-  // loop over input characters
-  for(i <- 0 until params.channelCount) {
-    // channel index corresponding to this input character
-    val way = (waymodulus +& i.U) % params.channelCount.U
+  
+  // STAGE 2: tree generation + encoding
+  nextStage()
+  counterResult = RegEnable(counterResult, transfer)
+  data = RegEnable(data, transfer) // TODO: parameterize the size of this
+  dataLength = RegEnable(dataLength, transfer)
+  dataComplete = RegEnable(dataComplete, transfer)
+  withReset(transfer || reset.asBool) {
     
-    // pass this input character to the proper channel
-    huffman.io.compressionInputs(way).dataIn(0) := io.in_compressor.bits(i)
+    val treeGenerator = Module(new TreeGenerator(params))
+    treeGenerator.io.counterResult := counterResult
+    val treeGeneratorResult = RegNext(treeGenerator.io.result)
+    val treeGeneratorFinished = RegNext(treeGenerator.io.finished, false.B)
     
-    val ready = huffman.io.compressionInputs(way).ready
-    // true iff this input character is valid
-    val valid = i.U < io.in_compressor.valid
-    // valid if the input character is valid and there is no hold
-    huffman.io.compressionInputs(way).valid := valid && !hold(way)
-    // if this input character is accepted, update the hold
-    when(valid && ready) {
-      // if we are progressing past this input character, clear hold
-      // if we will receive this input character again, set hold
-      hold(way) := !allPrevReady
+    val dataBegin = RegInit(UInt(params.passOneSize.idxBits.W), 0.U)
+    val dataEnd = dataLength
+    val dataPointerInverted = RegInit(Bool(), false.B)
+    val dataBeginWrap = WireDefault(Bool(), false.B)
+    val dataEndWrap = WireDefault(Bool(), false.B)
+    when(dataBeginWrap){dataPointerInverted := true.B}
+    when(dataEndWrap){dataPointerInverted := false.B}
+    when(!dataComplete) {
+      // fetch remaining input data
+      for(i <- 0 until params.compressorCharsIn) {
+        when(i.U < io.in.ready) {
+          data((dataEnd + i.U) % params.passOneSize.U) := io.in.data(i)
+        }
+      }
+      
+      val dataEndNextNoWrap = dataEnd +& (io.in.valid min io.in.ready)
+      dataEndWrap := dataEndNextNoWrap >= params.passOneSize.U
+      dataEnd := dataEndNextNoWrap - Mux(dataEndWrap, params.passOneSize.U, 0.U)
+      
+      val difference = dataEnd - dataBegin
+      io.in.ready := Mux(dataPointerInverted,
+        -difference,
+        params.passOneSize.U - difference
+      ) min params.compressorCharsIn.U
+      
+      when(io.in.last && io.in.valid <= io.in.ready){dataComplete := true.B}
     }
     
-    // if up to this character is accepted, then set waymodulus to this channel
-    // will be overridden if this input character is accepted
-    if(i != 0)
-    when(allPrevReady && i.U < io.in_compressor.valid) {
-      waymodulus := way
+    when(treeGeneratorFinished) {
+      val encoder = Module(new Encoder(params))
+      
+      val dataBeginNext = dataBegin +&
+        (encoder.io.in.valid min encoder.io.in.ready)
+      dataBegin := dataBeginNext - Mux(dataBeginWrap, params.passOneSize.U, 0.U)
+      dataBeginWrap := dataBeginNext >= params.passOneSize.U
+      for(i <- 0 until params.counterCharsIn) {
+        encoder.io.in.data(i) := data(dataBegin + i.U)
+      }
+      val difference = dataEnd - dataBegin
+      encoder.io.in.valid := Mux(dataPointerInverted,
+        params.passOneSize.U - difference,
+        difference
+      ) min params.counterCharsIn.U
+      encoder.io.in.last :=
+        (dataComplete && dataEnd - dataBegin <= params.encoderParallelism.U) ||
+        (dataEnd >= params.passOneSize.U && dataBegin >=
+          ((params.passOneSize - params.encoderParallelism) max 0).U)
+      
+      encoder.io.treeGeneratorResult := treeGeneratorResult
+      io.out.data <> encoder.io.out.data
+      io.out.valid <> encoder.io.out.valid
+      io.out.ready <> encoder.io.out.ready
+      io.out.last <> encoder.io.out.last
+      finished := encoder.io.finished
+    } otherwise {
+      io.out.data := DontCare
+      io.out.valid := 0.U
+      io.out.last := false.B
+      finished := false.B
     }
-    
-    // generate new ready signal that reflects this channel
-    // ready is true iff all previously processed channels are ready
-    allPrevReady &&= ready
-    // if this channel and all previous channels are ready, set ready count
-    // will be overridden if the next channel is ready
-    when(allPrevReady) {
-      io.in_compressor.ready := (i + 1).U
-    }
-    
-    // // handle termination
-    // if(params.huffman.variableCompression)
-    // when(io.in_compressor.finished) {
-    //   // stop by setting the compression limit to the current byte
-    //   huffman.io.compressionInputs(way).compressionLimit.get :=
-    //     huffman.io.compressionInputs(way).currentByteOut +
-    //     io.in_compressor.valid - i.U
-    // } otherwise {
-    //   // set the compression limit as high as possible
-    //   huffman.io.compressionInputs(way).compressionLimit.get :=
-    //     params.maxCompressionLimit.U
-    // }
   }
-  
-  // if all channels consumed input, waymodulus stays the same
-  when(allPrevReady && params.channelCount.U === io.in_compressor.valid) {
-    waymodulus := waymodulus
+  // make sure outputs have a reasonable default when stage 2 is inactive
+  when(!active) {
+    io.out.data := DontCare
+    io.out.valid := 0.U
+    io.out.last := false.B
   }
   
   
-  //============================================================================
-  // COMPRESSOR OUTPUT
-  //============================================================================
-  
-  io.out.zip(huffman.io.outputs zip huffman.io.compressionInputs)
-      .foreach {case (out, (subout, subin)) =>
-    
-    // packed starting from most-significant bit (1234xxxx)
-    Iterator.from(0)
-      .map(_ * params.compressedCharBits)
-      .sliding(2)
-      .map(i => subout.dataOut(i(1) - 1, i(0)))
-      .zip(out.data.reverse.iterator)
-      .foreach{o => o._2 := o._1}
-    
-    // make output valid as a chunk
-    out.valid := Mux(subout.valid && subout.ready, subout.dataLength, 0.U)
-    
-    subout.ready := out.ready * params.compressedCharBits.U >= subout.dataLength
-    
-    out.finished := io.in_compressor.finished &&
-      (subin.ready || !subin.valid) &&
-      (subout.ready || !subout.valid)
-  }
+  // END PIPELINE
+  nextStage()
+  active := DontCare
+  finished := DontCare
+  transfer := io.out.last && io.out.valid <= io.out.ready && io.out.restart
 }
 
 object HuffmanCompressor extends App {

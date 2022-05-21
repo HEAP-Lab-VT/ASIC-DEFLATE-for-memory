@@ -11,9 +11,9 @@ export TRACE
 src := $(root)/src/main/scala
 srcedu := $(src)/edu/vt/cs/hardware_compressor
 utilsrc := $(shell find $(srcedu)/util)
-lzsources := $(shell find $(srcedu)/lz  -not \( -path $(srcedu)/lz/test -prune \)) $(utilsrc) $(root)/configFiles/lz.csv
-huffmansources := $(shell find $(srcedu)/huffman $(src)/huffman -not \( \( -path $(src)/huffman/buffers -o -path $(src)/huffman/wrappers \) -prune \) ) $(utilsrc) $(root)/configFiles/huffman-compat.csv $(root)/configFiles/huffman.csv
-deflatesources := $(shell find $(srcedu)/deflate) $(utilsrc) $(lzsources) $(huffmansources) $(root)/configFiles/deflate.csv
+lzsources := $(shell find $(srcedu)/lz  -not \( -path $(srcedu)/lz/test -prune \)) $(utilsrc) $(root)/configFiles/lz.csv $(root)/build.sbt
+huffmansources := $(shell find $(srcedu)/huffman $(src)/huffman -not \( \( -path $(src)/huffman/buffers -o -path $(src)/huffman/wrappers \) -prune \) ) $(utilsrc) $(root)/configFiles/huffman-compat.csv $(root)/configFiles/huffman.csv $(root)/build.sbt
+deflatesources := $(shell find $(srcedu)/deflate) $(utilsrc) $(lzsources) $(huffmansources) $(root)/configFiles/deflate.csv $(root)/build.sbt
 cppsrc := $(root)/verilator
 export cppsrc
 lzccppsources := $(cppsrc)/DecoupledStreamModule.cpp
@@ -29,8 +29,12 @@ lzdflags := '-DMODNAME=LZDecompressor -DIN_CHARS=8 -DOUT_CHARS=8'
 huffmanflags := 
 deflateflags := 
 
-SBTFLAGS := --batch
-SBTFLAGS += -Dsbt.server.forcestart=true # workaround for SBT bug
+_SBTFLAGS := $(SBTFLAGS)
+_SBTFLAGS += --batch
+_SBTFLAGS += -Dsbt.server.forcestart=true # workaround for SBT bug
+_SBTFLAGS += -Dsbt.color=always
+
+_SBTRUNFLAGS := $(SBTRUNFLAGS)
 
 
 all: lz huffman deflate
@@ -70,17 +74,17 @@ $(TARGET_FILES): %: $(build)/%
 
 
 $(build)/LZCompressor.v: $(lzsources)
-	sbt $(SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.lz.LZCompressor -td $(build) -o $@'
+	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.lz.LZCompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 $(build)/LZDecompressor.v: $(lzsources)
-	sbt $(SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.lz.LZDecompressor -td $(build) -o $@'
+	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.lz.LZDecompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 $(build)/HuffmanCompressor.v: $(huffmansources)
-	sbt $(SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.huffman.HuffmanCompressor -td $(build) -o $@'
+	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.huffman.HuffmanCompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 $(build)/HuffmanDecompressor.v: $(huffmansources)
-	sbt $(SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.huffman.HuffmanDecompressor -td $(build) -o $@'
+	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.huffman.HuffmanDecompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 $(build)/DeflateCompressor.v: $(deflatesources)
-	sbt $(SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.deflate.DeflateCompressor -td $(build) -o $@'
+	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.deflate.DeflateCompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 $(build)/DeflateDecompressor.v: $(deflatesources)
-	sbt $(SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.deflate.DeflateDecompressor -td $(build) -o $@'
+	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.deflate.DeflateDecompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 
 
 $(build)/VLZCompressor: $(build)/vlmakefile $(build)/LZCompressor.v

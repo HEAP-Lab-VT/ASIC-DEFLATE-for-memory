@@ -62,6 +62,8 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross
 // exclude some unused stuff from compilation
 unmanagedSources / excludeFilter := {
   val src = baseDirectory.value / "src" / "main" / "scala"
+  val src_hc = baseDirectory.value / "src" / "main" / "scala" / "edu" / "vt" /
+    "cs" / "hardware_compressor"
   HiddenFileFilter ||
   new SimpleFileFilter(_.getCanonicalPath contains
     (src / "combinations" getCanonicalPath)) ||
@@ -70,7 +72,11 @@ unmanagedSources / excludeFilter := {
   new SimpleFileFilter(_.getCanonicalPath contains
     (src / "huffman" / "buffers" getCanonicalPath)) ||
   new SimpleFileFilter(_.getCanonicalPath contains
-    (src / "huffman" / "wrappers" getCanonicalPath))
+    (src / "huffman" / "wrappers" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (src / "huffman" getCanonicalPath)) ||
+  new SimpleFileFilter(_.getCanonicalPath contains
+    (src_hc / "deflate" getCanonicalPath))
 }
 
 // workaround for sbt bug that causes a hang when killing test execution
