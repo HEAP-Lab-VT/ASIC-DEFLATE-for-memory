@@ -15,15 +15,19 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     self =>
     val code = Vec(params.maxCodeLength, Bool())
     val length = UInt(params.maxCodeLength.valBits.W)
-    def mask = VecInit(((1.U << length) - 1.U).asBools.take(params.maxCodeLength))
+    // val mask = Vec(params.maxCodeLength, Bool())
+    def mask =
+      VecInit(((1.U << length) - 1.U).asBools.take(params.maxCodeLength))
     val character = UInt(params.characterBits.W)
-    def trueCharacter(coded: Seq[Bool]): UInt = Mux(escape,
-      (coded.map(_.asUInt).reduce(_ ## _) << length)(
-        coded.length - 1,
-        (coded.length - params.characterBits) max 0),
-      character)
     val escape = Bool()
+    // val fullLength =
+    //   UInt((params.maxCodeLength + params.characterBits).valBits.W)
     def fullLength = length + Mux(escape, params.characterBits.U, 0.U)
+    
+    // def postInit(): Unit = {
+    //   mask := ((1.U << length) - 1.U).asBools.take(params.maxCodeLength)
+    //   fullLength := length + Mux(escape, params.characterBits.U, 0.U)
+    // }
     
     def matches(input: Seq[Bool]): Bool = {
       val paddedInput = input.padTo(params.maxCodeLength, false.B)
@@ -32,6 +36,12 @@ class HuffmanDecompressor(params: Parameters) extends Module {
         .map{case ((c, i), m) => c === i || ~m}
         .fold(true.B)(_ && _)
     }
+    
+    def trueCharacter(coded: Seq[Bool]): UInt = Mux(escape,
+      (coded.map(_.asUInt).reduce(_ ## _) << length)(
+        coded.length - 1,
+        (coded.length - params.characterBits) max 0),
+      character)
   }
   
   private def decode(coded: Seq[Bool]): HuffmanCode = {
@@ -44,14 +54,15 @@ class HuffmanDecompressor(params: Parameters) extends Module {
       UInt(params.characterBits.W))
   })
   
-  val codes = RegInit(VecInit(Seq.fill(params.codeCount){
+  val codes = RegInit(VecInit(Seq.tabulate(params.codeCount){i =>
     val code = WireDefault(new HuffmanCode(), DontCare)
     code.length := 0.U
+    code.escape := (i == 0).B
     code
   }))
   
   val states = Enum(2);
-  val metadata :: decompress :: Nil = states;
+  val metadata :: decode :: Nil = states;
   val state = RegInit(UInt(states.length.idxBits.W), metadata)
   
   // set defaults
@@ -62,38 +73,55 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   
   switch(state) {
   is(metadata) {
-    val unitBits = 1 + params.characterBits + params.maxCodeLength +
-      params.maxCodeLength.valBits
     val codeIndex = RegInit(UInt(params.codeCount.idxBits.W), 0.U)
     val code = codes(codeIndex)
+    val unitLength = Wire(UInt())
+    val codeLength = Wire(UInt())
+    val valid = unitLength <= io.in.valid
     
-    io.in.ready := 0.U
     io.out.valid := 0.U
     io.out.last := false.B
-    when(io.in.valid >= unitBits.U) {
-      code.escape := io.in.data(0)
-      code.character := io.in.data
-        .drop(1)
-        .take(params.characterBits)
-        .map(_.asUInt)
-        .reduce(_ ## _)
+    
+    codeLength := VecInit(io.in.data.take(params.maxCodeLength.valBits)).asUInt
+    code.length := codeLength
+    
+    when(codeIndex === 0.U) {
+      // escape
+      unitLength := params.maxCodeLength.valBits.U + codeLength
+      code.character := DontCare
       code.code := io.in.data
-        .drop(1 + params.characterBits)
+        .drop(params.maxCodeLength.valBits)
         .take(params.maxCodeLength)
-      code.length := io.in.data
-        .drop(1 + params.characterBits + params.maxCodeLength)
-        .take(params.maxCodeLength.valBits)
-        .map(_.asUInt)
-        .reduce(_ ## _)
-      
-      io.in.ready := unitBits.U
+    } otherwise {
+      // regular character
+      unitLength :=
+        (params.maxCodeLength.valBits + params.characterBits).U + codeLength
+      code.character := VecInit(io.in.data
+        .drop(params.maxCodeLength.valBits)
+        .take(params.characterBits))
+        .asUInt
+      code.code := io.in.data
+        .drop(params.maxCodeLength.valBits + params.characterBits)
+        .take(params.maxCodeLength)
+    }
+    when(codeLength === 0.U) {
+      unitLength := params.maxCodeLength.valBits.U
+    }
+    
+    when(valid) {
+      io.in.ready := unitLength
       codeIndex :@= codeIndex + 1.U
-      when(codeIndex === (params.codeCount - 1).U) {
-        state := decompress
+      when(codeLength === 0.U) {
+        state := decode
+        code := code
       }
+    } otherwise {
+      io.in.ready := 0.U
+      // invalidate writes when the input is not valid
+      code := code
     }
   }
-  is(decompress) {
+  is(decode) {
     // This calculates the bit offsets for all the huffman codes on io.in. it
     // starts by computing the length of every potential code starting at every
     // bit position. Then, for each bit position, it adds the length of the
