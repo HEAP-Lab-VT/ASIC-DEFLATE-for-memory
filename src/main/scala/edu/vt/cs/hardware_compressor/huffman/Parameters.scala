@@ -5,8 +5,17 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
-    decompressorBitsInParam: Int,
-    decompressorCharsOutParam: Int
+  characterBitsParam: Int,
+  characterSpaceParam: Int,
+  codeCountParam: Int,
+  maxCodeLengthParam: Int,
+  compressorCharsInParam: Int,
+  compressorBitsOutParam: Int,
+  counterCharsInParam: Int,
+  encoderParallelismParam: Int,
+  passOneSizeParam: Int,
+  decompressorBitsInParam: Int,
+  decompressorCharsOutParam: Int
 ) {
   
   //============================================================================
@@ -14,15 +23,15 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // number of bits in an uncompressed character
-  val characterBits = 8
+  val characterBits = characterBitsParam
   
-  val characterSpace = characterBits.space.toInt
+  val characterSpace = characterSpaceParam
   
   // the number of huffman codes
-  val codeCount = 16
+  val codeCount = codeCountParam
   
   // maximum number of bits in a huffman code
-  val maxCodeLength = 16
+  val maxCodeLength = maxCodeLengthParam
   
   
   //============================================================================
@@ -30,21 +39,18 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of the compressor (in characters)
-  val compressorCharsIn = 8
+  val compressorCharsIn = compressorCharsInParam
   
   // output bus width of one way of the compressor (in characters)
-  val compressorBitsOut = 32
+  val compressorBitsOut = compressorBitsOutParam
   
   // bus width of the character frequency counter i.e. the first pass
-  val counterCharsIn = compressorCharsIn
+  val counterCharsIn = counterCharsInParam
   
-  val encoderParallelism = 8
-  
-  // maximum number of charaters to compress in a single run
-  val maxInputSize = 8192
+  val encoderParallelism = encoderParallelismParam
   
   // limit on the number of characters to count during the first pass
-  val passOneSize = 4096
+  val passOneSize = passOneSizeParam
   
   
   //============================================================================
@@ -52,10 +58,11 @@ class Parameters(
   //----------------------------------------------------------------------------
   
   // input bus width of one way of the decompressor (in characters)
-  val decompressorBitsIn = 32
+  val decompressorBitsIn = decompressorBitsInParam
   
   // output bus width of the decompressor (in characters)
-  val decompressorCharsOut = 8
+  val decompressorCharsOut = decompressorCharsOutParam
+  
   
   //============================================================================
   // ASSERTIONS
@@ -104,24 +111,70 @@ class Parameters(
   if(decompressorCharsOut < 1)
     throw new IllegalArgumentException(
       s"codeCount: ${codeCount}")
+  
+  
+  //============================================================================
+  // METHODS
+  //----------------------------------------------------------------------------
+  
+  def generateCppDefines(sink: PrintWriter, conditional: Boolean = false):
+  Unit = {
+    def define(name: String, definition: Any): Unit = {
+      if(conditional)
+      sink.println(s"#ifndef $name")
+      sink.println(s"#define $name $definition")
+      if(conditional)
+      sink.println(s"#endif")
+    }
+    
+    define("CHARACTER_BITS", characterBits)
+    define("CHARACTER_SPACE", characterSpace)
+    define("CODE_COUNT", codeCount)
+    define("MAX_CODE_LENGTH", maxCodeLength)
+    define("COMPRESSOR_CHARS_IN", compressorCharsIn)
+    define("COMPRESSOR_BITS_OUT", compressorBitsOut)
+    define("COUNTER_CHARS_IN", counterCharsIn)
+    define("ENCODER_PARALLELISM", encoderParallelism)
+    define("PASS_ONE_SIZE", passOneSize)
+    define("DECOMPRESSOR_BITS_IN", decompressorBitsIn)
+    define("DECOMPRESSOR_CHARS_OUT", decompressorCharsOut)
+  }
 }
 
 object Parameters {
   
   def apply(
+    characterBits: Int,
+    characterSpace: Int,
+    codeCount: Int,
+    maxCodeLength: Int,
+    compressorCharsIn: Int,
+    compressorBitsOut: Int,
+    counterCharsIn: Int,
+    encoderParallelism: Int,
+    passOneSize: Int,
     decompressorBitsIn: Int,
     decompressorCharsOut: Int
   ): Parameters =
     new Parameters(
+      characterBitsParam = characterBits,
+      characterSpaceParam = characterSpace,
+      codeCountParam = codeCount,
+      maxCodeLengthParam = maxCodeLength,
+      compressorCharsInParam = compressorCharsIn,
+      compressorBitsOutParam = compressorBitsOut,
+      counterCharsInParam = counterCharsIn,
+      encoderParallelismParam = encoderParallelism,
+      passOneSizeParam = passOneSize,
       decompressorBitsInParam = decompressorBitsIn,
       decompressorCharsOutParam = decompressorCharsOut
     )
   
-  def fromCSV(csvPath: String): Parameters = {
+  def fromCSV(csvFile: File): Parameters = {
     System.err.println(s"getting huffman parameters from $csvPath...")
     var map: Map[String, String] = Map()
-    val file = io.Source.fromFile(csvPath)
-    for (line <- file.getLines) {
+    val lines = io.Source.fromFile(csvFile)
+    for (line <- lines.getLines) {
       val cols = line.split(",").map(_.trim)
       if (cols.length == 2) {
         System.err.println(s"${cols(0)} = ${cols(1)}")
@@ -132,10 +185,21 @@ object Parameters {
           s"The line\n\n$line\n\ndid notmeet this requirement.")
       }
     }
-    file.close
+    lines.close
     
     val params = new Parameters(
-      32, 8)
+      characterBitsParam = map("characterBits"),
+      characterSpaceParam = map("characterSpace"),
+      codeCountParam = map("codeCount"),
+      maxCodeLengthParam = map("maxCodeLength"),
+      compressorCharsInParam = map("compressorCharsIn"),
+      compressorBitsOutParam = map("compressorBitsOut"),
+      counterCharsInParam = map("counterCharsIn"),
+      encoderParallelismParam = map("encoderParallelism"),
+      passOneSizeParam = map("passOneSize"),
+      decompressorBitsInParam = map("decompressorBitsIn"),
+      decompressorCharsOutParam = map("decompressorCharsOut")
+    )
       
     System.err.println(s"finished getting huffman parameters from $csvPath.")
     return params

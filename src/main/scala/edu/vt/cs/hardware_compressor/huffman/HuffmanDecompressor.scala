@@ -11,6 +11,12 @@ import edu.vt.cs.hardware_compressor.util.StrongWhenOps._
 //  input and output, so one or more universal connectors may be necessary to
 //  avoid deadlock and/or circular logic. See documentation for DecoupledStream.
 class HuffmanDecompressor(params: Parameters) extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(DecoupledStream(params.decompressorBitsIn, Bool()))
+    val out = DecoupledStream(params.decompressorCharsOut,
+      UInt(params.characterBits.W))
+  })
+
   class HuffmanCode extends Bundle {
     self =>
     val code = Vec(params.maxCodeLength, Bool())
@@ -47,12 +53,6 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   private def decode(coded: Seq[Bool]): HuffmanCode = {
     Mux1H(codes.map(_.matches(coded)), codes)
   }
-  
-  val io = IO(new Bundle{
-    val in = Flipped(DecoupledStream(params.decompressorBitsIn, Bool()))
-    val out = DecoupledStream(params.decompressorCharsOut,
-      UInt(params.characterBits.W))
-  })
   
   val codes = RegInit(VecInit(Seq.tabulate(params.codeCount){i =>
     val code = WireDefault(new HuffmanCode(), DontCare)
