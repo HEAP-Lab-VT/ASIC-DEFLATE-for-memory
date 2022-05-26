@@ -73,8 +73,8 @@ object DecoupledStream {
  * producer. When `restart` is asserted, `last` is asserted, and `ready` is
  * greater than or equal to `valid`, then the consumer will be ready for the
  * next stream on the next cycle and the next cycle will start a new stream.
- * The `restart` signal has no effect if `last` is deasserted or `ready` is
- * less than `valid`.
+ * Behavior is implementation-defined if `restart` is asserted when `last` is
+ * deasserted or `ready` is less than `valid`.
  * 
  * If the producer is not yet ready to produce the next stream when a restart
  * occures, then it may assert `last := false.B` and `valid := 0.U` until it is
