@@ -19,7 +19,8 @@ TRACE_SIMPLESUFFIX := _
 endif
 
 INCLUDES = -I$(VERILATOR_ROOT)/include -I.
-VLFLAGS := -Wno-WIDTH -Mdir .
+CFLAGS = -ggdb
+VLFLAGS := -Wno-WIDTH -Mdir . -CFLAGS '$(CFLAGS)'
 
 $(TARGET): $(TARGET)$(TRACE_SUFFIX)
 	cp $(TARGET)$(TRACE_SUFFIX) $(TARGET)
@@ -39,8 +40,8 @@ $(TARGET)$(TRACE_SUFFIX): $(OBJS:%.o=%$(TRACE_SIMPLESUFFIX).o) $(MODULES:%=V%__A
 
 
 
-OBJ_FLAGS := -c
-DEP_FLAGS := -MM -MG
+OBJ_FLAGS := -c $(CFLAGS)
+DEP_FLAGS := -MM -MG $(CFLAGS)
 
 ifeq ($(findstring --trace,$(TRACE)),--trace)
 TRACE_FLAGS := -DTRACE_ENABLE=true
@@ -71,6 +72,12 @@ Huffman_fused$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/Huffman_fused.cpp
 Huffman_fused$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/Huffman_fused.cpp
 	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
 include Huffman_fused$(TRACE_SIMPLESUFFIX).d
+
+HuffmanTest$(TRACE_SIMPLESUFFIX).o: $(root)/src/test/cpp/HuffmanTest.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) -include HuffmanParameters.h $(TRACE_FLAGS) $< -o $@
+HuffmanTest$(TRACE_SIMPLESUFFIX).d: $(root)/src/test/cpp/HuffmanTest.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) -include HuffmanParameters.h $(TRACE_FLAGS) $< -o $@
+include HuffmanTest$(TRACE_SIMPLESUFFIX).d
 
 Deflate_fused$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/Deflate_fused.cpp
 	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@

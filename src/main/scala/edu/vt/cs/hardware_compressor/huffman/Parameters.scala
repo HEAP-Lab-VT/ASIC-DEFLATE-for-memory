@@ -3,6 +3,8 @@ package edu.vt.cs.hardware_compressor.huffman
 import chisel3._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
+import java.io.PrintWriter
+import java.nio.file.Path
 
 class Parameters(
   characterBitsParam: Int,
@@ -170,10 +172,10 @@ object Parameters {
       decompressorCharsOutParam = decompressorCharsOut
     )
   
-  def fromCSV(csvFile: File): Parameters = {
+  def fromCSV(csvPath: Path): Parameters = {
     System.err.println(s"getting huffman parameters from $csvPath...")
+    val lines = io.Source.fromFile(csvPath.toFile())
     var map: Map[String, String] = Map()
-    val lines = io.Source.fromFile(csvFile)
     for (line <- lines.getLines) {
       val cols = line.split(",").map(_.trim)
       if (cols.length == 2) {
@@ -188,17 +190,17 @@ object Parameters {
     lines.close
     
     val params = new Parameters(
-      characterBitsParam = map("characterBits"),
-      characterSpaceParam = map("characterSpace"),
-      codeCountParam = map("codeCount"),
-      maxCodeLengthParam = map("maxCodeLength"),
-      compressorCharsInParam = map("compressorCharsIn"),
-      compressorBitsOutParam = map("compressorBitsOut"),
-      counterCharsInParam = map("counterCharsIn"),
-      encoderParallelismParam = map("encoderParallelism"),
-      passOneSizeParam = map("passOneSize"),
-      decompressorBitsInParam = map("decompressorBitsIn"),
-      decompressorCharsOutParam = map("decompressorCharsOut")
+      characterBitsParam = map("characterBits").toInt,
+      characterSpaceParam = map("characterSpace").toInt,
+      codeCountParam = map("codeCount").toInt,
+      maxCodeLengthParam = map("maxCodeLength").toInt,
+      compressorCharsInParam = map("compressorCharsIn").toInt,
+      compressorBitsOutParam = map("compressorBitsOut").toInt,
+      counterCharsInParam = map("counterCharsIn").toInt,
+      encoderParallelismParam = map("encoderParallelism").toInt,
+      passOneSizeParam = map("passOneSize").toInt,
+      decompressorBitsInParam = map("decompressorBitsIn").toInt,
+      decompressorCharsOutParam = map("decompressorCharsOut").toInt
     )
       
     System.err.println(s"finished getting huffman parameters from $csvPath.")

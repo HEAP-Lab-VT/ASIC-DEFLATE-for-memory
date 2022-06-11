@@ -1,16 +1,18 @@
 package edu.vt.cs.hardware_compressor.huffman
 
 import chisel3._
+import chisel3.experimental.dataview._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import edu.vt.cs.hardware_compressor.util.StrongWhenOps._
-
+import java.io.{File,PrintWriter}
+import java.nio.file.Path
 
 // Note: This module uses push input and pull output to facilitate block-style
 //  input and output, so one or more universal connectors may be necessary to
 //  avoid deadlock and/or circular logic. See documentation for DecoupledStream.
-class HuffmanDecompressor(params: Parameters) extends Module {
+class Decoder(params: Parameters) extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(params.decompressorBitsIn, Bool()))
     val out = DecoupledStream(params.decompressorCharsOut,
@@ -43,11 +45,10 @@ class HuffmanDecompressor(params: Parameters) extends Module {
         .fold(true.B)(_ && _)
     }
     
-    def trueCharacter(coded: Seq[Bool]): UInt = Mux(escape,
-      (coded.map(_.asUInt).reduce(_ ## _) << length)(
-        coded.length - 1,
-        (coded.length - params.characterBits) max 0),
-      character)
+    def trueCharacter(coded: Seq[Bool]): UInt =
+      WireDefault(UInt(params.characterBits.W), Mux(escape,
+        VecInit(coded).asUInt >> length,
+        character))
   }
   
   private def decode(coded: Seq[Bool]): HuffmanCode = {
@@ -87,7 +88,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     
     when(codeIndex === 0.U) {
       // escape
-      unitLength := params.maxCodeLength.valBits.U + codeLength
+      unitLength := params.maxCodeLength.valBits.U +& codeLength
       code.character := DontCare
       code.code := io.in.data
         .drop(params.maxCodeLength.valBits)
@@ -95,7 +96,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     } otherwise {
       // regular character
       unitLength :=
-        (params.maxCodeLength.valBits + params.characterBits).U + codeLength
+        (params.maxCodeLength.valBits + params.characterBits).U +& codeLength
       code.character := VecInit(io.in.data
         .drop(params.maxCodeLength.valBits)
         .take(params.characterBits))
@@ -122,7 +123,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     }
   }
   is(decode) {
-    // This calculates the bit offsets for all the huffman codes on io.in. it
+    // This calculates the bit offsets for all the huffman codes on io.in. It
     // starts by computing the length of every potential code starting at every
     // bit position. Then, for each bit position, it adds the length of the
     // current code plus the length of the next code. It continues in this
@@ -131,9 +132,12 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     val allDecodes = io.in.data.tails.filter(_.length != 0)
       .map(decode(_)).toSeq
     val allLengths = allDecodes.map(_.fullLength)
-    val skipLengths = Iterator.iterate(allLengths)
+    val skipLengths = LazyList.iterate(allLengths)
       {l => (l zip l.tails.toSeq).map(e => e._1 +& VecInit(e._2)(e._1))}
       .map(v => VecInit(v))
+      .map(v => WireDefault(v))
+      .zipWithIndex
+      .map(v => v._1.suggestName(s"skipLengths_${v._2}"))
     def codeOffset(idx: Int): UInt =
       Iterator.iterate(idx)(_ >> 1).takeWhile(_ != 0)
         .map(_ & 1).map(_ != 0)
@@ -148,24 +152,45 @@ class HuffmanDecompressor(params: Parameters) extends Module {
     
     io.out.data := offsets.init.map(decodedChars(_))
     
-    val validCodes = offsets.map(_ >= io.in.valid).tail
-    val validCodeCount1H = validCodes
+    val doCodes = offsets.map(_ <= io.in.valid).tail
+      .zipWithIndex.map(d => d._1 && d._2.U < io.out.ready)
+    val doCount1H = doCodes
       .+:(true.B)
       .:+(false.B)
       .sliding(2)
       .map(v => v(0) && !v(1))
       .toSeq
-    val validCodeCount = OHToUInt(validCodeCount1H)
+    val doCount = OHToUInt(doCount1H)
     
-    // min in case params.decompressorCharsOut < params.decompressorParallelism
-    io.out.valid := validCodeCount
-    io.in.ready := Mux1H(validCodeCount1H, offsets)
+    io.out.valid := doCount
+    io.in.ready := Mux1H(doCount1H, offsets)
+    io.out.last := io.in.last && io.in.ready === io.in.valid
   }
   }
 }
 
+class HuffmanDecompressor(params: Parameters) extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(RestartableDecoupledStream(params.decompressorBitsIn,
+      Bool()))
+    val out = RestartableDecoupledStream(params.decompressorCharsOut,
+      UInt(params.characterBits.W))
+  })
+  
+  withReset((io.out.restart && io.out.finished &&
+      io.out.ready >= io.out.valid) || reset.asBool) {
+    val decoder = Module(new Decoder(params))
+    decoder.io.in <> io.in.viewAsSupertype(chiselTypeOf(decoder.io.in))
+    decoder.io.out <> io.out.viewAsSupertype(chiselTypeOf(decoder.io.out))
+    io.in.restart := io.out.restart
+  }
+}
+
 object HuffmanDecompressor extends App {
-  val params = Parameters.fromCSV("configFiles/huffman-compat.csv")
+  val params = Parameters.fromCSV(Path.of("configFiles/huffman.csv"))
+  Using(new PrintWriter(new File("build/HuffmanParameters.h"))){pw =>
+    params.generateCppDefines(pw)
+  }
   new chisel3.stage.ChiselStage()
     .emitVerilog(new HuffmanDecompressor(params), args)
 }

@@ -45,6 +45,7 @@ class TreeGenerator(params: Parameters) extends Module {
         r
       }
   ))
+  roots := rootsInit
   
   // finds the two roots with the lowest frequency
   val least = Iterator.iterate(
@@ -94,22 +95,24 @@ class TreeGenerator(params: Parameters) extends Module {
     ir
   })
   
-  // merge the two roots into one
-  val newRoot = Wire(new Root())
-  newRoot.freq := least(0).freq + least(1).freq
-  roots(least(0).idx) := newRoot
-  roots(least(1).idx).freq := 0.U
-  
-  // update the leaves of the two roots
-  leaves.zip(leavesNext).foreach{case (l, n) =>
-    when(l.root === least(0).idx) {
-      n.code := l.code << 1
-      n.codeLength := l.codeLength + 1.U
-    }
-    when(l.root === least(1).idx) {
-      n.code := l.code << 1 | 1.U
-      n.codeLength := l.codeLength + 1.U
-      n.root := least(0).idx
+  when(least(1).freq =/= 0.U) {
+    // merge the two roots into one
+    val newRoot = Wire(new Root())
+    newRoot.freq := least(0).freq + least(1).freq
+    roots(least(0).idx) := newRoot
+    roots(least(1).idx).freq := 0.U
+    
+    // update the leaves of the two roots
+    leaves.zip(leavesNext).foreach{case (l, n) =>
+      when(l.root === least(0).idx) {
+        n.code := l.code << 1
+        n.codeLength := l.codeLength + 1.U
+      }
+      when(l.root === least(1).idx) {
+        n.code := l.code << 1 | 1.U
+        n.codeLength := l.codeLength + 1.U
+        n.root := least(0).idx
+      }
     }
   }
   
@@ -123,7 +126,9 @@ class TreeGenerator(params: Parameters) extends Module {
   }
   io.result.escapeCode := leavesNext.last.code
   io.result.escapeCodeLength := leavesNext.last.codeLength
-  io.finished := PopCount(roots.map(_.freq =/= 0.U)) === 2.U
+  io.finished := PopCount(rootsInit.map(_.freq =/= 0.U)) <= 2.U
+  // io.finished := leavesNext.map(_.root == leavesNext.head.root)
+  //   .reduce(_ && _)
 }
 
 

@@ -1,9 +1,11 @@
 package edu.vt.cs.hardware_compressor.huffman
 
 import chisel3._
-import chisel3.util._
+import chisel3.util.{RegEnable}
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
+import java.io.{File,PrintWriter}
+import java.nio.file.Path
 
 
 // Note: This module uses push input and pull output to facilitate block-style
@@ -18,6 +20,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   
   // DECLARE PIPELINE INFRASTRUCTURE
+  var stageId: Int = 0
   var active: Bool = null
   var activePrev: Bool = null
   var activeNext: Bool = Wire(Bool())
@@ -28,20 +31,25 @@ class HuffmanCompressor(params: Parameters) extends Module {
   var transferPrev: Bool = null
   var transferNext: Bool = Wire(Bool())
   def nextStage(activeInit: Bool = false.B): Unit = {
-    activePrev = WireDefault(active)
-    active = RegInit(Bool(), false.B)
+    stageId += 1
+    
+    activePrev = WireDefault(active).suggestName(s"activePrev_S$stageId")
+    active = RegInit(Bool(), activeInit).suggestName(s"active_S$stageId")
     activeNext := active
     activeNext = WireDefault(Bool(), DontCare)
+      .suggestName(s"activeNext_S$stageId")
     
-    finishedPrev = WireDefault(finished)
-    finished = Wire(Bool())
+    finishedPrev = WireDefault(finished).suggestName(s"finishedPrev_S$stageId")
+    finished = Wire(Bool()).suggestName(s"finished_S$stageId")
     finishedNext := finished
     finishedNext = WireDefault(Bool(), DontCare)
+      .suggestName(s"finishedNext_S$stageId")
     
-    transferPrev = WireDefault(transfer)
-    transfer = Wire(Bool())
+    transferPrev = WireDefault(transfer).suggestName(s"transferPrev_S$stageId")
+    transfer = Wire(Bool()).suggestName(s"transfer_S$stageId")
     transferNext := transfer
     transferNext = WireDefault(Bool(), DontCare)
+      .suggestName(s"transferNext_S$stageId")
     
     transfer := finishedPrev && activePrev && (!active || transferNext)
     when(transferNext){active := false.B}
@@ -146,7 +154,10 @@ class HuffmanCompressor(params: Parameters) extends Module {
     }
     
     when(treeGeneratorFinished) {
-      val encoder = Module(new Encoder(params))
+      val encoder =
+        withReset(!treeGeneratorFinished || transfer || reset.asBool) {
+          Module(new Encoder(params))
+        }
       
       val dataBeginNext = dataBegin +&
         (encoder.io.in.valid min encoder.io.in.ready)
@@ -194,7 +205,10 @@ class HuffmanCompressor(params: Parameters) extends Module {
 }
 
 object HuffmanCompressor extends App {
-  val params = Parameters.fromCSV("configFiles/huffman-compat.csv")
+  val params = Parameters.fromCSV(Path.of("configFiles/huffman.csv"))
+  Using(new PrintWriter(new File("build/HuffmanParameters.h"))){pw =>
+    params.generateCppDefines(pw)
+  }
   new chisel3.stage.ChiselStage()
     .emitVerilog(new HuffmanCompressor(params), args)
 }

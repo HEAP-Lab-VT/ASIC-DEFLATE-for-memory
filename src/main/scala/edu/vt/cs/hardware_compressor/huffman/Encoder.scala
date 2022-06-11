@@ -34,7 +34,7 @@ class Encoder(params: Parameters) extends Module {
     io.out.valid := 0.U
     when(io.out.ready >= outputLength) {
       io.out.valid := outputLength
-      iteration :@= iteration + 1.U
+      iteration := iteration + 1.U
     }
     
     when(iteration === 0.U) {
@@ -42,14 +42,14 @@ class Encoder(params: Parameters) extends Module {
       val outData = (io.treeGeneratorResult.escapeCode ##
         io.treeGeneratorResult.escapeCodeLength).asBools
       (io.out.data zip outData).foreach(d => d._1 := d._2)
-      outputLength := params.maxCodeLength.valBits.U +
+      outputLength := params.maxCodeLength.valBits.U +&
         io.treeGeneratorResult.escapeCodeLength
     } otherwise {
       // write character codewords
-      val code = io.treeGeneratorResult.codes(iteration - 1.U)
+      val code = WireDefault(io.treeGeneratorResult.codes(iteration - 1.U))
       val outData = (code.code ## code.char ## code.codeLength).asBools
       (io.out.data zip outData).foreach(d => d._1 := d._2)
-      outputLength := (params.maxCodeLength.valBits + params.characterBits).U +
+      outputLength := (params.maxCodeLength.valBits + params.characterBits).U +&
         code.codeLength
       
       when(code.codeLength === 0.U || iteration === params.codeCount.U) {

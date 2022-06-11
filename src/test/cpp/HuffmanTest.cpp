@@ -28,15 +28,15 @@
 #endif
 #if TRACE_ENABLE
   #include "verilated_vcd_c.h"
-  #define COMPRESSOR_TRACE() do { \
+  #define COMPRESSOR_TRACE() do \
     if(compressorTraceEnable) { \
-      compressorTrace->dump(compressorContext::time()); \
-      compressorContext::timeInc(1); \
+      compressorTrace->dump(compressorContext->time()); \
+      compressorContext->timeInc(1); \
     } while(false)
-  #define DECOMPRESSOR_TRACE() do { \
+  #define DECOMPRESSOR_TRACE() do \
     if(decompressorTraceEnable) { \
-      decompressorTrace->dump(decompressorContext::time()); \
-      decompressorContext::timeInc(1); \
+      decompressorTrace->dump(decompressorContext->time()); \
+      decompressorContext->timeInc(1); \
     } while(false)
 #else
   #define COMPRESSOR_TRACE() do {} while(false)
@@ -94,7 +94,7 @@ struct Summary {
   size_t nonzeroSize;
   int nonzeroPages;
   size_t processedSize;
-  size_t processedPages;
+  int processedPages;
   
   int passedPages;
   int failedPages;
@@ -104,67 +104,129 @@ struct Summary {
   int decompressorCycles;
   int decompressorStalls;
 };
+struct Options {
+  const char *dump;
+  const char *report;
+  const char *cTrace;
+  const char *dTrace;
+  const char *debugJob;
+};
+static Options options;
 
 static VCOMPRESSOR *compressor;
 static VDECOMPRESSOR *decompressor;
 #if TRACE_ENABLE
 static VerilatedVcdC *compressorTrace;
 static VerilatedVcdC *decompressorTrace;
-static VerilatedContext compressorContext;
-static VerilatedContext decompressorContext;
-static bool compressorTraceEnable;
-static bool decompressorTraceEnable;
+static VerilatedContext *compressorContext;
+static VerilatedContext *decompressorContext;
+static bool compressorTraceEnable = false;
+static bool decompressorTraceEnable = false;
 #endif
 static FILE *dumpfile;
 static FILE *reportfile;
 static Job jobs[JOB_QUEUE_SIZE];
 static Summary summary;
+static int debugJobId;
+static bool quit;
 
-static void doLoad();
-static void doCompressor();
-static void doDecompressor();
-static void doFinalize();
+static bool doLoad();
+static bool doCompressor();
+static bool doDecompressor();
+static bool doFinalize();
 
-int main(int argc, char **argv, char **env) {
-  Verilated::commandArgs(argc, argv);
-  compressor = new VCOMPRESSOR;
-  decompressor = new VDECOMPRESSOR;
+static void cleanup() {
+  compressor->final();
+  decompressor->final();
+  
+  if(dumpfile != stdin)
+  fclose(dumpfile);
+  if(reportfile != stdout)
+  fclose(reportfile);
   
   #if TRACE_ENABLE
-  compressorTraceEnable = argc > ARG_COMPRESSOR_TRACE &&
-    (argv[ARG_COMPRESSOR_TRACE][0] != '-' ||
-    argv[ARG_COMPRESSOR_TRACE][1] != '\0');
   if(compressorTraceEnable) {
-    compressorContext = new VerilatedContext;
-    // Verilated::traceEverOn(true);
-    compressorContext::traceEverOn(true);
+    compressorTrace->close();
+    delete compressorContext;
+  }
+  if(decompressorTraceEnable) {
+    decompressorTrace->close();
+    delete decompressorContext;
+  }
+  #endif
+  
+  delete compressor;
+  delete decompressor;
+}
+
+int main(int argc, const char **argv, char **env) {
+  options.dump = "-";
+  options.report = "-";
+  options.cTrace = "-";
+  options.dTrace = "-";
+  options.debugJob = "-1";
+  for(int i = 1; i < argc; i++) {
+    if(!strcmp(argv[i], "--dump")) {
+      ++i;
+      assert(i < argc);
+      options.dump = argv[i];
+    }
+    else if(!strcmp(argv[i], "--report")) {
+      ++i;
+      assert(i < argc);
+      options.report = argv[i];
+    }
+    else if(!strcmp(argv[i], "--c-trace")) {
+      ++i;
+      assert(i < argc);
+      options.cTrace = argv[i];
+    }
+    else if(!strcmp(argv[i], "--d-trace")) {
+      ++i;
+      assert(i < argc);
+      options.dTrace = argv[i];
+    }
+    else if(!strcmp(argv[i], "--debug-job")) {
+      ++i;
+      assert(i < argc);
+      options.debugJob = argv[i];
+    }
+  }
+  debugJobId = atoi(options.debugJob);
+  
+  
+  compressorContext = new VerilatedContext;
+  decompressorContext = new VerilatedContext;
+  compressorContext->commandArgs(argc, argv);
+  decompressorContext->commandArgs(argc, argv);
+  compressor = new VCOMPRESSOR{compressorContext, "HUFFMAN_COMPRESSOR"};
+  decompressor = new VDECOMPRESSOR{decompressorContext, "HUFFMAN_DECOMPRESSOR"};
+  
+  #if TRACE_ENABLE
+  compressorTraceEnable = !!strcmp(options.cTrace, "-");
+  if(compressorTraceEnable) {
+    compressorContext->traceEverOn(true);
     compressorTrace = new VerilatedVcdC;
     compressor->trace(compressorTrace, 99);
-    compressorTrace->open(argv[3]);
+    compressorTrace->open(options.cTrace);
   }
   
-  decompressorTraceEnable = argc > ARG_DECOMPRESSOR_TRACE &&
-    (argv[ARG_DECOMPRESSOR_TRACE][0] != '-' ||
-    argv[ARG_DECOMPRESSOR_TRACE][1] != '\0');
+  decompressorTraceEnable = !!strcmp(options.dTrace, "-");
   if(decompressorTraceEnable) {
-    decompressorContext = new VerilatedContext;
-    // Verilated::traceEverOn(true);
-    decompressorContext::traceEverOn(true);
+    decompressorContext->traceEverOn(true);
     decompressorTrace = new VerilatedVcdC;
     decompressor->trace(decompressorTrace, 99);
-    decompressorTrace->open(argv[ARG_DECOMPRESSOR_TRACE]);
+    decompressorTrace->open(options.dTrace);
   }
   #endif
   
   dumpfile = stdin;
-  if(argc > ARG_DUMP_FILENAME && (argv[ARG_DUMP_FILENAME][0] != '-' ||
-      argv[ARG_DUMP_FILENAME][1] != '\0'))
-    dumpfile = fopen(argv[ARG_DUMP_FILENAME], "r");
+  if(strcmp(options.dump, "-"))
+    dumpfile = fopen(options.dump, "r");
   
   reportfile = stdout;
-  if(argc > ARG_REPORT_FILENAME && (argv[ARG_REPORT_FILENAME][0] != '-' ||
-      argv[ARG_REPORT_FILENAME][1] != '\0'))
-    reportfile = fopen(argv[ARG_DUMP_FILENAME], "w");
+  if(strcmp(options.report, "-"))
+    reportfile = fopen(options.report, "w");
   
   for(int i = 0; i < JOB_QUEUE_SIZE; i++) {
     jobs[i].stage = 0;
@@ -213,41 +275,26 @@ int main(int argc, char **argv, char **env) {
   decompressor->eval();
   decompressor->reset = 0;
   
-  while() {
-    doLoad();
-    doCompressor();
-    doDecompressor();
-    doFinalize();
-  }
+  quit = false;
+  while(!quit && (
+    doLoad() |
+    doCompressor() |
+    doDecompressor() |
+    doFinalize()
+  ));
   
-  compressor->final();
-  decompressor->final();
+  cleanup();
   
-  if(dumpfile != stdin)
-  fclose(dumpfile);
-  
-  #if TRACE_ENABLE
-  if(compressorTraceEnable) {
-    compressorTrace->close();
-  }
-  if(decompressorTraceEnable) {
-    decompressorTrace->close();
-  }
-  #endif
-  
-  delete compressor;
-  delete decompressor;
-  
-  return 0;
+  return summary.failedPages;
 }
 
-static void doLoad() {
+static bool doLoad() {
   static int jobIdx = 0;
   struct Job *job = &jobs[jobIdx];
   if(job->stage != STAGE_LOAD)
-    return;
+    return false;
   if(job->raw == NULL) {
-    job->raw = malloc(PAGE_SIZE);
+    job->raw = (uint8_t*)malloc(PAGE_SIZE);
     assert(job->raw != NULL);
     job->rawCap = PAGE_SIZE;
   }
@@ -262,6 +309,9 @@ static void doLoad() {
     for(int i = 0; i < job->rawLen; i++)
       zero = zero && job->raw[i] == 0;
     if(zero) {
+      if(job->rawLen == 0) {
+        return false;
+      }
       job->rawLen = 0;
     }
     else {
@@ -278,9 +328,11 @@ static void doLoad() {
       jobIdx = ++jobIdx % JOB_QUEUE_SIZE;
     }
   }
+  
+  return true;
 }
 
-static void doCompressor() {
+static bool doCompressor() {
   static int jobIdxIn = 0;
   static int jobIdxOut = 0;
   static int inBufIdx = 0;
@@ -289,21 +341,21 @@ static void doCompressor() {
   bool quit = false;
   int idle = 0;
   if(jobIn->stage != STAGE_COMPRESSOR)
-    return;
+    return false;
   
   do {
     if(jobOut->compressedLen + COMPRESSOR_BITS_OUT > jobOut->compressedCap*8) {
-      size_t *newSize = max(jobOut->compressedCap * 2, PAGE_SIZE);
+      size_t newSize = max(jobOut->compressedCap * 2, PAGE_SIZE);
       while(jobOut->compressedLen + COMPRESSOR_BITS_OUT > newSize*8)
         newSize *= 2;
-      uint8_t *oldBuf = job->compressed;
-      job->compressed = realloc(job->compressed, newSize);
-      assert(job->compressed != oldBuf);
-      job->compressedCap = newSize;
+      uint8_t *oldBuf = jobOut->compressed;
+      jobOut->compressed = (uint8_t*)realloc(jobOut->compressed, newSize);
+      assert(jobOut->compressed != oldBuf);
+      jobOut->compressedCap = newSize;
     }
     
     // expose input buffer to module
-    int remaining = jobIn->rawLen - inBufIdx
+    int remaining = jobIn->rawLen - inBufIdx;
     compressor->io_in_valid = min(remaining, COMPRESSOR_CHARS_IN);
     compressor->io_in_last = remaining <= COMPRESSOR_CHARS_IN;
     // module input is not in array form, so must use an ugly cast
@@ -331,19 +383,20 @@ static void doCompressor() {
     for(int i = 0; i < c; i++) {
       int major = (jobOut->compressedLen + i) / 8;
       int minor = (jobOut->compressedLen + i) % 8;
-      jobOut->compressed[major] &= (1 << minor) - 1
-      jobOut->compressed[major] |= !!(&module->io_out_data_0)[i] << minor;
+      jobOut->compressed[major] &= (1 << minor) - 1;
+      jobOut->compressed[major] |= !!(&compressor->io_out_data_0)[i] << minor;
     }
     jobOut->compressedLen += c;
     
     compressor->io_out_restart = compressor->io_out_last &&
       compressor->io_out_ready >= compressor->io_out_valid;
-    
+    compressor->eval();
     
     for(int i = jobIdxIn;;i = ++i % JOB_QUEUE_SIZE) {
       jobs[i].compressorCycles++;
       if(i == jobIdxOut) break;
     }
+    summary.compressorCycles += 1;
     
     if(compressor->io_in_restart) {
       jobIdxIn = ++jobIdxIn % JOB_QUEUE_SIZE;
@@ -357,7 +410,6 @@ static void doCompressor() {
       jobOut = &jobs[jobIdxOut];
     }
     
-    summary.compressorCycles += 1;
     
     // make ure everything is still up to date
     compressor->eval();
@@ -372,11 +424,15 @@ static void doCompressor() {
     compressor->clock = 1;
     compressor->eval();
     
+    if(TIMEOUT)
+      cleanup();
     assert(!TIMEOUT);
   } while(!quit);
+  
+  return true;
 }
 
-static void doDecompressor() {
+static bool doDecompressor() {
   static int jobIdxIn = 0;
   static int jobIdxOut = 0;
   static int inBufIdx = 0;
@@ -385,29 +441,29 @@ static void doDecompressor() {
   bool quit = false;
   int idle = 0;
   if(jobIn->stage != STAGE_DECOMPRESSOR)
-    return;
+    return false;
   
   do {
     if(jobOut->decompressedLen + DECOMPRESSOR_CHARS_OUT >
         jobOut->decompressedCap) {
-      size_t *newSize = max(jobOut->decompressedCap * 2, PAGE_SIZE);
+      size_t newSize = max(jobOut->decompressedCap * 2, PAGE_SIZE);
       while(jobOut->decompressedLen + DECOMPRESSOR_CHARS_OUT > newSize)
         newSize *= 2;
-      uint8_t *oldBuf = job->decompressed;
-      job->decompressed = realloc(job->decompressed, newSize);
-      assert(job->compressed != oldBuf);
-      job->decompressedCap = newSize;
+      uint8_t *oldBuf = jobOut->decompressed;
+      jobOut->decompressed = (uint8_t*)realloc(jobOut->decompressed, newSize);
+      assert(jobOut->compressed != oldBuf);
+      jobOut->decompressedCap = newSize;
     }
     
     // expose input buffer to module
-    int remaining = jobIn->compressedLen - inBufIdx
+    int remaining = jobIn->compressedLen - inBufIdx;
     decompressor->io_in_valid = min(remaining, DECOMPRESSOR_BITS_IN);
     decompressor->io_in_last = remaining <= DECOMPRESSOR_BITS_IN;
     // module input is not in array form, so must use an ugly cast
     for(int i = 0; i < decompressor->io_in_valid; i++) {
-      int major = (jobOut->compressedLen + i) / 8;
-      int minor = (jobOut->compressedLen + i) % 8;
-      (&decompressor->io_in_data_0)[i] = jobIn->compressed[major] >> minor & 1
+      int major = (inBufIdx + i) / 8;
+      int minor = (inBufIdx + i) % 8;
+      (&decompressor->io_in_data_0)[i] = jobIn->compressed[major] >> minor & 1;
     }
     
     decompressor->io_out_ready = DECOMPRESSOR_CHARS_OUT;
@@ -428,8 +484,8 @@ static void doDecompressor() {
     // if(c) idle = 0;
     // module output is not in array form, so must use ugly cast
     for(int i = 0; i < c; i++) {
-      jobOut->decompressed[jobOut->compressedLen + i] =
-        (&module->io_out_data_0)[i]
+      jobOut->decompressed[jobOut->decompressedLen + i] =
+        (&decompressor->io_out_data_0)[i];
     }
     jobOut->decompressedLen += c;
     
@@ -442,6 +498,7 @@ static void doDecompressor() {
       jobs[i].decompressorCycles++;
       if(i == jobIdxOut) break;
     }
+    summary.decompressorCycles += 1;
     
     if(decompressor->io_in_restart) {
       jobIdxIn = ++jobIdxIn % JOB_QUEUE_SIZE;
@@ -455,7 +512,6 @@ static void doDecompressor() {
       jobOut = &jobs[jobIdxOut];
     }
     
-    summary.decompressorCycles += 1;
     
     DECOMPRESSOR_TRACE();
     
@@ -468,15 +524,19 @@ static void doDecompressor() {
     decompressor->clock = 1;
     decompressor->eval();
     
+    if(TIMEOUT)
+      cleanup();
     assert(!TIMEOUT);
   } while(!quit);
+  
+  return true;
 }
 
-static void doFinalize() {
+static bool doFinalize() {
   static int jobIdx = 0;
   struct Job *job = &jobs[jobIdx];
   if(job->stage != STAGE_FINALIZE)
-    return;
+    return false;
   
   bool pass = true;
   if(job->rawLen != job->decompressedLen)
@@ -493,6 +553,7 @@ static void doFinalize() {
   static bool printHeader = true;
   if(printHeader) {
     printHeader = false;
+    fprintf(reportfile, "file,", );
     fprintf(reportfile, "id,");
     fprintf(reportfile, "pass?,");
     fprintf(reportfile, "raw size,");
@@ -502,6 +563,7 @@ static void doFinalize() {
     fprintf(reportfile, "\n");
   }
   
+  fprintf(reportfile, "%s,", options.dump);
   fprintf(reportfile, "%d,", job->id);
   fprintf(reportfile, "%s,", pass ? "pass" : "fail");
   fprintf(reportfile, "%lu,", job->rawLen);
@@ -509,4 +571,44 @@ static void doFinalize() {
   fprintf(reportfile, "%d,", job->compressorCycles);
   fprintf(reportfile, "%d,", job->decompressorCycles);
   fprintf(reportfile, "\n");
+  
+  if(job->id == debugJobId) {
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "====================\n");
+    fprintf(reportfile, "| BEGIN DEBUG DUMP |\n");
+    fprintf(reportfile, "====================\n");
+    fprintf(reportfile, "job ID: %d\n", job->id);
+    fprintf(reportfile, "raw: (length = %lu)\n", job->rawLen);
+    for(size_t i = 0; i < job->rawLen; i +=
+      fwrite(job->raw + i, 1, job->rawLen - i, reportfile));
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "compressed: (length = %lu)\n", job->compressedLen);
+    for(size_t i = 0; i * 8 < job->compressedLen; i += 8 *
+      fwrite(job->compressed + i, 1, (job->compressedLen+7)/8 - i, reportfile));
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "decompressed: (length = %lu)\n", job->decompressedLen);
+    for(size_t i = 0; i < job->decompressedLen; i +=
+      fwrite(job->decompressed + i, 1, job->decompressedLen - i, reportfile));
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "\n");
+    fprintf(reportfile, "====================\n");
+    fprintf(reportfile, "|  END DEBUG DUMP  |\n");
+    fprintf(reportfile, "====================\n");
+    fprintf(reportfile, "\n");
+  }
+  
+  job->stage = 0;
+  job->rawLen = 0;
+  job->compressedLen = 0;
+  job->decompressedLen = 0;
+  job->compressorCycles = 0;
+  job->decompressorCycles = 0;
+  job->compressorStallCycles = 0;
+  job->decompressorStallCycles = 0;
+  
+  jobIdx = ++jobIdx % JOB_QUEUE_SIZE;
+  
+  return true;
 }

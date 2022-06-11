@@ -1,21 +1,11 @@
-characters, 4096
-characterBits, 8
-huffmanTreeCharacters, 16
-codewordMaxBits, 11
-outputRegisters, false
-inputRegister, false
-treeNormalizerInputRegister, false
-characterBufferSize, 1
-treeDesiredMaxDepth, 10
-treeDepthInputBits, 8
-characterFrequencyParallelism, 8
-compressionParallelism, 8
-decompressorCharacterBufferSize, 3
-compressorParallelInput, false
-compressorParallelOutput, false
-compressorInputRegister, false
-decompressorParallelInput, false
-decompressorParallelOutput, false
-decompressorInputRegister, false
-variableCompression, true
-debugStatistics, false
+characterBits,8
+characterSpace,256
+codeCount,16
+maxCodeLength,15
+compressorCharsIn,8
+compressorBitsOut,32
+counterCharsIn,8
+encoderParallelism,8
+passOneSize,4096
+decompressorBitsIn,32
+decompressorCharsOut,8

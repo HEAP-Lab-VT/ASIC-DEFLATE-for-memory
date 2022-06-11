@@ -44,36 +44,45 @@ class Counter(params: Parameters) extends Module {
   }
   
   
-  val highChars = Reg(Vec(params.codeCount - 1, new Entry()))
+  val highChars = RegInit(VecInit(Seq.fill(params.codeCount - 1){
+    val e = WireDefault(new Entry(), DontCare)
+    e.freq := 0.U
+    e
+  }))
   val updatedhighChars = WireDefault(highChars)
   highChars := updatedhighChars
   
   // update highChars
   highChars.zip(updatedhighChars).zipWithIndex.foreach{case ((h, uh), i) =>
     val u = PriorityMux(
-      updates.map(u => u.char === h.char).reverse :+ true.B,
+      updates.map(u => u.char === h.char && h.freq =/= 0.U).reverse :+ true.B,
       updates.reverse :+ h)
     uh.freq := u.freq
   }
   
   
-  // do a swap in highChars
+  // find a non-high that is greater than the cutoff
   val promotionChar = PriorityEncoder(
     frequencies.map(e => e.freq > highChars.last.freq && !e.high) :+ true.B)
   val promotion = frequencies(promotionChar)
   
+  // find a high that is less than the cutoff
   val demotionIdx = PriorityEncoder(
     highChars.init.map(_.freq < highChars.last.freq) :+ true.B)
   val demotion = highChars(demotionIdx)
   
   when(promotionChar === frequencies.length.U) {
+    // perform demotion
     highChars.last := updatedhighChars(demotionIdx)
     highChars(demotionIdx) := updatedhighChars.last
   } otherwise {
+    // perform promotion and demotion
     highChars(demotionIdx) := promotion
     highChars(demotionIdx).char := promotionChar
     frequencies(promotionChar).high := true.B
-    frequencies(demotion.char).high := false.B
+    when(demotion.freq =/= 0.U) {
+      frequencies(demotion.char).high := false.B
+    }
   }
   
   (io.result.highChars zip highChars).foreach{case (r, h) =>
@@ -102,8 +111,5 @@ class CounterResult(params: Parameters) extends Bundle {
     //   new Char().asInstanceOf[this.type]
   }
   val highChars = Vec(params.codeCount - 1, new Char())
-  val escapeFreq = UInt(params.characterBits.W)
-  
-  override def cloneType: this.type =
-    new CounterResult(params).asInstanceOf[this.type]
+  val escapeFreq = UInt(params.passOneSize.valBits.W)
 }
