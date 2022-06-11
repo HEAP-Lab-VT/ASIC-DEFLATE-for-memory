@@ -139,7 +139,4 @@ class TreeGeneratorResult(params: Parameters) extends Bundle {
   val codes = Vec(params.codeCount - 1, new Code())
   val escapeCode = UInt(params.maxCodeLength.W)
   val escapeCodeLength = UInt(params.maxCodeLength.valBits.W)
-  
-  override def cloneType: this.type =
-    new TreeGeneratorResult(params).asInstanceOf[this.type]
 }

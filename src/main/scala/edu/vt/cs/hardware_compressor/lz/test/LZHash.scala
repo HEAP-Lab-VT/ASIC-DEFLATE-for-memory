@@ -43,7 +43,7 @@ object LZHash {
           ((length - params.maxCharsInMinEncoding - 1) /
             params.characterBits.maxVal.intValue)
     
-    return (0 until encodinglength reverse).map(i =>
+    return (0 until encodinglength).reverse.map(i =>
       (encoding >> (i * params.characterBits) &
         params.characterBits.maxVal).toInt)
   }

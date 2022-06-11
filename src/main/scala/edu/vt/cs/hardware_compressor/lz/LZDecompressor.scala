@@ -165,7 +165,7 @@ class LZDecompressor(params: Parameters) extends Module {
         //  3) output not ready
         // Loop backward so first (most recent) stop condition is used.
         // matchLength is residual length from already processed characters
-        for(index <- 0 to maxInChars reverse) {
+        for(index <- (0 to maxInChars).reverse) {
           // valid out chars up to (but not including) current index
           val whole = matchLength +&
             (index * params.extraCharacterLengthIncrease).U

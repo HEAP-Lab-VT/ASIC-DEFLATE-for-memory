@@ -56,7 +56,7 @@ class Encoder(params: Parameters) extends Module {
       ((1 << params.minEncodingLengthBits) - 1).U
       )(params.minEncodingLengthBits - 1, 0)
     val minEncodingUInt = escape ## confirmation ## address ## length
-    minEncoding := (0 until params.minEncodingChars reverse)
+    minEncoding := (0 until params.minEncodingChars).reverse
       .map{i => minEncodingUInt(
         (i + 1) * params.characterBits - 1, i * params.characterBits)}
     minEncodingIndex := 0.U

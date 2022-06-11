@@ -24,6 +24,7 @@
 
 package edu.vt.cs.hardware_compressor.util
 
+import scala.util.Try
 import scala.util.control.{ControlThrowable, NonFatal}
 
 /** A utility for performing automatic resource management. It can be used to perform an

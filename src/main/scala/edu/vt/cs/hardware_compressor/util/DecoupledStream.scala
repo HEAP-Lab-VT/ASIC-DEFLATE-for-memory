@@ -54,9 +54,6 @@ class DecoupledStream[T <: Data](count: Int, gen: T)
   def bits = data // alias legacy name
   val last = Output(Bool())
   def finished = last // alias legacy name
-  
-  override def cloneType: this.type =
-    new DecoupledStream(count, gen).asInstanceOf[this.type]
 }
 
 object DecoupledStream {
@@ -86,9 +83,6 @@ object DecoupledStream {
 class RestartableDecoupledStream[T <: Data](count: Int, gen: T)
     extends DecoupledStream[T](count: Int, gen: T) {
   val restart = Input(Bool())
-  
-  override def cloneType: this.type =
-    new RestartableDecoupledStream(count, gen).asInstanceOf[this.type]
 }
 
 object RestartableDecoupledStream {
@@ -126,9 +120,6 @@ class StreamBundle[I <: Data, O <: Data](inSize: Int, inGen: I, outSize: Int,
     outGen: O) extends Bundle {
   val in = Flipped(DecoupledStream(inSize, inGen))
   val out = DecoupledStream(outSize, outGen)
-  
-  override def cloneType: this.type =
-    new StreamBundle(inSize, inGen, outSize, outGen).asInstanceOf[this.type]
 }
 
 
@@ -200,7 +191,7 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
       (validLength - progression) min bufSize.U,
     0.U)
   
-  (io.out zip outSizes zip offsets zipWithIndex)
+  (io.out zip outSizes zip offsets).zipWithIndex
       .foreach{case (((out, siz), off), i) =>
     val adjBufferLen = bufferLength - off
     val adjValidLen = validLength - off
