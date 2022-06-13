@@ -45,7 +45,7 @@
 
 
 #ifndef TIMEOUT
-#define TIMEOUT (idle >= 1000)
+#define TIMEOUT (idle >= 5000)
 #endif
 
 
@@ -61,6 +61,7 @@
 #define STAGE_DECOMPRESSOR 2
 #define STAGE_FINALIZE 3
 #define NUM_STAGES 4
+#define STAGE_FINISH -1
 
 #define JOB_QUEUE_SIZE 10
 
@@ -93,8 +94,7 @@ struct Summary {
   int totalPages;
   size_t nonzeroSize;
   int nonzeroPages;
-  size_t processedSize;
-  int processedPages;
+  size_t compressedSize;
   
   int passedPages;
   int failedPages;
@@ -115,11 +115,11 @@ static Options options;
 
 static VCOMPRESSOR *compressor;
 static VDECOMPRESSOR *decompressor;
+static VerilatedContext *compressorContext;
+static VerilatedContext *decompressorContext;
 #if TRACE_ENABLE
 static VerilatedVcdC *compressorTrace;
 static VerilatedVcdC *decompressorTrace;
-static VerilatedContext *compressorContext;
-static VerilatedContext *decompressorContext;
 static bool compressorTraceEnable = false;
 static bool decompressorTraceEnable = false;
 #endif
@@ -134,6 +134,18 @@ static bool doLoad();
 static bool doCompressor();
 static bool doDecompressor();
 static bool doFinalize();
+
+static bool isFinished() {
+  for(int i = 0; i < JOB_QUEUE_SIZE; i++) {
+    if(jobs[i].stage != STAGE_FINISH && jobs[i].stage != STAGE_LOAD)
+      return false;
+  }
+  for(int i = 0; i < JOB_QUEUE_SIZE; i++) {
+    if(jobs[i].stage == STAGE_FINISH)
+      return true;
+  }
+  return false;
+}
 
 static void cleanup() {
   compressor->final();
@@ -199,8 +211,8 @@ int main(int argc, const char **argv, char **env) {
   decompressorContext = new VerilatedContext;
   compressorContext->commandArgs(argc, argv);
   decompressorContext->commandArgs(argc, argv);
-  compressor = new VCOMPRESSOR{compressorContext, "HUFFMAN_COMPRESSOR"};
-  decompressor = new VDECOMPRESSOR{decompressorContext, "HUFFMAN_DECOMPRESSOR"};
+  compressor = new VCOMPRESSOR{compressorContext, "TOP_COMPRESSOR"};
+  decompressor = new VDECOMPRESSOR{decompressorContext, "TOP_DECOMPRESSOR"};
   
   #if TRACE_ENABLE
   compressorTraceEnable = !!strcmp(options.cTrace, "-");
@@ -249,8 +261,6 @@ int main(int argc, const char **argv, char **env) {
   summary.totalPages = 0;
   summary.nonzeroSize = 0;
   summary.nonzeroPages = 0;
-  summary.processedSize = 0;
-  summary.processedPages = 0;
   summary.passedPages = 0;
   summary.failedPages = 0;
   summary.compressorCycles = 0;
@@ -276,16 +286,27 @@ int main(int argc, const char **argv, char **env) {
   decompressor->reset = 0;
   
   quit = false;
-  while(!quit && (
-    doLoad() |
-    doCompressor() |
-    doDecompressor() |
-    doFinalize()
-  ));
+  while(!quit && !isFinished()) {
+    doLoad();
+    doCompressor();
+    doDecompressor();
+    doFinalize();
+  }
+  
+  fprintf(reportfile, "***** FINISHED *****\n");
+  fprintf(reportfile, "dump: %s\n", options.dump);
+  fprintf(reportfile, "total (bytes): %lu\n", summary.totalSize);
+  fprintf(reportfile, "total (pages): %d\n", summary.totalPages);
+  fprintf(reportfile, "non-zero (bytes): %lu\n", summary.nonzeroSize);
+  fprintf(reportfile, "non-zero (pages): %d\n", summary.nonzeroPages);
+  fprintf(reportfile, "passed (pages): %d\n", summary.passedPages);
+  fprintf(reportfile, "failed (pages): %d\n", summary.failedPages);
+  fprintf(reportfile, "C-cycles: %d\n", summary.compressorCycles);
+  fprintf(reportfile, "D-cycles: %d\n", summary.decompressorCycles);
   
   cleanup();
   
-  return summary.failedPages;
+  return min(summary.failedPages, 255);
 }
 
 static bool doLoad() {
@@ -308,21 +329,23 @@ static bool doLoad() {
     bool zero = true;
     for(int i = 0; i < job->rawLen; i++)
       zero = zero && job->raw[i] == 0;
-    if(zero) {
-      if(job->rawLen == 0) {
-        return false;
-      }
+    if(job->rawLen == 0) {
+      job->stage = STAGE_FINISH;
+    }
+    else if(zero) {
+      summary.totalPages += 1;
+      summary.totalSize += job->rawLen;
+      
       job->rawLen = 0;
     }
     else {
+      job->id = summary.nonzeroPages;
+      
       summary.totalPages += 1;
       summary.totalSize += job->rawLen;
+      
       summary.nonzeroPages += 1;
       summary.nonzeroSize += job->rawLen;
-      
-      job->id = summary.processedPages;
-      summary.processedPages += 1;
-      summary.processedSize += job->rawLen;
       
       job->stage++;
       jobIdx = ++jobIdx % JOB_QUEUE_SIZE;
@@ -340,8 +363,11 @@ static bool doCompressor() {
   struct Job *jobOut = &jobs[jobIdxOut];
   bool quit = false;
   int idle = 0;
-  if(jobIn->stage != STAGE_COMPRESSOR)
+  bool onlyOut = jobIn->stage == STAGE_FINISH;
+  if(jobIn->stage != STAGE_COMPRESSOR &&
+      (!onlyOut || jobOut->stage != STAGE_COMPRESSOR)) {
     return false;
+  }
   
   do {
     if(jobOut->compressedLen + COMPRESSOR_BITS_OUT > jobOut->compressedCap*8) {
@@ -359,8 +385,13 @@ static bool doCompressor() {
     compressor->io_in_valid = min(remaining, COMPRESSOR_CHARS_IN);
     compressor->io_in_last = remaining <= COMPRESSOR_CHARS_IN;
     // module input is not in array form, so must use an ugly cast
+    if(!onlyOut) // prevent segfault
     for(int i = 0; i < compressor->io_in_valid; i++) {
       (&compressor->io_in_data_0)[i] = jobIn->raw[inBufIdx + i];
+    }
+    if(onlyOut) {
+      compressor->io_in_valid = 0;
+      compressor->io_in_last = false;
     }
     
     compressor->io_out_ready = COMPRESSOR_BITS_OUT;
@@ -392,9 +423,9 @@ static bool doCompressor() {
       compressor->io_out_ready >= compressor->io_out_valid;
     compressor->eval();
     
-    for(int i = jobIdxIn;;i = ++i % JOB_QUEUE_SIZE) {
+    for(int i = jobIdxOut;;i = ++i % JOB_QUEUE_SIZE) {
       jobs[i].compressorCycles++;
-      if(i == jobIdxOut) break;
+      if(i == jobIdxIn) break;
     }
     summary.compressorCycles += 1;
     
@@ -402,12 +433,13 @@ static bool doCompressor() {
       jobIdxIn = ++jobIdxIn % JOB_QUEUE_SIZE;
       inBufIdx = 0;
       jobIn = &jobs[jobIdxIn];
-      quit = jobIn->stage != STAGE_COMPRESSOR;
+      quit = quit || jobIn->stage != STAGE_COMPRESSOR;
     }
     if(compressor->io_out_restart) {
       jobIdxOut = ++jobIdxOut % JOB_QUEUE_SIZE;
       jobOut->stage++;
       jobOut = &jobs[jobIdxOut];
+      quit = quit || (onlyOut && jobOut->stage != STAGE_COMPRESSOR);
     }
     
     
@@ -440,8 +472,11 @@ static bool doDecompressor() {
   struct Job *jobOut = &jobs[jobIdxOut];
   bool quit = false;
   int idle = 0;
-  if(jobIn->stage != STAGE_DECOMPRESSOR)
+  bool onlyOut = jobIn->stage == STAGE_FINISH;
+  if(jobIn->stage != STAGE_DECOMPRESSOR &&
+      (!onlyOut || jobOut->stage != STAGE_DECOMPRESSOR)) {
     return false;
+  }
   
   do {
     if(jobOut->decompressedLen + DECOMPRESSOR_CHARS_OUT >
@@ -460,10 +495,15 @@ static bool doDecompressor() {
     decompressor->io_in_valid = min(remaining, DECOMPRESSOR_BITS_IN);
     decompressor->io_in_last = remaining <= DECOMPRESSOR_BITS_IN;
     // module input is not in array form, so must use an ugly cast
+    if(!onlyOut)
     for(int i = 0; i < decompressor->io_in_valid; i++) {
       int major = (inBufIdx + i) / 8;
       int minor = (inBufIdx + i) % 8;
       (&decompressor->io_in_data_0)[i] = jobIn->compressed[major] >> minor & 1;
+    }
+    if(onlyOut) {
+      decompressor->io_in_valid = 0;
+      decompressor->io_in_last = false;
     }
     
     decompressor->io_out_ready = DECOMPRESSOR_CHARS_OUT;
@@ -494,9 +534,9 @@ static bool doDecompressor() {
     decompressor->eval();
     
     
-    for(int i = jobIdxIn;;i = ++i % JOB_QUEUE_SIZE) {
+    for(int i = jobIdxOut;;i = ++i % JOB_QUEUE_SIZE) {
       jobs[i].decompressorCycles++;
-      if(i == jobIdxOut) break;
+      if(i == jobIdxIn) break;
     }
     summary.decompressorCycles += 1;
     
@@ -504,12 +544,13 @@ static bool doDecompressor() {
       jobIdxIn = ++jobIdxIn % JOB_QUEUE_SIZE;
       inBufIdx = 0;
       jobIn = &jobs[jobIdxIn];
-      quit = jobIn->stage != STAGE_DECOMPRESSOR;
+      quit = quit || jobIn->stage != STAGE_DECOMPRESSOR;
     }
     if(decompressor->io_out_restart) {
       jobIdxOut = ++jobIdxOut % JOB_QUEUE_SIZE;
       jobOut->stage++;
       jobOut = &jobs[jobIdxOut];
+      quit = quit || (onlyOut && jobOut->stage != STAGE_DECOMPRESSOR);
     }
     
     
@@ -550,10 +591,12 @@ static bool doFinalize() {
   else
     summary.failedPages += 1;
   
+  summary.compressedSize += job->compressedLen;
+  
   static bool printHeader = true;
   if(printHeader) {
     printHeader = false;
-    fprintf(reportfile, "file,", );
+    fprintf(reportfile, "dump,");
     fprintf(reportfile, "id,");
     fprintf(reportfile, "pass?,");
     fprintf(reportfile, "raw size,");
