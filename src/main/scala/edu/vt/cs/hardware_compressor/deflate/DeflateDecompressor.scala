@@ -11,16 +11,14 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 class DeflateDecompressor(params: Parameters) extends Module {
   val io = IO(new Bundle{
     val in = Vec(params.encChannels,
-      Flipped(DecoupledStream(params.decompressorCharsIn,
-        UInt(params.encCharBits.W))))
-    val out = DecoupledStream(params.decompressorCharsOut,
+      Flipped(RestartableDecoupledStream(params.decompressorBitsIn, Bool())))
+    val out = RestartableDecoupledStream(params.decompressorCharsOut,
       UInt(params.plnCharBits.W))
   })
   
   
   val lz = Module(new LZDecompressor(params.lz))
   val huffman = Module(new HuffmanDecompressor(params.huffman))
-  // val serializer = Module(new Serializer(params))
   val buffer = Module(new StreamBuffer(
     params.huffman.decompressorCharsOut,
     params.lz.decompressorCharsIn,
@@ -30,9 +28,13 @@ class DeflateDecompressor(params: Parameters) extends Module {
     false))
   
   huffman.io.in <> io.in
-  buffer.io.in <> huffman.io.out
+  buffer.io.in <> huffman.io.out.viewAsDecoupledStream
   lz.io.in <> buffer.io.out
-  io.out <> lz.io.out
+  io.out.viewAsDecoupledStream <> lz.io.out
+  
+  huffman.io.out.restart := io.out.restart
+  lz.reset := reset || io.out.restart
+  buffer.reset := reset || io.out.restart
 }
 
 object DeflateDecompressor extends App {

@@ -1,7 +1,6 @@
 package edu.vt.cs.hardware_compressor.huffman
 
 import chisel3._
-import chisel3.experimental.dataview._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
@@ -180,8 +179,8 @@ class HuffmanDecompressor(params: Parameters) extends Module {
   withReset((io.out.restart && io.out.finished &&
       io.out.ready >= io.out.valid) || reset.asBool) {
     val decoder = Module(new Decoder(params))
-    decoder.io.in <> io.in.viewAsSupertype(chiselTypeOf(decoder.io.in))
-    decoder.io.out <> io.out.viewAsSupertype(chiselTypeOf(decoder.io.out))
+    decoder.io.in <> io.in.viewAsDecoupledStream
+    decoder.io.out <> io.out.viewAsDecoupledStream
     io.in.restart := io.out.restart
   }
 }

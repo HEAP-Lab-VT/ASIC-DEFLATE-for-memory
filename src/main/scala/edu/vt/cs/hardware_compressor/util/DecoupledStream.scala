@@ -1,6 +1,7 @@
 package edu.vt.cs.hardware_compressor.util
 
 import chisel3._
+import chisel3.experimental.dataview._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
@@ -83,6 +84,9 @@ object DecoupledStream {
 class RestartableDecoupledStream[T <: Data](count: Int, gen: T)
     extends DecoupledStream[T](count: Int, gen: T) {
   val restart = Input(Bool())
+  
+  def viewAsDecoupledStream: DecoupledStream =
+    this.viewAsSupertype(new DecoupledStream(count, gen))
 }
 
 object RestartableDecoupledStream {
