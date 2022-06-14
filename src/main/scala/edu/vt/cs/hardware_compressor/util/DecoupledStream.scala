@@ -85,7 +85,7 @@ class RestartableDecoupledStream[T <: Data](count: Int, gen: T)
     extends DecoupledStream[T](count: Int, gen: T) {
   val restart = Input(Bool())
   
-  def viewAsDecoupledStream: DecoupledStream =
+  def viewAsDecoupledStream: DecoupledStream[T] =
     this.viewAsSupertype(new DecoupledStream(count, gen))
 }
 
@@ -128,7 +128,7 @@ class StreamBundle[I <: Data, O <: Data](inSize: Int, inGen: I, outSize: Int,
 
 
 class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
-    delayValid: Boolean = false, delayReady: Boolean = false)
+    delayForward: Boolean = false, delayBackward: Boolean = false)
     extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(inSize, gen))
@@ -136,7 +136,7 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
   })
   
   val tee = Module(new StreamTee[T](inSize, Seq(outSize), bufSize, gen,
-    delayValid, delayReady))
+    delayForward, delayBackward))
   
   io.in <> tee.io.in
   io.out <> tee.io.out(0)
@@ -144,7 +144,7 @@ class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
 
 
 class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
-    gen: T, delayValid: Boolean = false, delayReady: Boolean = false)
+    gen: T, delayForward: Boolean = false, delayBackward: Boolean = false)
     extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(inSize, gen))
@@ -157,11 +157,12 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
   val buffer = Reg(Vec(bufSize, gen))
   val bufferLength = RegInit(0.U(bufSize.valBits.W))
   val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
+  val last = Reg(Bool())
   
   val offReady =
     io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
   val validLength =
-    if(delayReady)
+    if(delayBackward)
       (bufferLength +& io.in.valid) min bufSize.U
     else
       bufferLength +& io.in.valid
@@ -170,9 +171,9 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
   // NOTE: progression width assumes at least one offset must be zero
   // TODO: use a treeified min-reduction
   val maxProgression =
-    ((if(delayValid) 0 else inSize) + bufSize) min outSizes.max
+    ((if(delayForward) 0 else inSize) + bufSize) min outSizes.max
   val progression = Wire(UInt(maxProgression.valBits.W))
-  progression := offReady min (if(delayValid) bufferLength else validLength)
+  progression := offReady min (if(delayForward) bufferLength else validLength)
   
   buffer
     .tails
@@ -183,13 +184,13 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
     .foreach{case (h, b) => b := h}
   
   for(i <- 0 until inSize)
-    when((delayValid.B || i.U +& bufferLength >= progression) &&
+    when((delayForward.B || i.U +& bufferLength >= progression) &&
         i.U +& bufferLength - progression < bufSize.U) {
       buffer(i.U + bufferLength - progression) := io.in.bits(i)
     }
   
-  bufferLength := Mux(delayValid.B || validLength >= progression,
-    if(delayReady)
+  bufferLength := Mux(delayForward.B || validLength >= progression,
+    if(delayBackward)
       validLength - progression // validLength is already min-ed
     else
       (validLength - progression) min bufSize.U,
@@ -202,15 +203,15 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
     
     for(i <- 0 until siz)
       out.bits(i) := Mux(i.U < adjBufferLen, buffer(i.U + off),
-        if(delayValid) DontCare else io.in.bits(i.U - adjBufferLen))
+        if(delayForward) DontCare else io.in.bits(i.U - adjBufferLen))
     
     if(!singleOut) // offset stays zero with only one output
     off := ((off +& out.ready) min validLength) - progression
     
-    val valid = if(delayValid) adjBufferLen else adjValidLen
+    val valid = if(delayForward) adjBufferLen else adjValidLen
     when(valid <= siz.U) {
       out.valid := valid
-      out.last := io.in.last && (!delayValid.B || io.in.valid === 0.U)
+      out.last := (if(delayForward) last else io.in.last)
     } otherwise {
       out.valid := siz.U
       out.last := false.B
@@ -222,6 +223,8 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
     valid.suggestName(s"valid_$i")  
   }
   
-  io.in.ready := inSize.U min (bufSize.U - bufferLength +&
-    (if(delayReady) 0.U else offReady))
+  val readyUnlimit = bufSize.U - bufferLength +&
+    (if(delayBackward) 0.U else offReady)
+  io.in.ready := inSize.U min readyUnlimit
+  last := io.in.last && io.in.valid <= readyUnlimit
 }
