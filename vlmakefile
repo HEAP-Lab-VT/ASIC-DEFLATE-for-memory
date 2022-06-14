@@ -49,6 +49,19 @@ else
 TRACE_FLAGS := 
 endif
 
+
+HuffmanTest$(TRACE_SIMPLESUFFIX).o: $(root)/src/test/cpp/HuffmanTest.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) -include HuffmanParameters.h $(TRACE_FLAGS) $< -o $@
+HuffmanTest$(TRACE_SIMPLESUFFIX).d: $(root)/src/test/cpp/HuffmanTest.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) -include HuffmanParameters.h $(TRACE_FLAGS) $< -o $@
+include HuffmanTest$(TRACE_SIMPLESUFFIX).d
+
+DeflateTest$(TRACE_SIMPLESUFFIX).o: $(root)/src/test/cpp/DeflateTest.cpp
+	g++ $(OBJ_FLAGS) $(INCLUDES) -include DeflateParameters.h $(TRACE_FLAGS) $< -o $@
+HuffmanTest$(TRACE_SIMPLESUFFIX).d: $(root)/src/test/cpp/DeflateTest.cpp
+	g++ $(DEP_FLAGS) $(INCLUDES) -include DeflateParameters.h $(TRACE_FLAGS) $< -o $@
+include DeflateTest$(TRACE_SIMPLESUFFIX).d
+
 LZCOMPRESSOR_CFLAGS := -DMODNAME=LZCompressor \
 	-DIN_CHARS=$(shell sed -E 's/^compressorCharsIn\s*,\s*([0-9]+)$$/\1/; t; d' $(root)/configFiles/lz.csv) \
 	-DOUT_CHARS=$(shell sed -E 's/^compressorCharsOut\s*,\s*([0-9]+)$$/\1/; t; d' $(root)/configFiles/lz.csv)
@@ -72,12 +85,6 @@ Huffman_fused$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/Huffman_fused.cpp
 Huffman_fused$(TRACE_SIMPLESUFFIX).d: $(cppsrc)/Huffman_fused.cpp
 	g++ $(DEP_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@
 include Huffman_fused$(TRACE_SIMPLESUFFIX).d
-
-HuffmanTest$(TRACE_SIMPLESUFFIX).o: $(root)/src/test/cpp/HuffmanTest.cpp
-	g++ $(OBJ_FLAGS) $(INCLUDES) -include HuffmanParameters.h $(TRACE_FLAGS) $< -o $@
-HuffmanTest$(TRACE_SIMPLESUFFIX).d: $(root)/src/test/cpp/HuffmanTest.cpp
-	g++ $(DEP_FLAGS) $(INCLUDES) -include HuffmanParameters.h $(TRACE_FLAGS) $< -o $@
-include HuffmanTest$(TRACE_SIMPLESUFFIX).d
 
 Deflate_fused$(TRACE_SIMPLESUFFIX).o: $(cppsrc)/Deflate_fused.cpp
 	g++ $(OBJ_FLAGS) $(INCLUDES) $(TRACE_FLAGS) $< -o $@

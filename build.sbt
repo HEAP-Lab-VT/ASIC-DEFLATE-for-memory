@@ -40,7 +40,7 @@ unmanagedSources / excludeFilter := {
   new SimpleFileFilter(_.getCanonicalPath contains
     (src / "huffman" getCanonicalPath)) ||
   new SimpleFileFilter(_.getCanonicalPath contains
-    (src_hc / "deflate" getCanonicalPath))
+    (src_hc / "GenVerilog.scala" getCanonicalPath))
 }
 
 // workaround for sbt bug that causes a hang when killing test execution

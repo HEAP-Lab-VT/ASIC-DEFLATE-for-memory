@@ -88,6 +88,12 @@ $(build)/DeflateDecompressor.v: $(deflatesources)
 	sbt $(_SBTFLAGS) 'runMain edu.vt.cs.hardware_compressor.deflate.DeflateDecompressor -td $(build) -o $@ $(_SBTRUNFLAGS)'
 
 
+$(build)/VHuffmanTest: $(build)/vlmakefile $(build)/HuffmanCompressor.v $(build)/HuffmanDecompressor.v
+	$(MAKE) -C $(build) -f vlmakefile VHuffmanTest TARGET=VHuffmanTest MODULES='HuffmanCompressor HuffmanDecompressor' OBJS='HuffmanTest.o'
+
+$(build)/VDeflateTest: $(build)/vlmakefile $(build)/DeflateCompressor.v $(build)/DeflateDecompressor.v
+	$(MAKE) -C $(build) -f vlmakefile VDeflateTest TARGET=VDeflateTest MODULES='DeflateCompressor DeflateDecompressor' OBJS='DeflateTest.o'
+
 $(build)/VLZCompressor: $(build)/vlmakefile $(build)/LZCompressor.v
 	$(MAKE) -C $(build) -f vlmakefile VLZCompressor TARGET=VLZCompressor MODULES=LZCompressor OBJS='LZCompressor.o'
 
@@ -97,13 +103,10 @@ $(build)/VLZDecompressor: $(build)/vlmakefile $(build)/LZDecompressor.v
 $(build)/VHuffman_fused: $(build)/vlmakefile $(build)/HuffmanCompressor.v $(build)/HuffmanDecompressor.v
 	$(MAKE) -C $(build) -f vlmakefile VHuffman_fused TARGET=VHuffman_fused MODULES='HuffmanCompressor HuffmanDecompressor' OBJS='Huffman_fused.o BitQueue.o'
 
-$(build)/VHuffmanTest: $(build)/vlmakefile $(build)/HuffmanCompressor.v $(build)/HuffmanDecompressor.v
-	$(MAKE) -C $(build) -f vlmakefile VHuffmanTest TARGET=VHuffmanTest MODULES='HuffmanCompressor HuffmanDecompressor' OBJS='HuffmanTest.o'
-
 $(build)/VDeflate_fused: $(build)/vlmakefile $(build)/DeflateCompressor.v $(build)/DeflateDecompressor.v
 	$(MAKE) -C $(build) -f vlmakefile VDeflate_fused TARGET=VDeflate_fused MODULES='DeflateCompressor DeflateDecompressor' OBJS='Deflate_fused.o BitQueue.o'
 
-.PHONY: $(build)/VLZCompressor $(build)/VLZDecompressor $(build)/VHuffman_fused $(build)/VHuffmanTest $(build)/VDeflate_fused
+.PHONY: $(build)/VHuffmanTest $(build)/VDeflateTest $(build)/VLZCompressor $(build)/VLZDecompressor $(build)/VHuffman_fused $(build)/VDeflate_fused
 
 
 # copy c++ sources into build directory

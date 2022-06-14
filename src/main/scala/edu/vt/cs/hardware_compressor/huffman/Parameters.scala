@@ -119,12 +119,13 @@ class Parameters(
   // METHODS
   //----------------------------------------------------------------------------
   
-  def generateCppDefines(sink: PrintWriter, conditional: Boolean = false):
+  def generateCppDefines(sink: PrintWriter, prefix: Option[String] = None,
+    conditional: Boolean = false):
   Unit = {
     def define(name: String, definition: Any): Unit = {
       if(conditional)
-      sink.println(s"#ifndef $name")
-      sink.println(s"#define $name $definition")
+      sink.println(s"#ifndef $prefix$name")
+      sink.println(s"#define $prefix$name $definition")
       if(conditional)
       sink.println(s"#endif")
     }

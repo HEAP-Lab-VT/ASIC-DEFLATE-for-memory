@@ -2,11 +2,12 @@ package edu.vt.cs.hardware_compressor.deflate
 
 import chisel3._
 import chisel3.util._
+import edu.vt.cs.hardware_compressor._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class Parameters(
-    lzParam: edu.vt.cs.hardware_compressor.lz.Parameters,
-    huffmanParam: edu.vt.cs.hardware_compressor.huffman.Parameters
+    lzParam: lz.Parameters,
+    huffmanParam: huffman.Parameters
 ) {
   
   //============================================================================
@@ -21,16 +22,12 @@ class Parameters(
   // GENERAL PARAMETERS
   //----------------------------------------------------------------------------
   
-  val plnCharBits = lz.characterBits
-  val encCharBits = huffman.compressedCharBits
-  val encChannels = huffman.channelCount
-  val intCharBits = lz.characterBits
+  val characterBits = lz.characterBits
   val compressorCharsIn = lz.compressorCharsIn
-  val compressorCharsOut = huffman.compressorCharsOut
-  val compressorIntBufSize = huffman.huffman.characters
-  val decompressorCharsIn = huffman.decompressorCharsIn
+  val compressorBitsOut = huffman.compressorBitsOut
+  val decompressorBitsIn = huffman.decompressorBitsIn
   val decompressorCharsOut = lz.decompressorCharsOut
-  val decompressorIntBufferSize =
+  val decompressorMidBufferSize =
     lz.decompressorCharsIn max huffman.decompressorCharsOut
   
   
@@ -43,6 +40,33 @@ class Parameters(
     throw new IllegalArgumentException(s"LZ characterBits " +
       "(${lz.characterBits}) is not same as Huffman characterBits " +
       "(${huffman.characterBits}).")
+  
+  
+  //============================================================================
+  // METHODS
+  //----------------------------------------------------------------------------
+  
+  def generateCppDefines(sink: PrintWriter, prefix: String = "",
+    conditional: Boolean = false):
+  Unit = {
+    def define(name: String, definition: Any): Unit = {
+      if(conditional)
+      sink.println(s"#ifndef $prefix$name")
+      sink.println(s"#define $prefix$name $definition")
+      if(conditional)
+      sink.println(s"#endif")
+    }
+    
+    define("CHARACTER_BITS", characterBits)
+    define("COMPRESSOR_CHARS_IN", compressorCharsIn)
+    define("COMPRESSOR_BITS_OUT", compressorBitsOut)
+    define("DECOMPRESSOR_BITS_IN", decompressorBitsIn)
+    define("DECOMPRESSOR_CHARS_OUT", decompressorCharsOut)
+    define("DECOMPRESSOR_MID_BUFFER_SIZE", decompressorMidBufferSize)
+    
+    lz.generateCppDefines(sink, prefix + "LZ_", conditional)
+    huffman.generateCppDefines(sink, prefix + "HUFFMAN_", conditional)
+  }
 }
 
 object Parameters {

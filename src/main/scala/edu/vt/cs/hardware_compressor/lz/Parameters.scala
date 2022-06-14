@@ -93,7 +93,6 @@ class Parameters(
   val extraCharacterLengthIncrease = characterBits.space.intValue - 1
   
   // maximum characters that can be in a sequence of the minimum encoding length
-  // TODO: rename to `maxCharsInMinPattern` or `maxCharsInMinSequence`
   val maxCharsInMinEncoding =
     minCharsToEncode + minEncodingLengthBits.maxVal.intValue - 1
   
@@ -145,6 +144,42 @@ class Parameters(
     // must encode at least one character
     throw new IllegalArgumentException(
       "must encode at least one character")
+  
+  
+  //============================================================================
+  // METHODS
+  //----------------------------------------------------------------------------
+  
+  def generateCppDefines(sink: PrintWriter, prefix: Option[String] = None,
+    conditional: Boolean = false):
+  Unit = {
+    def define(name: String, definition: Any): Unit = {
+      if(conditional)
+      sink.println(s"#ifndef $prefix$name")
+      sink.println(s"#define $prefix$name $definition")
+      if(conditional)
+      sink.println(s"#endif")
+    }
+    
+    define("CHARACTER_BITS", characterBits)
+    define("COMPRESSOR_CHARS_IN", compressorCharsIn)
+    define("COMPRESSOR_CHARS_OUT", compressorCharsOut)
+    define("DECOMPRESSOR_CHARS_IN", decompressorCharsIn)
+    define("DECOMPRESSOR_CHARS_OUT", decompressorCharsOut)
+    define("CAM_SIZE", camSize)
+    define("CAM_CHARS_IN", camCharsIn)
+    define("CAM_LOOKAHEAD", camLookahead)
+    define("CAM_CHARS_PER_CYCLE", camCharsPerCycle)
+    define("CAM_BUF_SIZE", camBufSize)
+    define("ESCAPE_CHARACTER", escapeCharacter)
+    define("MIN_CHARS_TO_ENCODE", minCharsToEncode)
+    define("MAX_CHARS_TO_ENCODE", maxCharsToEncode)
+    define("MIN_ENCODING_CHARS", minEncodingChars)
+    define("MIN_ENCODING_BITS", minEncodingBits)
+    define("MIN_ENCODING_LENGTH_BITS", minEncodingLengthBits)
+    define("EXTRA_CHARACTER_LENGTH_INCREASE", extraCharacterLengthIncrease)
+    define("MAX_CHARS_IN_MIN_ENCODING", maxCharsInMinEncoding)
+  }
 }
 
 object Parameters {

@@ -207,7 +207,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
 object HuffmanCompressor extends App {
   val params = Parameters.fromCSV(Path.of("configFiles/huffman.csv"))
   Using(new PrintWriter(new File("build/HuffmanParameters.h"))){pw =>
-    params.generateCppDefines(pw)
+    params.generateCppDefines(pw, "HUFFMAN_")
   }
   new chisel3.stage.ChiselStage()
     .emitVerilog(new HuffmanCompressor(params), args)

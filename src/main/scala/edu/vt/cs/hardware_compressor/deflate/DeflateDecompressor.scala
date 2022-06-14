@@ -10,10 +10,10 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 
 class DeflateDecompressor(params: Parameters) extends Module {
   val io = IO(new Bundle{
-    val in = Vec(params.encChannels,
-      Flipped(RestartableDecoupledStream(params.decompressorBitsIn, Bool())))
+    val in = Flipped(RestartableDecoupledStream(params.decompressorBitsIn,
+      Bool()))
     val out = RestartableDecoupledStream(params.decompressorCharsOut,
-      UInt(params.plnCharBits.W))
+      UInt(params.characterBits.W))
   })
   
   
@@ -22,23 +22,38 @@ class DeflateDecompressor(params: Parameters) extends Module {
   val buffer = Module(new StreamBuffer(
     params.huffman.decompressorCharsOut,
     params.lz.decompressorCharsIn,
-    params.decompressorIntBufferSize,
-    UInt(params.intCharBits.W),
+    params.decompressorMidBufferSize,
+    UInt(params.characterBits.W),
     true,
     false))
   
-  huffman.io.in <> io.in
+  // input => huffman
+  huffman.io.in.data := DontCare
+  (huffman.io.in.data zip io.in.data).foreach(d => d._1 := d._2)
+  huffman.io.in.valid := io.in.valid min params.huffman.decompressorBitsIn.U
+  io.in.data.ready := huffman.io.in.ready min params.decompressorBitsIn.U
+  // huffman => buffer
   buffer.io.in <> huffman.io.out.viewAsDecoupledStream
+  // buffer => lz
   lz.io.in <> buffer.io.out
-  io.out.viewAsDecoupledStream <> lz.io.out
+  // lz => output
+  io.out.data := DontCare
+  (io.out.data zip lz.io.out.data).foreach(d => d._1 := d._2)
+  io.out.valid := lz.io.out.valid min params.compressorCharsOut.U
+  lz.io.out.data.ready := io.out.ready min params.lz.compressorCharsOut.U
   
+  // restart signals
+  io.in.restart := huffman.io.in.restart
   huffman.io.out.restart := io.out.restart
-  lz.reset := reset || io.out.restart
   buffer.reset := reset || io.out.restart
+  lz.reset := reset || io.out.restart
 }
 
 object DeflateDecompressor extends App {
   val params = Parameters.fromCSV("configFiles/deflate.csv")
+  Using(new PrintWriter(new File("build/DeflateParameters.h"))){pw =>
+    params.generateCppDefines(pw, "DEFLATE_")
+  }
   new chisel3.stage.ChiselStage()
     .emitVerilog(new DeflateDecompressor(params), args)
 }
