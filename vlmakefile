@@ -58,7 +58,7 @@ include HuffmanTest$(TRACE_SIMPLESUFFIX).d
 
 DeflateTest$(TRACE_SIMPLESUFFIX).o: $(root)/src/test/cpp/DeflateTest.cpp
 	g++ $(OBJ_FLAGS) $(INCLUDES) -include DeflateParameters.h $(TRACE_FLAGS) $< -o $@
-HuffmanTest$(TRACE_SIMPLESUFFIX).d: $(root)/src/test/cpp/DeflateTest.cpp
+DeflateTest$(TRACE_SIMPLESUFFIX).d: $(root)/src/test/cpp/DeflateTest.cpp
 	g++ $(DEP_FLAGS) $(INCLUDES) -include DeflateParameters.h $(TRACE_FLAGS) $< -o $@
 include DeflateTest$(TRACE_SIMPLESUFFIX).d
 

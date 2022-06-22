@@ -2,12 +2,15 @@ package edu.vt.cs.hardware_compressor.deflate
 
 import chisel3._
 import chisel3.util._
-import edu.vt.cs.hardware_compressor._
+import edu.vt.cs._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
+import java.io.PrintWriter
+import java.nio.file.Path
+import scala.util.Using
 
 class Parameters(
-    lzParam: lz.Parameters,
-    huffmanParam: huffman.Parameters
+    lzParam: hardware_compressor.lz.Parameters,
+    huffmanParam: hardware_compressor.huffman.Parameters
 ) {
   
   //============================================================================
@@ -72,35 +75,36 @@ class Parameters(
 object Parameters {
   
   def apply(
-    lz: edu.vt.cs.hardware_compressor.lz.Parameters,
-    huffman: edu.vt.cs.hardware_compressor.huffman.Parameters
+    lz: hardware_compressor.lz.Parameters,
+    huffman: hardware_compressor.huffman.Parameters
   ): Parameters =
     new Parameters(
       lzParam = lz,
       huffmanParam = huffman)
   
-  def fromCSV(csvPath: String): Parameters = {
+  def fromCSV(csvPath: Path): Parameters = {
     System.err.println(s"getting deflate parameters from $csvPath...")
     var map: Map[String, String] = Map()
-    val file = io.Source.fromFile(csvPath)
-    for (line <- file.getLines) {
-      val cols = line.split(",").map(_.trim)
-      if (cols.length == 2) {
-        System.err.println(s"${cols(0)} = ${cols(1)}")
-        map += (cols(0) -> cols(1))
-      } else if (cols.length != 0) {
-        System.err.println("Error: Each line should have exactly two values " +
-          "separated by a comma.\n\n" +
-          s"The line\n\n$line\n\ndid notmeet this requirement.")
+    Using(io.Source.fromFile(csvPath.toFile)){lines =>
+      for(line <- lines.getLines) {
+        val cols = line.split(",").map(_.trim)
+        if(cols.length == 2) {
+          System.err.println(s"${cols(0)} = ${cols(1)}")
+          map += (cols(0) -> cols(1))
+        } else if(cols.length != 0) {
+          System.err.println("Error: Each line should have exactly two values " +
+            "separated by a comma.\n\n" +
+            s"The line\n\n$line\n\ndid notmeet this requirement.")
+        }
       }
     }
-    file.close
     
     val lzParametersOutput = new Parameters(
       lzParam = edu.vt.cs.hardware_compressor
-        .lz.Parameters.fromCSV(map("lz")),
+        .lz.Parameters.fromCSV(Path.of(map("lz"))),
       huffmanParam = edu.vt.cs.hardware_compressor
-        .huffman.Parameters.fromCSV(map("huffman")))
+        .huffman.Parameters.fromCSV(Path.of(map("huffman")))
+    )
       
     System.err.println(s"finished getting deflate parameters from $csvPath.")
     return lzParametersOutput

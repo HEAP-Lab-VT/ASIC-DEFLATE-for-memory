@@ -157,7 +157,7 @@ class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
   val buffer = Reg(Vec(bufSize, gen))
   val bufferLength = RegInit(0.U(bufSize.valBits.W))
   val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
-  val last = Reg(Bool())
+  val last = RegInit(Bool(), false.B)
   
   val offReady =
     io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)

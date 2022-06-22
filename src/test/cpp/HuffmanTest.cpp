@@ -370,9 +370,9 @@ static bool doCompressor() {
   }
   
   do {
-    if(jobOut->compressedLen + COMPRESSOR_BITS_OUT > jobOut->compressedCap*8) {
+    if(jobOut->compressedLen + HUFFMAN_COMPRESSOR_BITS_OUT > jobOut->compressedCap*8) {
       size_t newSize = max(jobOut->compressedCap * 2, PAGE_SIZE);
-      while(jobOut->compressedLen + COMPRESSOR_BITS_OUT > newSize*8)
+      while(jobOut->compressedLen + HUFFMAN_COMPRESSOR_BITS_OUT > newSize*8)
         newSize *= 2;
       uint8_t *oldBuf = jobOut->compressed;
       jobOut->compressed = (uint8_t*)realloc(jobOut->compressed, newSize);
@@ -382,8 +382,8 @@ static bool doCompressor() {
     
     // expose input buffer to module
     int remaining = jobIn->rawLen - inBufIdx;
-    compressor->io_in_valid = min(remaining, COMPRESSOR_CHARS_IN);
-    compressor->io_in_last = remaining <= COMPRESSOR_CHARS_IN;
+    compressor->io_in_valid = min(remaining, HUFFMAN_COMPRESSOR_CHARS_IN);
+    compressor->io_in_last = remaining <= HUFFMAN_COMPRESSOR_CHARS_IN;
     // module input is not in array form, so must use an ugly cast
     if(!onlyOut) // prevent segfault
     for(int i = 0; i < compressor->io_in_valid; i++) {
@@ -394,7 +394,7 @@ static bool doCompressor() {
       compressor->io_in_last = false;
     }
     
-    compressor->io_out_ready = COMPRESSOR_BITS_OUT;
+    compressor->io_out_ready = HUFFMAN_COMPRESSOR_BITS_OUT;
     compressor->io_out_restart = false;
     
     // update outputs based on new inputs
@@ -479,10 +479,10 @@ static bool doDecompressor() {
   }
   
   do {
-    if(jobOut->decompressedLen + DECOMPRESSOR_CHARS_OUT >
+    if(jobOut->decompressedLen + HUFFMAN_DECOMPRESSOR_CHARS_OUT >
         jobOut->decompressedCap) {
       size_t newSize = max(jobOut->decompressedCap * 2, PAGE_SIZE);
-      while(jobOut->decompressedLen + DECOMPRESSOR_CHARS_OUT > newSize)
+      while(jobOut->decompressedLen + HUFFMAN_DECOMPRESSOR_CHARS_OUT > newSize)
         newSize *= 2;
       uint8_t *oldBuf = jobOut->decompressed;
       jobOut->decompressed = (uint8_t*)realloc(jobOut->decompressed, newSize);
@@ -492,8 +492,8 @@ static bool doDecompressor() {
     
     // expose input buffer to module
     int remaining = jobIn->compressedLen - inBufIdx;
-    decompressor->io_in_valid = min(remaining, DECOMPRESSOR_BITS_IN);
-    decompressor->io_in_last = remaining <= DECOMPRESSOR_BITS_IN;
+    decompressor->io_in_valid = min(remaining, HUFFMAN_DECOMPRESSOR_BITS_IN);
+    decompressor->io_in_last = remaining <= HUFFMAN_DECOMPRESSOR_BITS_IN;
     // module input is not in array form, so must use an ugly cast
     if(!onlyOut)
     for(int i = 0; i < decompressor->io_in_valid; i++) {
@@ -506,7 +506,7 @@ static bool doDecompressor() {
       decompressor->io_in_last = false;
     }
     
-    decompressor->io_out_ready = DECOMPRESSOR_CHARS_OUT;
+    decompressor->io_out_ready = HUFFMAN_DECOMPRESSOR_CHARS_OUT;
     decompressor->io_out_restart = false;
     
     // update outputs based on new inputs

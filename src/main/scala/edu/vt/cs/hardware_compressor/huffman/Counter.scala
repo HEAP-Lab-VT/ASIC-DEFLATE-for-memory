@@ -21,10 +21,11 @@ class Counter(params: Parameters) extends Module {
     val high = Bool()
   }
   
-  val frequencies = RegInit(VecInit(Seq.fill(params.characterSpace){
+  val frequencies = RegInit(VecInit(Seq.tabulate(params.characterSpace){i =>
     val b = WireDefault(new Entry(), DontCare)
     b.freq := 0.U
     b.high := false.B
+    b.char := i.U
     b
   }))
   val total = Reg(UInt(params.passOneSize.valBits.W))
@@ -40,6 +41,8 @@ class Counter(params: Parameters) extends Module {
       frequencies(char).freq := newFreq
       updates(i).char := char
       updates(i).freq := newFreq
+    } otherwise {
+      updates(i).freq := 0.U
     }
   }
   
@@ -49,15 +52,17 @@ class Counter(params: Parameters) extends Module {
     e.freq := 0.U
     e
   }))
-  val updatedhighChars = WireDefault(highChars)
-  highChars := updatedhighChars
+  // reflects promotion/demotion
+  val shuffledHighChars = WireDefault(highChars)
+  highChars := shuffledHighChars
   
   // update highChars
-  highChars.zip(updatedhighChars).zipWithIndex.foreach{case ((h, uh), i) =>
+  highChars.zip(shuffledHighChars).zipWithIndex.foreach{case ((h, sh), i) =>
     val u = PriorityMux(
-      updates.map(u => u.char === h.char && h.freq =/= 0.U).reverse :+ true.B,
-      updates.reverse :+ h)
-    uh.freq := u.freq
+      updates.map(u => u.char === sh.char && sh.freq =/= 0.U &&
+        u.freq =/= 0.U).reverse :+ true.B,
+      updates.reverse :+ sh)
+    h.freq := u.freq
   }
   
   
@@ -73,12 +78,11 @@ class Counter(params: Parameters) extends Module {
   
   when(promotionChar === frequencies.length.U) {
     // perform demotion
-    highChars.last := updatedhighChars(demotionIdx)
-    highChars(demotionIdx) := updatedhighChars.last
+    shuffledHighChars.last := highChars(demotionIdx)
+    shuffledHighChars(demotionIdx) := highChars.last
   } otherwise {
     // perform promotion and demotion
-    highChars(demotionIdx) := promotion
-    highChars(demotionIdx).char := promotionChar
+    shuffledHighChars(demotionIdx) := promotion
     frequencies(promotionChar).high := true.B
     when(demotion.freq =/= 0.U) {
       frequencies(demotion.char).high := false.B

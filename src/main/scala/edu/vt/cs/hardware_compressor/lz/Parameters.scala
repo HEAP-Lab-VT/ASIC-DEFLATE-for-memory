@@ -3,6 +3,9 @@ package edu.vt.cs.hardware_compressor.lz
 import chisel3._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
+import java.io.PrintWriter
+import java.nio.file.Path
+import scala.util.Using
 
 class Parameters(
     characterBitsParam: Int = 8,
@@ -150,7 +153,7 @@ class Parameters(
   // METHODS
   //----------------------------------------------------------------------------
   
-  def generateCppDefines(sink: PrintWriter, prefix: Option[String] = None,
+  def generateCppDefines(sink: PrintWriter, prefix: String = "",
     conditional: Boolean = false):
   Unit = {
     def define(name: String, definition: Any): Unit = {
@@ -205,28 +208,28 @@ object Parameters {
       minCharsToEncodeParam = minCharsToEncode,
       maxCharsToEncodeParam = maxCharsToEncode)
   
-  def fromCSV(csvPath: String): Parameters = {
+  def fromCSV(csvPath: Path): Parameters = {
     System.err.println(s"getting LZ parameters from $csvPath...")
     var boolMap: Map[String, Boolean] = Map()
     var intMap: Map[String, Int] = Map()
-    val file = io.Source.fromFile(csvPath)
-    for (line <- file.getLines) {
-      val cols = line.split(",").map(_.trim)
-      if (cols.length == 2) {
-        System.err.println(s"${cols(0)} = ${cols(1)}")
-        if (cols(1) == "true" || cols(1) == "false") {
-          boolMap += (cols(0) -> (cols(1) == "true"))
-        } else {
-          intMap += (cols(0) -> cols(1).toInt)
+    Using(io.Source.fromFile(csvPath.toFile)){lines =>
+      for(line <- lines.getLines) {
+        val cols = line.split(",").map(_.trim)
+        if(cols.length == 2) {
+          System.err.println(s"${cols(0)} = ${cols(1)}")
+          if (cols(1) == "true" || cols(1) == "false") {
+            boolMap += (cols(0) -> (cols(1) == "true"))
+          } else {
+            intMap += (cols(0) -> cols(1).toInt)
+          }
+        } else if(cols.length != 0) {
+          System.err.println("Error: Each line must have two values" +
+            " separated by a comma. The line:\n")
+          System.err.println(line)
+          System.err.println("\nDid not meet this requirement")
         }
-      } else if (cols.length != 0) {
-        System.err.println("Error, each line should have two values separated by a comma."+
-          " The line:\n")
-        System.err.println(line)
-        System.err.println("\nDid notmeet this requirement")
       }
     }
-    file.close
 
     val lzParametersOutput = new Parameters(
       characterBitsParam = intMap("characterBits"),

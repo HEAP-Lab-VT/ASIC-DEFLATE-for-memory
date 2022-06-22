@@ -1,9 +1,10 @@
 package edu.vt.cs.hardware_compressor.lz
 
-import edu.vt.cs.hardware_compressor.util._
-import edu.vt.cs.hardware_compressor.util.WidthOps._
 import chisel3._
 import chisel3.util._
+import edu.vt.cs.hardware_compressor.util._
+import edu.vt.cs.hardware_compressor.util.WidthOps._
+import java.nio.file.Path
 
 class LZCompressor(params: Parameters) extends Module {
   
@@ -88,7 +89,7 @@ class LZCompressor(params: Parameters) extends Module {
 }
 
 object LZCompressor extends App {
-  val params = Parameters.fromCSV("configFiles/lz.csv")
+  val params = Parameters.fromCSV(Path.of("configFiles/lz.csv"))
   new chisel3.stage.ChiselStage()
     .emitVerilog(new LZCompressor(params), args)
 }

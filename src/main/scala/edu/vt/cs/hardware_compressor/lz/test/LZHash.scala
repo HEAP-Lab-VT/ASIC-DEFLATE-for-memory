@@ -4,6 +4,7 @@ import edu.vt.cs.hardware_compressor.lz.Parameters
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import scala.util.control.Breaks._
 import java.io._
+import java.nio.file.Path
 
 // Note: This can be compiled into a jar by using the following sbt command:
 // set assembly / mainClass :=
@@ -126,7 +127,7 @@ object LZHash {
 
 
 object LZHashCompress extends App {
-  val params = Parameters.fromCSV("configFiles/lz.csv")
+  val params = Parameters.fromCSV(Path.of("configFiles/lz.csv"))
   val in =
     if(args.length >= 1 && args(0) != "-")
       new BufferedInputStream(new FileInputStream(args(0)))

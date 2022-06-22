@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util.{RegEnable}
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
-import java.io.{File,PrintWriter}
+import java.io.{PrintWriter}
 import java.nio.file.Path
 
 
@@ -130,8 +130,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
     val dataPointerInverted = RegInit(Bool(), false.B)
     val dataBeginWrap = WireDefault(Bool(), false.B)
     val dataEndWrap = WireDefault(Bool(), false.B)
-    when(dataBeginWrap){dataPointerInverted := true.B}
-    when(dataEndWrap){dataPointerInverted := false.B}
+    when(dataBeginWrap =/= dataEndWrap){dataPointerInverted := dataEndWrap}
     when(!dataComplete) {
       // fetch remaining input data
       for(i <- 0 until params.compressorCharsIn) {
@@ -206,7 +205,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
 
 object HuffmanCompressor extends App {
   val params = Parameters.fromCSV(Path.of("configFiles/huffman.csv"))
-  Using(new PrintWriter(new File("build/HuffmanParameters.h"))){pw =>
+  Using(new PrintWriter("build/HuffmanParameters.h")){pw =>
     params.generateCppDefines(pw, "HUFFMAN_")
   }
   new chisel3.stage.ChiselStage()

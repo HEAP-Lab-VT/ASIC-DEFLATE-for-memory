@@ -5,7 +5,7 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import edu.vt.cs.hardware_compressor.util.StrongWhenOps._
-import java.io.{File,PrintWriter}
+import java.io.{PrintWriter}
 import java.nio.file.Path
 
 // Note: This module uses push input and pull output to facilitate block-style
@@ -187,7 +187,7 @@ class HuffmanDecompressor(params: Parameters) extends Module {
 
 object HuffmanDecompressor extends App {
   val params = Parameters.fromCSV(Path.of("configFiles/huffman.csv"))
-  Using(new PrintWriter(new File("build/HuffmanParameters.h"))){pw =>
+  Using(new PrintWriter("build/HuffmanParameters.h")){pw =>
     params.generateCppDefines(pw, "HUFFMAN_")
   }
   new chisel3.stage.ChiselStage()

@@ -5,6 +5,7 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import java.io.PrintWriter
 import java.nio.file.Path
+import scala.util.Using
 
 class Parameters(
   characterBitsParam: Int,
@@ -119,7 +120,7 @@ class Parameters(
   // METHODS
   //----------------------------------------------------------------------------
   
-  def generateCppDefines(sink: PrintWriter, prefix: Option[String] = None,
+  def generateCppDefines(sink: PrintWriter, prefix: String = "",
     conditional: Boolean = false):
   Unit = {
     def define(name: String, definition: Any): Unit = {
@@ -175,20 +176,20 @@ object Parameters {
   
   def fromCSV(csvPath: Path): Parameters = {
     System.err.println(s"getting huffman parameters from $csvPath...")
-    val lines = io.Source.fromFile(csvPath.toFile())
     var map: Map[String, String] = Map()
-    for (line <- lines.getLines) {
-      val cols = line.split(",").map(_.trim)
-      if (cols.length == 2) {
-        System.err.println(s"${cols(0)} = ${cols(1)}")
-        map += (cols(0) -> cols(1))
-      } else if (cols.length != 0) {
-        System.err.println("Error: Each line should have exactly two values " +
-          "separated by a comma.\n\n" +
-          s"The line\n\n$line\n\ndid notmeet this requirement.")
+    Using(io.Source.fromFile(csvPath.toFile())){lines =>
+      for (line <- lines.getLines) {
+        val cols = line.split(",").map(_.trim)
+        if (cols.length == 2) {
+          System.err.println(s"${cols(0)} = ${cols(1)}")
+          map += (cols(0) -> cols(1))
+        } else if (cols.length != 0) {
+          System.err.println("Error: Each line must have exactly two values " +
+            "separated by a comma.\n" +
+            s"The line\n$line\ndoes not meet this requirement.")
+        }
       }
     }
-    lines.close
     
     val params = new Parameters(
       characterBitsParam = map("characterBits").toInt,

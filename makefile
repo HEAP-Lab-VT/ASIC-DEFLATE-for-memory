@@ -12,7 +12,7 @@ src := $(root)/src/main/scala
 srcedu := $(src)/edu/vt/cs/hardware_compressor
 utilsrc := $(shell find $(srcedu)/util)
 lzsources := $(shell find $(srcedu)/lz  -not \( -path $(srcedu)/lz/test -prune \)) $(utilsrc) $(root)/configFiles/lz.csv $(root)/build.sbt
-huffmansources := $(shell find $(srcedu)/huffman $(src)/huffman -not \( \( -path $(src)/huffman/buffers -o -path $(src)/huffman/wrappers \) -prune \) ) $(utilsrc) $(root)/configFiles/huffman-compat.csv $(root)/configFiles/huffman.csv $(root)/build.sbt
+huffmansources := $(shell find $(srcedu)/huffman $(src)/huffman -not \( \( -path $(src)/huffman/buffers -o -path $(src)/huffman/wrappers \) -prune \) ) $(utilsrc) $(root)/configFiles/huffman.csv $(root)/build.sbt
 deflatesources := $(shell find $(srcedu)/deflate) $(utilsrc) $(lzsources) $(huffmansources) $(root)/configFiles/deflate.csv $(root)/build.sbt
 cppsrc := $(root)/verilator
 export cppsrc
@@ -63,10 +63,11 @@ TARGET_FILES := \
 	HuffmanDecompressor.v \
 	DeflateCompressor.v \
 	DeflateDecompressor.v \
+	VHuffmanTest \
+	VDeflateTest \
 	VLZCompressor \
 	VLZDecompressor \
 	VHuffman_fused \
-	VHuffmanTest \
 	VDeflate_fused
 
 .PHONY: $(TARGET_FILES)
