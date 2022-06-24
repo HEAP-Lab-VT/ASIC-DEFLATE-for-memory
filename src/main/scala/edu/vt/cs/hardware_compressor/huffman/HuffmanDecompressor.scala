@@ -74,33 +74,33 @@ class Decoder(params: Parameters) extends Module {
   switch(state) {
   is(metadata) {
     val codeIndex = RegInit(UInt(params.codeCount.idxBits.W), 0.U)
-    val code = codes(codeIndex)
     val unitLength = Wire(UInt())
-    val codeLength = Wire(UInt())
     val valid = unitLength <= io.in.valid
+    val codeLength = Wire(UInt(params.maxCodeLength.valBits.W))
+    val codeCharacter = Wire(UInt(params.characterBits.W))
+    val codeCode = Wire(Vec(params.maxCodeLength, Bool()))
     
     io.out.valid := 0.U
     io.out.last := false.B
     
     codeLength := VecInit(io.in.data.take(params.maxCodeLength.valBits)).asUInt
-    code.length := codeLength
     
     when(codeIndex === 0.U) {
       // escape
       unitLength := params.maxCodeLength.valBits.U +& codeLength
-      code.character := DontCare
-      code.code := io.in.data
+      codeCharacter := DontCare
+      codeCode := io.in.data
         .drop(params.maxCodeLength.valBits)
         .take(params.maxCodeLength)
     } otherwise {
       // regular character
       unitLength :=
         (params.maxCodeLength.valBits + params.characterBits).U +& codeLength
-      code.character := VecInit(io.in.data
+      codeCharacter := VecInit(io.in.data
         .drop(params.maxCodeLength.valBits)
         .take(params.characterBits))
         .asUInt
-      code.code := io.in.data
+      codeCode := io.in.data
         .drop(params.maxCodeLength.valBits + params.characterBits)
         .take(params.maxCodeLength)
     }
@@ -111,14 +111,15 @@ class Decoder(params: Parameters) extends Module {
     when(valid) {
       io.in.ready := unitLength
       codeIndex :@= codeIndex + 1.U
-      when(codeLength === 0.U) {
+      when(codeLength =/= 0.U) {
+        codes(codeIndex).length := codeLength
+        codes(codeIndex).character := codeCharacter
+        codes(codeIndex).code := codeCode
+      } otherwise {
         state := decode
-        code := code
       }
     } otherwise {
       io.in.ready := 0.U
-      // invalidate writes when the input is not valid
-      code := code
     }
   }
   is(decode) {
