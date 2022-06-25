@@ -103,17 +103,17 @@ class Parameters(
   if(decompressorBitsIn < maxCodeLength + characterBits)
     // deadlock
     throw new IllegalArgumentException(
-      s"codeCount: ${codeCount}")
+      s"decompressorBitsIn: ${decompressorBitsIn}")
   
-  if(decompressorBitsIn < 1 + characterBits + maxCodeLength +
+  if(decompressorBitsIn < characterBits + maxCodeLength +
       maxCodeLength.valBits)
     // cannot load metadata
     throw new IllegalArgumentException(
-      s"codeCount: ${codeCount}")
+      s"decompressorBitsIn: ${decompressorBitsIn}")
   
   if(decompressorCharsOut < 1)
     throw new IllegalArgumentException(
-      s"codeCount: ${codeCount}")
+      s"decompressorCharsOut: ${decompressorCharsOut}")
   
   
   //============================================================================
