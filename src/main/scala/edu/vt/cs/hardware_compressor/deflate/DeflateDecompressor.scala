@@ -9,6 +9,7 @@ import edu.vt.cs.hardware_compressor.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import java.io.PrintWriter
 import java.nio.file.Path
+import scala.util._
 
 
 class DeflateDecompressor(params: Parameters) extends Module {

@@ -60,8 +60,12 @@ class Parameters(
   // DECOMPRESSOR PARAMETERS
   //----------------------------------------------------------------------------
   
+  val decompressorLineBits = 32
+  
+  val decompressorLookahead = maxCodeLength - 1
+  
   // input bus width of one way of the decompressor (in characters)
-  val decompressorBitsIn = decompressorBitsInParam
+  val decompressorBitsIn = decompressorLineBits + decompressorLookahead
   
   // output bus width of the decompressor (in characters)
   val decompressorCharsOut = decompressorCharsOutParam

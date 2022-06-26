@@ -7,6 +7,7 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
 import edu.vt.cs.hardware_compressor.util.StrongWhenOps._
 import java.io.{PrintWriter}
 import java.nio.file.Path
+import scala.util._
 
 // Note: This module uses push input and pull output to facilitate block-style
 //  input and output, so one or more universal connectors may be necessary to
@@ -29,7 +30,7 @@ class Decoder(params: Parameters) extends Module {
     val escape = Bool()
     // val fullLength =
     //   UInt((params.maxCodeLength + params.characterBits).valBits.W)
-    def fullLength = length + Mux(escape, params.characterBits.U, 0.U)
+    def fullLength = length +& Mux(escape, params.characterBits.U, 0.U)
     
     // def postInit(): Unit = {
     //   mask := ((1.U << length) - 1.U).asBools.take(params.maxCodeLength)
@@ -129,42 +130,92 @@ class Decoder(params: Parameters) extends Module {
     // current code plus the length of the next code. It continues in this
     // manner to get the lengths of groups of 2,4,8,16,... codes. The lengths of
     // these groups can be combined to get the bit offset of any huffman code.
-    val allDecodes = io.in.data.tails.filter(_.length != 0)
-      .map(decode(_)).toSeq
-    val allLengths = allDecodes.map(_.fullLength)
-    val skipLengths = LazyList.iterate(allLengths)
-      {l => (l zip l.tails.toSeq).map(e => e._1 +& VecInit(e._2)(e._1))}
-      .map(v => VecInit(v))
-      .map(v => WireDefault(v))
-      .zipWithIndex
-      .map(v => v._1.suggestName(s"skipLengths_${v._2}"))
-    def codeOffset(idx: Int): UInt =
-      Iterator.iterate(idx)(_ >> 1).takeWhile(_ != 0)
-        .map(_ & 1).map(_ != 0)
-        .zip(skipLengths)
-        .filter(_._1)
-        .map(_._2)
-        .foldRight(0.U){(l, i) => i +& l(i)}
-    val offsets = (0 to params.decompressorCharsOut).map(codeOffset(_))
     
-    val decodedChars = VecInit(allDecodes.zip(io.in.data.tails.toSeq)
-      .map(d => d._1.trueCharacter(d._2)))
-    
-    io.out.data := offsets.init.map(decodedChars(_))
-    
-    val doCodes = offsets.map(_ <= io.in.valid).tail
-      .zipWithIndex.map(d => d._1 && d._2.U < io.out.ready)
-    val doCount1H = doCodes
-      .+:(true.B)
-      .:+(false.B)
-      .sliding(2)
-      .map(v => v(0) && !v(1))
+    val stall = WireDefault(Bool(), false.B)
+    var bitsThru = Wire(UInt(params.decompressorLineBits.valBits.W))
+    bitsThru := Mux(io.in.valid >= params.decompressorLookahead.U,
+      io.in.valid - params.decompressorLookahead.U,
+      0.U)
+    io.in.ready := Mux(!stall, bitsThru, 0.U)
+    // compute group lengths in a pipeline
+    val decodes = RegEnable(VecInit(io.in.data.tails
+      .take(params.decompressorLineBits)
+      .map(decode(_))
       .toSeq
-    val doCount = OHToUInt(doCount1H)
+    ), !stall)
+    val (jumps, jumpsDelay) = Iterator.iterate(Seq(
+      decodes.zipWithIndex.map(d => d._1.fullLength +& d._2.U)
+    )){jumps =>
+      (jumps ++ jumps.map(_.map{j => VecInit(jumps.last)(j)}))
+        .map(_.map(j => RegEnable(j, !stall)))
+    }
+      .zipWithIndex.map(s => s._1.zipWithIndex.map(j => j._1.zipWithIndex
+        .map(o => o._1.suggestName(s"jumps_${s._2}_${j._2}_${o._2}"))))
+      .zipWithIndex
+      .find(_._1.length >= params.decompressorLineBits)
+      .get
     
-    io.out.valid := doCount
-    io.in.ready := Mux1H(doCount1H, offsets)
-    io.out.last := io.in.last && io.in.ready === io.in.valid
+    bitsThru = ShiftRegister(bitsThru, jumpsDelay + 1, 0.U, !stall)
+    val startOff = RegInit(UInt(params.maxCodeLength.idxBits.W), 0.U)
+    var codeStarts = VecInit(jumps
+      .map(VecInit(_)(startOff))
+      .prepended(0.U)
+      .take(params.decompressorLineBits))
+    var codesThru = PriorityEncoder(codeStarts
+      .map(_ >= bitsThru)
+      .init :+ true.B)
+    val endOff = codeStarts(codesThru)
+    when(!stall){startOff := endOff - bitsThru}
+    
+    codeStarts = RegEnable(codeStarts, !stall)
+    codesThru = RegEnable(codesThru, 0.U, !stall)
+    val characters = ShiftRegister(
+      VecInit(decodes
+        .zip(RegEnable(io.in.data, !stall).tails.seq)
+        .map(d => d._1.trueCharacter(d._2))),
+      jumpsDelay + 1, !stall)
+    
+    val outShift = RegInit(UInt(params.decompressorLineBits.idxBits.W), 0.U)
+    io.out.data := (0 until params.decompressorCharsOut)
+      .map(_.U + outShift)
+      .map(codeStarts(_))
+      .map(characters(_))
+    val rem = codesThru - outShift
+    io.out.valid := rem min params.decompressorCharsOut.U
+    when(io.out.ready < rem) {
+      stall := true.B
+      outShift := outShift + io.in.ready
+    } otherwise {
+      outShift := 0.U
+    }
+    io.out.last := ShiftRegister(io.in.last, jumpsDelay + 2, false.B, !stall) &&
+      io.in.ready >= rem
+    // TODO:
+    //  stall when not all characters fit on the output bus
+    //  manage output ready and valid
+    //  manage input ready and valid
+    //  manage input and output last
+    //  ensure proper startup and shutdown of pipeline
+    
+    
+    // val decodedChars = VecInit(allDecodes.zip(io.in.data.tails.toSeq)
+    //   .map(d => d._1.trueCharacter(d._2)))
+    // 
+    // io.out.data := offsets.init.map(decodedChars(_))
+    // 
+    // val doCodes = offsets.map(_ <= io.in.valid).tail
+    //   .zipWithIndex.map(d => d._1 && d._2.U < io.out.ready)
+    // val doCount1H = doCodes
+    //   .+:(true.B)
+    //   .:+(false.B)
+    //   .sliding(2)
+    //   .map(v => v(0) && !v(1))
+    //   .toSeq
+    // val doCount = OHToUInt(doCount1H)
+    // 
+    // io.out.valid := doCount
+    // io.in.ready := Mux1H(doCount1H, offsets)
+    // io.out.last := io.in.last && io.in.ready === io.in.valid
   }
   }
 }
