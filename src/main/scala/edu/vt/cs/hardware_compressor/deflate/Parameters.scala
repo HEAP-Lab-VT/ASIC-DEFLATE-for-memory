@@ -68,7 +68,7 @@ class Parameters(
     define("DECOMPRESSOR_MID_BUFFER_SIZE", decompressorMidBufferSize)
     
     lz.generateCppDefines(sink, prefix + "LZ_", conditional)
-    huffman.generateCppDefines(sink, prefix + "HUFFMAN_", conditional)
+    huffman.genCppDefines(sink, prefix + "HUFFMAN_", conditional)
   }
 }
 

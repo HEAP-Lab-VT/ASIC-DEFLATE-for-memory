@@ -7,5 +7,5 @@ compressorBitsOut,32
 counterCharsIn,8
 encoderParallelism,8
 passOneSize,4096
-decompressorBitsIn,32
+decompressorLineBits,32
 decompressorCharsOut,8

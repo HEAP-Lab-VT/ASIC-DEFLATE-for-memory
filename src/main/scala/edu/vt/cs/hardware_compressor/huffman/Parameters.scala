@@ -17,7 +17,7 @@ class Parameters(
   counterCharsInParam: Int,
   encoderParallelismParam: Int,
   passOneSizeParam: Int,
-  decompressorBitsInParam: Int,
+  decompressorLineBitsParam: Int,
   decompressorCharsOutParam: Int
 ) {
   
@@ -60,7 +60,7 @@ class Parameters(
   // DECOMPRESSOR PARAMETERS
   //----------------------------------------------------------------------------
   
-  val decompressorLineBits = 32
+  val decompressorLineBits = decompressorLineBitsParam
   
   val decompressorLookahead = maxCodeLength - 1
   
@@ -72,80 +72,45 @@ class Parameters(
   
   
   //============================================================================
-  // ASSERTIONS
-  //----------------------------------------------------------------------------
-  
-  if(characterBits < 1)
-    throw new IllegalArgumentException(
-      s"characterBits: ${characterBits}")
-  
-  if(maxCodeLength < 1)
-    throw new IllegalArgumentException(
-      s"maxCodeLength: ${maxCodeLength}")
-  
-  if(codeCount < 1)
-    throw new IllegalArgumentException(
-      s"codeCount: ${codeCount}")
-  
-  if(counterCharsIn < 1)
-    throw new IllegalArgumentException(
-      s"counterCharsIn: ${counterCharsIn}")
-  
-  if(compressorCharsIn < 1)
-    throw new IllegalArgumentException(
-      s"compressorCharsIn: ${compressorCharsIn}")
-  
-  if(compressorBitsOut < 1)
-    throw new IllegalArgumentException(
-      s"compressorBitsOut: ${compressorBitsOut}")
-  
-  if(compressorBitsOut < maxCodeLength.valBits + characterBits + maxCodeLength)
-    // a metadata chunk does not fit in output
-    throw new IllegalArgumentException(
-      s"compressorBitsOut: ${compressorBitsOut}")
-  
-  if(decompressorBitsIn < maxCodeLength + characterBits)
-    // deadlock
-    throw new IllegalArgumentException(
-      s"decompressorBitsIn: ${decompressorBitsIn}")
-  
-  if(decompressorBitsIn < characterBits + maxCodeLength +
-      maxCodeLength.valBits)
-    // cannot load metadata
-    throw new IllegalArgumentException(
-      s"decompressorBitsIn: ${decompressorBitsIn}")
-  
-  if(decompressorCharsOut < 1)
-    throw new IllegalArgumentException(
-      s"decompressorCharsOut: ${decompressorCharsOut}")
-  
-  
-  //============================================================================
   // METHODS
   //----------------------------------------------------------------------------
   
-  def generateCppDefines(sink: PrintWriter, prefix: String = "",
-    conditional: Boolean = false):
-  Unit = {
-    def define(name: String, definition: Any): Unit = {
+  lazy val map: Map[String, Any] = Map(
+    "characterBits" -> characterBits,
+    "characterSpace" -> characterSpace,
+    "codeCount" -> codeCount,
+    "maxCodeLength" -> maxCodeLength,
+    "compressorCharsIn" -> compressorCharsIn,
+    "compressorBitsOut" -> compressorBitsOut,
+    "counterCharsIn" -> counterCharsIn,
+    "encoderParallelism" -> encoderParallelism,
+    "passOneSize" -> passOneSize,
+    "decompressorLineBits" -> decompressorLineBits,
+    "decompressorLookahead" -> decompressorLookahead,
+    "decompressorBitsIn" -> decompressorBitsIn,
+    "decompressorCharsOut" -> decompressorCharsOut
+  )
+  
+  def print(sink: PrintWriter = new PrintWriter(System.out, true)): Unit = {
+    map.foreachEntry{(name, value) =>
+      sink.println(s"$name = $value")
+    }
+  }
+  
+  def genCppDefines(sink: PrintWriter, prefix: String = "",
+    conditional: Boolean = false
+  ): Unit = {
+    map.foreachEntry{(name, value) =>
+      val dispName = name
+        .replaceAll("\\B[A-Z]", "_$0")
+        .toUpperCase
+        .prependedAll(prefix)
       if(conditional)
-      sink.println(s"#ifndef $prefix$name")
-      sink.println(s"#define $prefix$name $definition")
+      sink.println(s"#ifndef $dispName")
+      sink.println(s"#define $dispName $value")
       if(conditional)
       sink.println(s"#endif")
     }
-    
-    define("CHARACTER_BITS", characterBits)
-    define("CHARACTER_SPACE", characterSpace)
-    define("CODE_COUNT", codeCount)
-    define("MAX_CODE_LENGTH", maxCodeLength)
-    define("COMPRESSOR_CHARS_IN", compressorCharsIn)
-    define("COMPRESSOR_BITS_OUT", compressorBitsOut)
-    define("COUNTER_CHARS_IN", counterCharsIn)
-    define("ENCODER_PARALLELISM", encoderParallelism)
-    define("PASS_ONE_SIZE", passOneSize)
-    define("DECOMPRESSOR_BITS_IN", decompressorBitsIn)
-    define("DECOMPRESSOR_CHARS_OUT", decompressorCharsOut)
   }
 }
 
@@ -161,7 +126,7 @@ object Parameters {
     counterCharsIn: Int,
     encoderParallelism: Int,
     passOneSize: Int,
-    decompressorBitsIn: Int,
+    decompressorLineBits: Int,
     decompressorCharsOut: Int
   ): Parameters =
     new Parameters(
@@ -174,18 +139,16 @@ object Parameters {
       counterCharsInParam = counterCharsIn,
       encoderParallelismParam = encoderParallelism,
       passOneSizeParam = passOneSize,
-      decompressorBitsInParam = decompressorBitsIn,
+      decompressorLineBitsParam = decompressorLineBits,
       decompressorCharsOutParam = decompressorCharsOut
     )
   
   def fromCSV(csvPath: Path): Parameters = {
-    System.err.println(s"getting huffman parameters from $csvPath...")
     var map: Map[String, String] = Map()
     Using(io.Source.fromFile(csvPath.toFile())){lines =>
       for (line <- lines.getLines) {
         val cols = line.split(",").map(_.trim)
         if (cols.length == 2) {
-          System.err.println(s"${cols(0)} = ${cols(1)}")
           map += (cols(0) -> cols(1))
         } else if (cols.length != 0) {
           System.err.println("Error: Each line must have exactly two values " +
@@ -205,11 +168,9 @@ object Parameters {
       counterCharsInParam = map("counterCharsIn").toInt,
       encoderParallelismParam = map("encoderParallelism").toInt,
       passOneSizeParam = map("passOneSize").toInt,
-      decompressorBitsInParam = map("decompressorBitsIn").toInt,
+      decompressorLineBitsParam = map("decompressorLineBits").toInt,
       decompressorCharsOutParam = map("decompressorCharsOut").toInt
     )
-      
-    System.err.println(s"finished getting huffman parameters from $csvPath.")
-    return params
+    params
   }
 }
