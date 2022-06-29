@@ -123,7 +123,7 @@ class Decoder(params: Parameters) extends Module {
       io.in.ready := 0.U
     }
   }
-  is(decode) {
+  is(decode){withReset(state =/= decode || reset.asBool){
     // This calculates the bit offsets for all the huffman codes on io.in. It
     // starts by computing the length of every potential code starting at every
     // bit position. Then, for each bit position, it adds the length of the
@@ -133,9 +133,16 @@ class Decoder(params: Parameters) extends Module {
     
     val stall = WireDefault(Bool(), false.B)
     var bitsThru = Wire(UInt(params.decompressorLineBits.valBits.W))
-    bitsThru := Mux(io.in.valid >= params.decompressorLookahead.U,
-      io.in.valid - params.decompressorLookahead.U,
-      0.U)
+    bitsThru := Mux(!io.in.last,
+      Mux(io.in.valid >= params.decompressorLookahead.U,
+        io.in.valid - params.decompressorLookahead.U,
+        0.U
+      ),
+      Mux(io.in.valid <= params.decompressorLineBits.U,
+        io.in.valid,
+        params.decompressorLineBits.U
+      )
+    )
     io.in.ready := Mux(!stall, bitsThru, 0.U)
     // compute group lengths in a pipeline
     val decodes = RegEnable(VecInit(io.in.data.tails
@@ -159,11 +166,11 @@ class Decoder(params: Parameters) extends Module {
     val startOff = RegInit(UInt(params.maxCodeLength.idxBits.W), 0.U)
     var codeStarts = VecInit(jumps
       .map(VecInit(_)(startOff))
-      .prepended(0.U)
-      .take(params.decompressorLineBits))
+      .take(params.decompressorLineBits)
+      .prepended(startOff))
     var codesThru = PriorityEncoder(codeStarts
       .map(_ >= bitsThru)
-      .init :+ true.B)
+      .init.:+(true.B))
     val endOff = codeStarts(codesThru)
     when(!stall){startOff := endOff - bitsThru}
     
@@ -184,39 +191,15 @@ class Decoder(params: Parameters) extends Module {
     io.out.valid := rem min params.decompressorCharsOut.U
     when(io.out.ready < rem) {
       stall := true.B
-      outShift := outShift + io.in.ready
+      outShift := outShift + io.out.ready
     } otherwise {
       outShift := 0.U
     }
-    io.out.last := ShiftRegister(io.in.last, jumpsDelay + 2, false.B, !stall) &&
-      io.in.ready >= rem
-    // TODO:
-    //  stall when not all characters fit on the output bus
-    //  manage output ready and valid
-    //  manage input ready and valid
-    //  manage input and output last
-    //  ensure proper startup and shutdown of pipeline
-    
-    
-    // val decodedChars = VecInit(allDecodes.zip(io.in.data.tails.toSeq)
-    //   .map(d => d._1.trueCharacter(d._2)))
-    // 
-    // io.out.data := offsets.init.map(decodedChars(_))
-    // 
-    // val doCodes = offsets.map(_ <= io.in.valid).tail
-    //   .zipWithIndex.map(d => d._1 && d._2.U < io.out.ready)
-    // val doCount1H = doCodes
-    //   .+:(true.B)
-    //   .:+(false.B)
-    //   .sliding(2)
-    //   .map(v => v(0) && !v(1))
-    //   .toSeq
-    // val doCount = OHToUInt(doCount1H)
-    // 
-    // io.out.valid := doCount
-    // io.in.ready := Mux1H(doCount1H, offsets)
-    // io.out.last := io.in.last && io.in.ready === io.in.valid
-  }
+    io.out.last := ShiftRegister(
+      io.in.last && io.in.valid <= params.decompressorLineBits.U,
+      jumpsDelay + 2, false.B, !stall
+    ) && io.out.ready >= rem
+  }}
   }
 }
 
