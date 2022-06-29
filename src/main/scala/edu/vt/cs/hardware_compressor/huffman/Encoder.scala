@@ -52,9 +52,10 @@ class Encoder(params: Parameters) extends Module {
       outputLength := (params.maxCodeLength.valBits + params.characterBits).U +&
         code.codeLength
       
-      when(code.codeLength === 0.U || iteration === params.codeCount.U) {
-        // The tree generator puts all the zero lengths last, so when we see
-        // one, we are done.
+      when(code.codeLength === 0.U) {
+        outputLength := 0.U
+      }
+      when(iteration === params.codeCount.U) {
         // terminate metadata with a zero codeword length
         val outData = 0.U(params.maxCodeLength.valBits.W).asBools
         (io.out.data zip outData).foreach(d => d._1 := d._2)

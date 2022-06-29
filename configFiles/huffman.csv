@@ -1,7 +1,7 @@
 characterBits,8
 characterSpace,256
 codeCount,16
-maxCodeLength,15
+maxCodeLength,7
 compressorCharsIn,8
 compressorBitsOut,32
 counterCharsIn,8

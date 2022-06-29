@@ -36,6 +36,8 @@ class Parameters(
   // maximum number of bits in a huffman code
   val maxCodeLength = maxCodeLengthParam
   
+  val maxFullSymbolLength = maxCodeLengthParam + characterBits
+  
   
   //============================================================================
   // COMPRESSOR PARAMETERS
@@ -62,7 +64,7 @@ class Parameters(
   
   val decompressorLineBits = decompressorLineBitsParam
   
-  val decompressorLookahead = maxCodeLength - 1
+  val decompressorLookahead = maxFullSymbolLength - 1
   
   // input bus width of one way of the decompressor (in characters)
   val decompressorBitsIn = decompressorLineBits + decompressorLookahead
@@ -80,6 +82,7 @@ class Parameters(
     "characterSpace" -> characterSpace,
     "codeCount" -> codeCount,
     "maxCodeLength" -> maxCodeLength,
+    "maxFullSymbolLength" -> maxFullSymbolLength,
     "compressorCharsIn" -> compressorCharsIn,
     "compressorBitsOut" -> compressorBitsOut,
     "counterCharsIn" -> counterCharsIn,

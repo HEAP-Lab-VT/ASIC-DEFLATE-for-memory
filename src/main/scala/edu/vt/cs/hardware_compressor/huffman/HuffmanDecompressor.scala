@@ -163,7 +163,7 @@ class Decoder(params: Parameters) extends Module {
       .get
     
     bitsThru = ShiftRegister(bitsThru, jumpsDelay + 1, 0.U, !stall)
-    val startOff = RegInit(UInt(params.maxCodeLength.idxBits.W), 0.U)
+    val startOff = RegInit(UInt(params.maxFullSymbolLength.idxBits.W), 0.U)
     var codeStarts = VecInit(jumps
       .map(VecInit(_)(startOff))
       .take(params.decompressorLineBits)

@@ -113,6 +113,21 @@ class TreeGenerator(params: Parameters) extends Module {
         n.codeLength := l.codeLength + 1.U
         n.root := least(0).idx
       }
+      // depth truncation
+      when(least.map(_.idx === l.root).reduce(_ || _) &&
+        l.codeLength === params.maxCodeLength.U
+      ) {
+        when((l.code(params.maxCodeLength - 1) === false.B ||
+          l.code(params.maxCodeLength - 2, 0) =/= leaves.last.code) &&
+          (l ne leaves.last).B
+        ) {
+          n.code := DontCare
+          n.codeLength := 0.U
+          n.root := least(1).idx
+        } otherwise {
+          n.codeLength := params.maxCodeLength.U
+        }
+      }
     }
   }
   
