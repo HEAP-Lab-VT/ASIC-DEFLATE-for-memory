@@ -294,15 +294,19 @@ int main(int argc, const char **argv, char **env) {
   }
   
   fprintf(reportfile, "***** FINISHED *****\n");
-  fprintf(reportfile, "dump: %s\n", options.dump);
+  fprintf(reportfile, "dumps: %s\n", options.dump);
   fprintf(reportfile, "total (bytes): %lu\n", summary.totalSize);
   fprintf(reportfile, "total (pages): %d\n", summary.totalPages);
   fprintf(reportfile, "non-zero (bytes): %lu\n", summary.nonzeroSize);
   fprintf(reportfile, "non-zero (pages): %d\n", summary.nonzeroPages);
   fprintf(reportfile, "passed (pages): %d\n", summary.passedPages);
   fprintf(reportfile, "failed (pages): %d\n", summary.failedPages);
+  fprintf(reportfile, "compressed (bits): %lu\n", summary.compressedSize);
+  fprintf(reportfile, "compression ratio: %f\n", (double)summary.nonzeroSize / summary.compressedSize * 8);
   fprintf(reportfile, "C-cycles: %d\n", summary.compressorCycles);
+  fprintf(reportfile, "C-throughput (B/c): %f\n", (double)summary.nonzeroSize / summary.compressorCycles);
   fprintf(reportfile, "D-cycles: %d\n", summary.decompressorCycles);
+  fprintf(reportfile, "D-throughput (B/c): %f\n", (double)summary.nonzeroSize / summary.decompressorCycles);
   
   cleanup();
   

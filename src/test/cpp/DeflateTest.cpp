@@ -304,9 +304,9 @@ int main(int argc, const char **argv, char **env) {
   fprintf(reportfile, "compressed (bits): %lu\n", summary.compressedSize);
   fprintf(reportfile, "compression ratio: %f\n", (double)summary.nonzeroSize / summary.compressedSize * 8);
   fprintf(reportfile, "C-cycles: %d\n", summary.compressorCycles);
-  fprintf(reportfile, "C-throughupt (B/c): %f\n", (double)summary.nonzeroSize / summary.compressorCycles);
+  fprintf(reportfile, "C-throughput (B/c): %f\n", (double)summary.nonzeroSize / summary.compressorCycles);
   fprintf(reportfile, "D-cycles: %d\n", summary.decompressorCycles);
-  fprintf(reportfile, "D-throughupt (B/c): %f\n", (double)summary.nonzeroSize / summary.decompressorCycles);
+  fprintf(reportfile, "D-throughput (B/c): %f\n", (double)summary.nonzeroSize / summary.decompressorCycles);
   
   cleanup();
   
