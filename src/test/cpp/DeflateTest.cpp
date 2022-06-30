@@ -380,7 +380,7 @@ static bool doCompressor() {
         newSize *= 2;
       uint8_t *oldBuf = jobOut->compressed;
       jobOut->compressed = (uint8_t*)realloc(jobOut->compressed, newSize);
-      assert(jobOut->compressed != oldBuf);
+      assert(jobOut->compressed != NULL);
       jobOut->compressedCap = newSize;
     }
     
@@ -490,7 +490,7 @@ static bool doDecompressor() {
         newSize *= 2;
       uint8_t *oldBuf = jobOut->decompressed;
       jobOut->decompressed = (uint8_t*)realloc(jobOut->decompressed, newSize);
-      assert(jobOut->compressed != oldBuf);
+      assert(jobOut->compressed != NULL);
       jobOut->decompressedCap = newSize;
     }
     
