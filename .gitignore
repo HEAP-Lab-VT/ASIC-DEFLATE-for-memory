@@ -1,28 +1,6 @@
-$*
-*.fir
-/*.json
-/*.v
-/*.dump
-/*.txt
-/*.vcd
-/*.out
-*.anno.json
-.bloop/
-.metals/
-project/
-!.gitignore
-*.un~
-.gitignore~
-/*.f
-/*.log
-obj_dir/*.[adho]
-obj_dir/V*
-obj_dir/*.mk
-testbenches/*.vvp
-testbenches/*.fst
-target/
-*.un~
-rust/*/target
-*.vvp
-*.fst
-.vscode/
+
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build

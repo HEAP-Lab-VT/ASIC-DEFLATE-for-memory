@@ -1,0 +1,130 @@
+
+plugins {
+  id "scala"
+  id "application"
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation "org.scala-lang:scala-library:2.13.6"
+  implementation "edu.berkeley.cs:chisel3_2.13:3.5.3"
+  scalaCompilerPlugins "edu.berkeley.cs:chisel3-plugin_2.13.8:3.5.3"
+}
+
+application {
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  applicationDefaultJvmArgs = ["-Xmx12g"]
+}
+
+tasks.register("genLZCompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate LZ compressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--module", "LZCompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/LZCompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/lz.csv")
+  outputs.files("$buildDir/LZCompressor.v")
+}
+tasks.register("genLZDecompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate LZ decompressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--module", "LZDecompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/LZDecompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/lz.csv")
+  outputs.files("$buildDir/LZDecompressor.v")
+}
+tasks.register("genHuffmanCompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Huffman compressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--module", "HuffmanCompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/HuffmanCompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/huffman.csv")
+  outputs.files("$buildDir/HuffmanCompressor.v")
+}
+tasks.register("genHuffmanDecompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Huffman decompressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--module", "genHuffmanDecompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/genHuffmanDecompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/huffman.csv")
+  outputs.files("$buildDir/HuffmanDecompressor.v")
+}
+tasks.register("genDeflateCompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Deflate compressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--module", "DeflateCompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/DeflateCompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/deflate.csv")
+  outputs.files("$buildDir/DeflateCompressor.v")
+}
+tasks.register("genDeflateDecompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Deflate decompressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--module", "DeflateDecompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/DeflateDecompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/deflate.csv")
+  outputs.files("$buildDir/DeflateDecompressor.v")
+}
+
+tasks.register("genLZ") {
+  dependsOn "genLZCompressor"
+  dependsOn "genLZDecompressor"
+}
+tasks.register("genHuffman") {
+  dependsOn "genHuffmanCompressor"
+  dependsOn "genHuffmanDecompressor"
+}
+tasks.register("genDeflate") {
+  dependsOn "genDeflateCompressor"
+  dependsOn "genDeflateDecompressor"
+}
