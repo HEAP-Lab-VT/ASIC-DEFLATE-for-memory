@@ -1,7 +1,11 @@
 #include "verilated.h"
+#include <stddef.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
+#include <assert.h>
 
 
 // <editor-fold> ugly pre-processor macros
@@ -293,7 +297,7 @@ int main(int argc, const char **argv, char **env) {
     doFinalize();
   }
   
-  fprintf(reportfile, "***** FINISHED *****\n");
+  fprintf(reportfile, "\n***** SUMMARY *****\n");
   fprintf(reportfile, "dumps: %s\n", options.dump);
   fprintf(reportfile, "total (bytes): %lu\n", summary.totalSize);
   fprintf(reportfile, "total (pages): %d\n", summary.totalPages);
@@ -301,6 +305,7 @@ int main(int argc, const char **argv, char **env) {
   fprintf(reportfile, "non-zero (pages): %d\n", summary.nonzeroPages);
   fprintf(reportfile, "passed (pages): %d\n", summary.passedPages);
   fprintf(reportfile, "failed (pages): %d\n", summary.failedPages);
+  fprintf(reportfile, "pass rate: %f\n", (double)summary.passedPages / summary.nonzeroPages);
   fprintf(reportfile, "compressed (bits): %lu\n", summary.compressedSize);
   fprintf(reportfile, "compression ratio: %f\n", (double)summary.nonzeroSize / summary.compressedSize * 8);
   fprintf(reportfile, "C-cycles: %d\n", summary.compressorCycles);

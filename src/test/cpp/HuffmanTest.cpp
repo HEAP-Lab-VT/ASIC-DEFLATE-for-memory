@@ -301,6 +301,7 @@ int main(int argc, const char **argv, char **env) {
   fprintf(reportfile, "non-zero (pages): %d\n", summary.nonzeroPages);
   fprintf(reportfile, "passed (pages): %d\n", summary.passedPages);
   fprintf(reportfile, "failed (pages): %d\n", summary.failedPages);
+  fprintf(reportfile, "pass rate: %f\n", (double)summary.passedPages / summary.nonzeroPages);
   fprintf(reportfile, "compressed (bits): %lu\n", summary.compressedSize);
   fprintf(reportfile, "compression ratio: %f\n", (double)summary.nonzeroSize / summary.compressedSize * 8);
   fprintf(reportfile, "C-cycles: %d\n", summary.compressorCycles);

@@ -1,9 +1,12 @@
 
 root = $(shell pwd)
+export root
 build ?= build
 override build := $(abspath $(build))
-export root
 export build
+test ?= $(build)/test
+override test := $(abspath $(test))
+export test
 
 TRACE ?= 
 export TRACE
@@ -35,6 +38,9 @@ _SBTFLAGS += -Dsbt.server.forcestart=true # workaround for SBT bug
 _SBTFLAGS += -Dsbt.color=always
 
 _SBTRUNFLAGS := $(SBTRUNFLAGS)
+
+export _SBTFLAGS
+export _SBTRUNFLAGS
 
 
 all: lz huffman deflate
@@ -110,14 +116,24 @@ $(build)/VDeflate_fused: $(build)/vlmakefile $(build)/DeflateCompressor.v $(buil
 .PHONY: $(build)/VHuffmanTest $(build)/VDeflateTest $(build)/VLZCompressor $(build)/VLZDecompressor $(build)/VHuffman_fused $(build)/VDeflate_fused
 
 
-# copy c++ sources into build directory
-# $(patsubst $(cppsrc)/%,$(build)/%,$(wildcard $(cppsrc)/*)): $(build)/%: $(cppsrc)/%
-# 	cp $< $@
-# $(build)/LZCompressor.cpp $(build)/LZCompressor.cpp: $(cppsrc)/DecoupledStreamModule.cpp
-# 	cp $< $@
-
-
 $(build)/vlmakefile: vlmakefile $(build)
 	cp vlmakefile $(build)/vlmakefile
 $(build):
 	mkdir -p $(build)
+
+
+$(test)/testmakefile: testmakefile $(test)
+	cp testmakefile $(test)/testmakefile
+$(test):
+	mkdir -p $(test)
+
+.PHONY: test-deflate test-huffman
+
+BENCHMARKS ?= $(wildcard ../benchmarks/test/*)
+override BENCHMARKS := $(abspath $(BENCHMARKS))
+export BENCHMARKS
+
+$(test)/test-deflate-report.txt: $(test)/testmakefile $(build)/VDeflateTest $(BENCHMARKS)
+	$(MAKE) -C $(test) -f testmakefile $@
+
+test-deflate: $(test)/test-deflate-report.txt
