@@ -5,6 +5,7 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import java.io.PrintWriter
 import java.nio.file.Path
+import scala.collection.{mutable, Map, SortedMap}
 import scala.util.Using
 
 class Parameters(
@@ -74,10 +75,10 @@ class Parameters(
   
   
   //============================================================================
-  // METHODS
+  // PRINTING
   //----------------------------------------------------------------------------
   
-  lazy val map: Map[String, Any] = Map(
+  lazy val map: Map[String, Any] = SortedMap(
     "characterBits" -> characterBits,
     "characterSpace" -> characterSpace,
     "codeCount" -> codeCount,
@@ -147,14 +148,15 @@ object Parameters {
     )
   
   def fromCSV(csvPath: Path): Parameters = {
-    var map: Map[String, String] = Map()
+    var map: mutable.Map[String, String] = mutable.Map.empty
     Using(io.Source.fromFile(csvPath.toFile())){lines =>
       for (line <- lines.getLines()) {
         val cols = line.split(",").map(_.trim)
         if (cols.length == 2) {
           map += (cols(0) -> cols(1))
         } else if (cols.length != 0) {
-          System.err.println("Error: Each line must have exactly two values " +
+          System.err.println("Warning: " +
+            "Each line must have exactly two values " +
             "separated by a comma.\n" +
             s"The line\n$line\ndoes not meet this requirement.")
         }

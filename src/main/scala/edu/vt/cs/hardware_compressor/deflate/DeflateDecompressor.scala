@@ -58,7 +58,7 @@ class DeflateDecompressor(params: Parameters) extends Module {
 object DeflateDecompressor extends App {
   val params = Parameters.fromCSV(Path.of("configFiles/deflate.csv"))
   Using(new PrintWriter("build/DeflateParameters.h")){pw =>
-    params.generateCppDefines(pw, "DEFLATE_")
+    params.genCppDefines(pw, "DEFLATE_")
   }
   new chisel3.stage.ChiselStage()
     .emitVerilog(new DeflateDecompressor(params), args)

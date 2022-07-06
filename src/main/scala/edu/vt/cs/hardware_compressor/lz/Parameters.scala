@@ -5,6 +5,7 @@ import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import java.io.PrintWriter
 import java.nio.file.Path
+import scala.collection.{mutable, Map, SortedMap}
 import scala.util.Using
 
 class Parameters(
@@ -150,38 +151,50 @@ class Parameters(
   
   
   //============================================================================
-  // METHODS
+  // PRINTING
   //----------------------------------------------------------------------------
   
-  def generateCppDefines(sink: PrintWriter, prefix: String = "",
-    conditional: Boolean = false):
-  Unit = {
-    def define(name: String, definition: Any): Unit = {
+  lazy val map: Map[String, Any] = SortedMap(
+    "characterBits" -> characterBits,
+    "compressorCharsIn" -> compressorCharsIn,
+    "compressorCharsOut" -> compressorCharsOut,
+    "decompressorCharsIn" -> decompressorCharsIn,
+    "decompressorCharsOut" -> decompressorCharsOut,
+    "camSize" -> camSize,
+    "camCharsIn" -> camCharsIn,
+    "camLookahead" -> camLookahead,
+    "camCharsPerCycle" -> camCharsPerCycle,
+    "camBufSize" -> camBufSize,
+    "escapeCharacter" -> escapeCharacter,
+    "minCharsToEncode" -> minCharsToEncode,
+    "maxCharsToEncode" -> maxCharsToEncode,
+    "minEncodingChars" -> minEncodingChars,
+    "minEncodingBits" -> minEncodingBits,
+    "minEncodingLengthBits" -> minEncodingLengthBits,
+    "extraCharacterLengthIncrease" -> extraCharacterLengthIncrease,
+    "maxCharsInMinEncoding" -> maxCharsInMinEncoding
+  )
+  
+  def print(sink: PrintWriter = new PrintWriter(System.out, true)): Unit = {
+    map.foreachEntry{(name, value) =>
+      sink.println(s"$name = $value")
+    }
+  }
+  
+  def genCppDefines(sink: PrintWriter, prefix: String = "",
+    conditional: Boolean = false
+  ): Unit = {
+    map.foreachEntry{(name, value) =>
+      val dispName = name
+        .replaceAll("\\B[A-Z]", "_$0")
+        .toUpperCase
+        .prependedAll(prefix)
       if(conditional)
-      sink.println(s"#ifndef $prefix$name")
-      sink.println(s"#define $prefix$name $definition")
+      sink.println(s"#ifndef $dispName")
+      sink.println(s"#define $dispName $value")
       if(conditional)
       sink.println(s"#endif")
     }
-    
-    define("CHARACTER_BITS", characterBits)
-    define("COMPRESSOR_CHARS_IN", compressorCharsIn)
-    define("COMPRESSOR_CHARS_OUT", compressorCharsOut)
-    define("DECOMPRESSOR_CHARS_IN", decompressorCharsIn)
-    define("DECOMPRESSOR_CHARS_OUT", decompressorCharsOut)
-    define("CAM_SIZE", camSize)
-    define("CAM_CHARS_IN", camCharsIn)
-    define("CAM_LOOKAHEAD", camLookahead)
-    define("CAM_CHARS_PER_CYCLE", camCharsPerCycle)
-    define("CAM_BUF_SIZE", camBufSize)
-    define("ESCAPE_CHARACTER", escapeCharacter)
-    define("MIN_CHARS_TO_ENCODE", minCharsToEncode)
-    define("MAX_CHARS_TO_ENCODE", maxCharsToEncode)
-    define("MIN_ENCODING_CHARS", minEncodingChars)
-    define("MIN_ENCODING_BITS", minEncodingBits)
-    define("MIN_ENCODING_LENGTH_BITS", minEncodingLengthBits)
-    define("EXTRA_CHARACTER_LENGTH_INCREASE", extraCharacterLengthIncrease)
-    define("MAX_CHARS_IN_MIN_ENCODING", maxCharsInMinEncoding)
   }
 }
 
@@ -209,40 +222,32 @@ object Parameters {
       maxCharsToEncodeParam = maxCharsToEncode)
   
   def fromCSV(csvPath: Path): Parameters = {
-    System.err.println(s"getting LZ parameters from $csvPath...")
-    var boolMap: Map[String, Boolean] = Map()
-    var intMap: Map[String, Int] = Map()
-    Using(io.Source.fromFile(csvPath.toFile)){lines =>
-      for(line <- lines.getLines()) {
+    var map: mutable.Map[String, String] = mutable.Map.empty
+    Using(io.Source.fromFile(csvPath.toFile())){lines =>
+      for (line <- lines.getLines()) {
         val cols = line.split(",").map(_.trim)
-        if(cols.length == 2) {
-          System.err.println(s"${cols(0)} = ${cols(1)}")
-          if (cols(1) == "true" || cols(1) == "false") {
-            boolMap += (cols(0) -> (cols(1) == "true"))
-          } else {
-            intMap += (cols(0) -> cols(1).toInt)
-          }
-        } else if(cols.length != 0) {
-          System.err.println("Error: Each line must have two values" +
-            " separated by a comma. The line:\n")
-          System.err.println(line)
-          System.err.println("\nDid not meet this requirement")
+        if (cols.length == 2) {
+          map += (cols(0) -> cols(1))
+        } else if (cols.length != 0) {
+          System.err.println("Warning: " +
+            "Each line must have exactly two values " +
+            "separated by a comma.\n" +
+            s"The line\n$line\ndoes not meet this requirement.")
         }
       }
     }
 
     val lzParametersOutput = new Parameters(
-      characterBitsParam = intMap("characterBits"),
-      compressorCharsInParam = intMap("compressorCharsIn"),
-      compressorCharsOutParam = intMap("compressorCharsOut"),
-      decompressorCharsInParam = intMap("decompressorCharsIn"),
-      decompressorCharsOutParam = intMap("decompressorCharsOut"),
-      camSizeParam = intMap("camSize"),
-      escapeCharacterParam = intMap("escapeCharacter"),
-      minCharsToEncodeParam = intMap("minCharsToEncode"),
-      maxCharsToEncodeParam = intMap("maxCharsToEncode"))
-      
-    System.err.println(s"finished getting LZ parameters from $csvPath.")
+      characterBitsParam = map("characterBits").toInt,
+      compressorCharsInParam = map("compressorCharsIn").toInt,
+      compressorCharsOutParam = map("compressorCharsOut").toInt,
+      decompressorCharsInParam = map("decompressorCharsIn").toInt,
+      decompressorCharsOutParam = map("decompressorCharsOut").toInt,
+      camSizeParam = map("camSize").toInt,
+      escapeCharacterParam = map("escapeCharacter").toInt,
+      minCharsToEncodeParam = map("minCharsToEncode").toInt,
+      maxCharsToEncodeParam = map("maxCharsToEncode").toInt
+    )
     return lzParametersOutput
   }
 }

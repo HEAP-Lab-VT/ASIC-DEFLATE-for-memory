@@ -6,6 +6,7 @@ import edu.vt.cs._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 import java.io.PrintWriter
 import java.nio.file.Path
+import scala.collection.{mutable, Map, SortedMap}
 import scala.util.Using
 
 class Parameters(
@@ -46,29 +47,41 @@ class Parameters(
   
   
   //============================================================================
-  // METHODS
+  // PRINTING
   //----------------------------------------------------------------------------
   
-  def generateCppDefines(sink: PrintWriter, prefix: String = "",
-    conditional: Boolean = false):
-  Unit = {
-    def define(name: String, definition: Any): Unit = {
+  lazy val map: Map[String, Any] = (SortedMap(
+    "characterBits" -> characterBits,
+    "compressorCharsIn" -> compressorCharsIn,
+    "compressorBitsOut" -> compressorBitsOut,
+    "decompressorBitsIn" -> decompressorBitsIn,
+    "decompressorCharsOut" -> decompressorCharsOut,
+    "decompressorMidBufferSize" -> decompressorMidBufferSize
+  )
+    ++ lz.map.map{case (k, v) => ("lz." + k, v)}
+    ++ huffman.map.map{case (k, v) => ("huffman." + k, v)})
+  
+  def print(sink: PrintWriter = new PrintWriter(System.out, true)): Unit = {
+    map.foreachEntry{(name, value) =>
+      sink.println(s"$name = $value")
+    }
+  }
+  
+  def genCppDefines(sink: PrintWriter, prefix: String = "",
+    conditional: Boolean = false
+  ): Unit = {
+    map.foreachEntry{(name, value) =>
+      val dispName = name
+        .replaceAll("\\B[A-Z]", "_$0")
+        .replaceAll("[ .]", "_")
+        .toUpperCase
+        .prependedAll(prefix)
       if(conditional)
-      sink.println(s"#ifndef $prefix$name")
-      sink.println(s"#define $prefix$name $definition")
+      sink.println(s"#ifndef $dispName")
+      sink.println(s"#define $dispName $value")
       if(conditional)
       sink.println(s"#endif")
     }
-    
-    define("CHARACTER_BITS", characterBits)
-    define("COMPRESSOR_CHARS_IN", compressorCharsIn)
-    define("COMPRESSOR_BITS_OUT", compressorBitsOut)
-    define("DECOMPRESSOR_BITS_IN", decompressorBitsIn)
-    define("DECOMPRESSOR_CHARS_OUT", decompressorCharsOut)
-    define("DECOMPRESSOR_MID_BUFFER_SIZE", decompressorMidBufferSize)
-    
-    lz.generateCppDefines(sink, prefix + "LZ_", conditional)
-    huffman.genCppDefines(sink, prefix + "HUFFMAN_", conditional)
   }
 }
 
@@ -83,18 +96,17 @@ object Parameters {
       huffmanParam = huffman)
   
   def fromCSV(csvPath: Path): Parameters = {
-    System.err.println(s"getting deflate parameters from $csvPath...")
-    var map: Map[String, String] = Map()
+    var map: Map[String, String] = mutable.Map.empty
     Using(io.Source.fromFile(csvPath.toFile)){lines =>
       for(line <- lines.getLines()) {
         val cols = line.split(",").map(_.trim)
         if(cols.length == 2) {
-          System.err.println(s"${cols(0)} = ${cols(1)}")
           map += (cols(0) -> cols(1))
         } else if(cols.length != 0) {
-          System.err.println("Error: Each line should have exactly two values " +
-            "separated by a comma.\n\n" +
-            s"The line\n\n$line\n\ndid notmeet this requirement.")
+          System.err.println("Warning: " +
+            "Each line must have exactly two values " +
+            "separated by a comma.\n" +
+            s"The line\n$line\ndoes not meet this requirement.")
         }
       }
     }
@@ -105,8 +117,6 @@ object Parameters {
       huffmanParam = edu.vt.cs.hardware_compressor
         .huffman.Parameters.fromCSV(Path.of(map("huffman")))
     )
-      
-    System.err.println(s"finished getting deflate parameters from $csvPath.")
     return lzParametersOutput
   }
 }

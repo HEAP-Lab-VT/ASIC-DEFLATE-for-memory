@@ -28,6 +28,7 @@ tasks.register("genLZCompressor", JavaExec) {
   args = [
     "--module", "LZCompressor",
     "--config", "$projectDir/configFiles/lz.csv",
+    "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/LZCompressor.v"
@@ -44,6 +45,7 @@ tasks.register("genLZDecompressor", JavaExec) {
   args = [
     "--module", "LZDecompressor",
     "--config", "$projectDir/configFiles/lz.csv",
+    "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/LZDecompressor.v"
@@ -60,6 +62,7 @@ tasks.register("genHuffmanCompressor", JavaExec) {
   args = [
     "--module", "HuffmanCompressor",
     "--config", "$projectDir/configFiles/huffman.csv",
+    "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/HuffmanCompressor.v"
@@ -76,6 +79,7 @@ tasks.register("genHuffmanDecompressor", JavaExec) {
   args = [
     "--module", "HuffmanDecompressor",
     "--config", "$projectDir/configFiles/huffman.csv",
+    "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/HuffmanDecompressor.v"
@@ -92,6 +96,7 @@ tasks.register("genDeflateCompressor", JavaExec) {
   args = [
     "--module", "DeflateCompressor",
     "--config", "$projectDir/configFiles/deflate.csv",
+    "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/DeflateCompressor.v"
@@ -108,6 +113,7 @@ tasks.register("genDeflateDecompressor", JavaExec) {
   args = [
     "--module", "DeflateDecompressor",
     "--config", "$projectDir/configFiles/deflate.csv",
+    "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/DeflateDecompressor.v"

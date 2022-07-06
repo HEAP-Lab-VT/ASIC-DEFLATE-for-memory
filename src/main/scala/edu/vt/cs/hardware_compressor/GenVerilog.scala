@@ -10,6 +10,7 @@ object GenVerilog extends App {
     var hdlType: Option[String] = None
     var configFile: Option[String] = None
     var chiselArgs: Iterable[String] = Seq.empty
+    var printConfig: Boolean = false
   }
   
   private var argsList: List[String] = args.toList
@@ -20,6 +21,12 @@ object GenVerilog extends App {
       argsList = rem
     case "--config" :: config :: rem =>
       options.configFile = Some(config)
+      argsList = rem
+    case "--print-config" :: rem =>
+      options.printConfig = true
+      argsList = rem
+    case "--no-print-config" :: rem =>
+      options.printConfig = false
       argsList = rem
     case "--" :: rem =>
       options.chiselArgs = options.chiselArgs ++ rem
@@ -36,26 +43,32 @@ object GenVerilog extends App {
   options.modName.get match {
     case "LZCompressor" =>
       val params = lz.Parameters.fromCSV(Path.of(options.configFile.get))
+      if(options.printConfig) params.print()
       emitter(new lz.LZCompressor(params),
         options.chiselArgs.toArray)
     case "LZDecompressor" =>
       val params = lz.Parameters.fromCSV(Path.of(options.configFile.get))
+      if(options.printConfig) params.print()
       emitter(new lz.LZCompressor(params),
         options.chiselArgs.toArray)
     case "HuffmanCompressor" =>
       val params = huffman.Parameters.fromCSV(Path.of(options.configFile.get))
+      if(options.printConfig) params.print()
       emitter(new huffman.HuffmanCompressor(params),
         options.chiselArgs.toArray)
     case "HuffmanDecompressor" =>
       val params = huffman.Parameters.fromCSV(Path.of(options.configFile.get))
+      if(options.printConfig) params.print()
       emitter(new huffman.HuffmanDecompressor(params),
         options.chiselArgs.toArray)
     case "DeflateCompressor" =>
       val params = deflate.Parameters.fromCSV(Path.of(options.configFile.get))
+      if(options.printConfig) params.print()
       emitter(new deflate.DeflateCompressor(params),
         options.chiselArgs.toArray)
     case "DeflateDecompressor" =>
       val params = deflate.Parameters.fromCSV(Path.of(options.configFile.get))
+      if(options.printConfig) params.print()
       emitter(new deflate.DeflateDecompressor(params),
         options.chiselArgs.toArray)
     case a => throw new IllegalArgumentException(a)
