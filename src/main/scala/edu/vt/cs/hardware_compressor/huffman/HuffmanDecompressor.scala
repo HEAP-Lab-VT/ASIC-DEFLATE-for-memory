@@ -178,7 +178,7 @@ class Decoder(params: Parameters) extends Module {
     codesThru = RegEnable(codesThru, 0.U, !stall)
     val characters = ShiftRegister(
       VecInit(decodes
-        .zip(RegEnable(io.in.data, !stall).tails.seq)
+        .zip(RegEnable(io.in.data, !stall).tails)
         .map(d => d._1.trueCharacter(d._2))),
       jumpsDelay + 1, !stall)
     

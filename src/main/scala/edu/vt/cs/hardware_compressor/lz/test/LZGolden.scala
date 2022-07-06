@@ -49,9 +49,9 @@ object LZGolden {
   }
   
   def compress(data: Seq[Int], params: Parameters): Seq[Int] =
-    Stream.iterate((data.toStream, Seq.empty[Int], Seq.empty[Int]))
+    LazyList.iterate((LazyList.from(data), Seq.empty[Int], Seq.empty[Int]))
     {case (data, cam, _) =>
-      if(data.isEmpty) (Stream.empty[Int], Seq.empty[Int], Seq.empty[Int])
+      if(data.isEmpty) (LazyList.empty[Int], Seq.empty[Int], Seq.empty[Int])
       else (if(cam.isEmpty) None else Some(cam))
         .map(_
           .tails.toSeq.init
@@ -104,7 +104,7 @@ object LZGolden {
         val p = scala.math.random() * .3 + .7
         while(scala.math.random() < p && length < len - uncompressed.length)
           length += 1
-        if(index + length > params.camSize && !overlap) break // continue
+        if(index + length > params.camSize && !overlap) break() // continue
         
         compressed ++= encode(index, length, params)
         
@@ -135,7 +135,7 @@ object LZGoldenCompress extends App {
     else
       System.out
   try {
-    LZGolden.compress(Stream.continually(in.read).takeWhile(_ != -1), params)
+    LZGolden.compress(LazyList.continually(in.read).takeWhile(_ != -1), params)
       .foreach(b => out.write(b))
     out.flush
   } finally {

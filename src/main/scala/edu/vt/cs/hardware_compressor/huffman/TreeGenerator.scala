@@ -133,7 +133,7 @@ class TreeGenerator(params: Parameters) extends Module {
   
   
   // output
-  (io.result.codes, leavesNext, io.counterResult.highChars).zipped
+  (io.result.codes lazyZip leavesNext lazyZip io.counterResult.highChars)
   .foreach{(r, l, h) =>
     r.char := h.char
     r.code := l.code

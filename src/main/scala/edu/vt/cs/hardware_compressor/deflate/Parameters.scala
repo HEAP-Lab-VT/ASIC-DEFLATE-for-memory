@@ -86,7 +86,7 @@ object Parameters {
     System.err.println(s"getting deflate parameters from $csvPath...")
     var map: Map[String, String] = Map()
     Using(io.Source.fromFile(csvPath.toFile)){lines =>
-      for(line <- lines.getLines) {
+      for(line <- lines.getLines()) {
         val cols = line.split(",").map(_.trim)
         if(cols.length == 2) {
           System.err.println(s"${cols(0)} = ${cols(1)}")

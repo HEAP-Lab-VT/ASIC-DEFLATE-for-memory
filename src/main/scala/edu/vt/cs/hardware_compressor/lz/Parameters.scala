@@ -213,7 +213,7 @@ object Parameters {
     var boolMap: Map[String, Boolean] = Map()
     var intMap: Map[String, Int] = Map()
     Using(io.Source.fromFile(csvPath.toFile)){lines =>
-      for(line <- lines.getLines) {
+      for(line <- lines.getLines()) {
         val cols = line.split(",").map(_.trim)
         if(cols.length == 2) {
           System.err.println(s"${cols(0)} = ${cols(1)}")
