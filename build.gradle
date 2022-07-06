@@ -1,5 +1,6 @@
 
 plugins {
+  id "base"
   id "scala"
   id "application"
 }
@@ -26,7 +27,7 @@ tasks.register("genLZCompressor", JavaExec) {
   mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
   args = [
     "--module", "LZCompressor",
-    "--config", "$projectDir/configFiles/deflate.csv",
+    "--config", "$projectDir/configFiles/lz.csv",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/LZCompressor.v"
@@ -42,7 +43,7 @@ tasks.register("genLZDecompressor", JavaExec) {
   mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
   args = [
     "--module", "LZDecompressor",
-    "--config", "$projectDir/configFiles/deflate.csv",
+    "--config", "$projectDir/configFiles/lz.csv",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/LZDecompressor.v"
@@ -58,7 +59,7 @@ tasks.register("genHuffmanCompressor", JavaExec) {
   mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
   args = [
     "--module", "HuffmanCompressor",
-    "--config", "$projectDir/configFiles/deflate.csv",
+    "--config", "$projectDir/configFiles/huffman.csv",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/HuffmanCompressor.v"
@@ -73,11 +74,11 @@ tasks.register("genHuffmanDecompressor", JavaExec) {
   classpath = sourceSets.main.runtimeClasspath
   mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
   args = [
-    "--module", "genHuffmanDecompressor",
-    "--config", "$projectDir/configFiles/deflate.csv",
+    "--module", "HuffmanDecompressor",
+    "--config", "$projectDir/configFiles/huffman.csv",
     "--",
     "-td", "$buildDir",
-    "-o", "$buildDir/genHuffmanDecompressor.v"
+    "-o", "$buildDir/HuffmanDecompressor.v"
   ]
   jvmArgs = ["-Xmx12g"]
   inputs.files("$projectDir/configFiles/huffman.csv")

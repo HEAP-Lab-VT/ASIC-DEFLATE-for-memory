@@ -23,8 +23,10 @@ object GenVerilog extends App {
       argsList = rem
     case "--" :: rem =>
       options.chiselArgs = options.chiselArgs ++ rem
+      argsList = Nil
     case rem =>
       options.chiselArgs = options.chiselArgs ++ rem
+      argsList = Nil
     }
   }
   
