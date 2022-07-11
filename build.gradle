@@ -231,7 +231,7 @@ def BUILD_VK_GLOBAL_OBJS = VK_GLOBAL_OBJS.stream()
   }
 }
 
-tasks.register("compileDeflateTest", Exec) {
+tasks.register("compileTestDeflate", Exec) {
   executable = "g++"
   args("-c")
   args("-I$System.env.VERILATOR_ROOT/include", "-I$buildDir")
@@ -242,33 +242,33 @@ tasks.register("compileDeflateTest", Exec) {
   if(hasProperty("trace")) {
     args("-DTRACE_ENABLE=true")
   }
-  args("$projectDir/src/test/cpp/DeflateTest.cpp")
-  args("-o", "$buildDir/DeflateTest.o")
-  inputs.files("$projectDir/src/test/cpp/DeflateTest.cpp")
+  args("$projectDir/src/test/cpp/TestDeflate.cpp")
+  args("-o", "$buildDir/TestDeflate.o")
+  inputs.files("$projectDir/src/test/cpp/TestDeflate.cpp")
   inputs.files("$buildDir/DeflateParameters.h")
   inputs.files("$buildDir/VDeflateCompressor.h",
     "$buildDir/VDeflateDecompressor.h")
-  outputs.files("$buildDir/DeflateTest.o")
+  outputs.files("$buildDir/TestDeflate.o")
   dependsOn "makeVDeflateCompressor", "makeVDeflateDecompressor"
   dependsOn "genDeflateCppConfig"
 }
 
-tasks.register("linkDeflateTest", Exec) {
+tasks.register("linkTestDeflate", Exec) {
   executable = "g++"
-  args("$buildDir/DeflateTest.o")
+  args("$buildDir/TestDeflate.o")
   args("$buildDir/VDeflateCompressor__ALL.a",
     "$buildDir/VDeflateDecompressor__ALL.a")
   args BUILD_VK_GLOBAL_OBJS
-  args("-o", "$buildDir/VDeflateTest")
-  inputs.files("$buildDir/DeflateTest.o")
+  args("-o", "$buildDir/VTestDeflate")
+  inputs.files("$buildDir/TestDeflate.o")
   inputs.files("$buildDir/VDeflateCompressor__ALL.a",
     "$buildDir/VDeflateDecompressor__ALL.a")
   inputs.files(BUILD_VK_GLOBAL_OBJS)
-  outputs.files("$buildDir/VDeflateTest")
-  dependsOn "compileDeflateTest"
+  outputs.files("$buildDir/VTestDeflate")
+  dependsOn "compileTestDeflate"
   dependsOn "makeVDeflateCompressor", "makeVDeflateDecompressor"
 }
 
-tasks.register("buildDeflateTest") {
-  dependsOn "linkDeflateTest"
+tasks.register("buildTestDeflate") {
+  dependsOn "linkTestDeflate"
 }
