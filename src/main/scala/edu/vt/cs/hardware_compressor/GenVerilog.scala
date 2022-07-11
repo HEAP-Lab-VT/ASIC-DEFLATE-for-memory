@@ -2,12 +2,18 @@ package edu.vt.cs.hardware_compressor
 
 import chisel3._
 import edu.vt.cs.hardware_compressor._
+import java.io.PrintWriter
 import java.nio.file.Path
+import scala.util.Using
 
 object GenVerilog extends App {
   private object options {
-    var modName: Option[String] = None
+    var compression: Option[String] = None
     var hdlType: Option[String] = None
+    var genCompressor: Boolean = false
+    var genDecompressor: Boolean = false
+    var genCppConfig: Option[String] = None
+    var cppConfigPrefix: String = ""
     var configFile: Option[String] = None
     var chiselArgs: Iterable[String] = Seq.empty
     var printConfig: Boolean = false
@@ -16,11 +22,23 @@ object GenVerilog extends App {
   private var argsList: List[String] = args.toList
   while(argsList.nonEmpty) {
     argsList match {
-    case "--module" :: modName :: rem =>
-      options.modName = Some(modName)
+    case "--compression" :: compression :: rem =>
+      options.compression = Some(compression)
       argsList = rem
     case "--config" :: config :: rem =>
       options.configFile = Some(config)
+      argsList = rem
+    case "--gen-compressor" :: rem =>
+      options.genCompressor = true
+      argsList = rem
+    case "--gen-decompressor" :: rem =>
+      options.genDecompressor = true
+      argsList = rem
+    case "--gen-cpp-config" :: file :: rem =>
+      options.genCppConfig = Some(file)
+      argsList = rem
+    case "--cpp-config-prefix" :: prefix :: rem =>
+      options.cppConfigPrefix = prefix
       argsList = rem
     case "--print-config" :: rem =>
       options.printConfig = true
@@ -37,41 +55,41 @@ object GenVerilog extends App {
     }
   }
   
-  private val stage = new chisel3.stage.ChiselStage()
-  private def emitter(gen: => RawModule, args: Array[String]) =
-    stage.emitVerilog(gen, args)
-  options.modName.get match {
-    case "LZCompressor" =>
-      val params = lz.Parameters.fromCSV(Path.of(options.configFile.get))
+  if(options.compression.isDefined) {
+    val stage = new chisel3.stage.ChiselStage()
+    def emitter(gen: => RawModule, args: Iterable[String]) =
+      stage.emitVerilog(gen, args.toArray)
+    val configPath = Path.of(options.configFile.get)
+    options.compression.get match {
+    case "LZ" =>
+      val params = lz.Parameters.fromCSV(configPath)
       if(options.printConfig) params.print()
-      emitter(new lz.LZCompressor(params),
-        options.chiselArgs.toArray)
-    case "LZDecompressor" =>
-      val params = lz.Parameters.fromCSV(Path.of(options.configFile.get))
+      options.genCppConfig.foreach(f => Using(new PrintWriter(f))(w =>
+        params.genCppDefines(w, options.cppConfigPrefix)))
+      if(options.genCompressor)
+        emitter(new lz.LZCompressor(params), options.chiselArgs)
+      if(options.genDecompressor)
+        emitter(new lz.LZDecompressor(params), options.chiselArgs)
+    case "Huffman" =>
+      val params = huffman.Parameters.fromCSV(configPath)
       if(options.printConfig) params.print()
-      emitter(new lz.LZCompressor(params),
-        options.chiselArgs.toArray)
-    case "HuffmanCompressor" =>
-      val params = huffman.Parameters.fromCSV(Path.of(options.configFile.get))
+      options.genCppConfig.foreach(f => Using(new PrintWriter(f))(w =>
+        params.genCppDefines(w, options.cppConfigPrefix)))
+      if(options.genCompressor)
+        emitter(new huffman.HuffmanCompressor(params), options.chiselArgs)
+      if(options.genDecompressor)
+        emitter(new huffman.HuffmanDecompressor(params), options.chiselArgs)
+    case "Deflate" =>
+      val params = deflate.Parameters.fromCSV(configPath)
       if(options.printConfig) params.print()
-      emitter(new huffman.HuffmanCompressor(params),
-        options.chiselArgs.toArray)
-    case "HuffmanDecompressor" =>
-      val params = huffman.Parameters.fromCSV(Path.of(options.configFile.get))
-      if(options.printConfig) params.print()
-      emitter(new huffman.HuffmanDecompressor(params),
-        options.chiselArgs.toArray)
-    case "DeflateCompressor" =>
-      val params = deflate.Parameters.fromCSV(Path.of(options.configFile.get))
-      if(options.printConfig) params.print()
-      emitter(new deflate.DeflateCompressor(params),
-        options.chiselArgs.toArray)
-    case "DeflateDecompressor" =>
-      val params = deflate.Parameters.fromCSV(Path.of(options.configFile.get))
-      if(options.printConfig) params.print()
-      emitter(new deflate.DeflateDecompressor(params),
-        options.chiselArgs.toArray)
+      options.genCppConfig.foreach(f => Using(new PrintWriter(f))(w =>
+        params.genCppDefines(w, options.cppConfigPrefix)))
+      if(options.genCompressor)
+        emitter(new deflate.DeflateCompressor(params), options.chiselArgs)
+      if(options.genDecompressor)
+        emitter(new deflate.DeflateDecompressor(params), options.chiselArgs)
     case a => throw new IllegalArgumentException(a)
+    }
   }
   
   private def argSplit(args: String): Array[String] = {

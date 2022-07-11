@@ -96,7 +96,7 @@ object Parameters {
       huffmanParam = huffman)
   
   def fromCSV(csvPath: Path): Parameters = {
-    var map: Map[String, String] = mutable.Map.empty
+    var map: mutable.Map[String, String] = mutable.Map.empty
     Using(io.Source.fromFile(csvPath.toFile)){lines =>
       for(line <- lines.getLines()) {
         val cols = line.split(",").map(_.trim)
