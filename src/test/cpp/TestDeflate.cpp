@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
+#include <limits.h>
 
 
 // <editor-fold> ugly pre-processor macros
@@ -114,6 +115,8 @@ struct Options {
   const char *cTrace;
   const char *dTrace;
   const char *debugJob;
+  long int dumpSeek;
+  long int dumpLimit;
 };
 static Options options;
 
@@ -177,6 +180,8 @@ static void cleanup() {
 
 int main(int argc, const char **argv, char **env) {
   options.dump = "-";
+  options.dumpSeek = 0;
+  options.dumpLimit = LONG_MAX;
   options.report = "-";
   options.cTrace = "-";
   options.dTrace = "-";
@@ -186,6 +191,16 @@ int main(int argc, const char **argv, char **env) {
       ++i;
       assert(i < argc);
       options.dump = argv[i];
+    }
+    else if(!strcmp(argv[i], "--dump-seek")) {
+      ++i;
+      assert(i < argc);
+      options.dumpSeek = atol(argv[i]);
+    }
+    else if(!strcmp(argv[i], "--dump-limit")) {
+      ++i;
+      assert(i < argc);
+      options.dumpLimit = atol(argv[i]);
     }
     else if(!strcmp(argv[i], "--report")) {
       ++i;
@@ -239,6 +254,7 @@ int main(int argc, const char **argv, char **env) {
   dumpfile = stdin;
   if(strcmp(options.dump, "-"))
     dumpfile = fopen(options.dump, "r");
+  fseek(dumpfile, options.dumpSeek, SEEK_SET);
   
   reportfile = stdout;
   if(strcmp(options.report, "-"))
@@ -329,11 +345,16 @@ static bool doLoad() {
     job->rawCap = PAGE_SIZE;
   }
   
-  size_t bytesRead =
-    fread(job->raw + job->rawLen, 1, PAGE_SIZE - job->rawLen, dumpfile);
+  size_t bytesRead = fread(
+    job->raw + job->rawLen,
+    1,
+    min(PAGE_SIZE - job->rawLen, options.dumpLimit - summary.totalSize),
+    dumpfile);
   job->rawLen += bytesRead;
   
-  if(job->rawLen == PAGE_SIZE || feof(dumpfile)) {
+  if(job->rawLen == PAGE_SIZE || summary.totalSize == options.dumpLimit ||
+    feof(dumpfile)
+  ) {
     // finished loading page
     bool zero = true;
     for(int i = 0; i < job->rawLen; i++)

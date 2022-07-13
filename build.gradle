@@ -196,6 +196,7 @@ def VK_GLOBAL_OBJS = ["verilated.o"]
 def BUILD_VK_GLOBAL_OBJS = VK_GLOBAL_OBJS.stream()
   .map({"$buildDir/$it"})
   .collect(Collectors.toCollection(ArrayList::new))
+ext.makeJ = project.getGradle().getStartParameter().getMaxWorkerCount()
 
 ["DeflateCompressor", "DeflateDecompressor"].forEach { moduleName ->
   tasks.register("verilate${moduleName}", Exec) {
@@ -271,4 +272,15 @@ tasks.register("linkTestDeflate", Exec) {
 
 tasks.register("buildTestDeflate") {
   dependsOn "linkTestDeflate"
+}
+
+
+def testDataDir = "$projectDir/testData"
+
+tasks.register("runTestDeflate", ParallelTestTask) {
+  executable = "$buildDir/VTestDeflate"
+  dumps = fileTree("testBenchmarks").filter(File::isFile)
+  reportDir = file("$buildDir/test/deflate-reports")
+  chunkSize = 4096l * 256 * 32
+  dependsOn "buildTestDeflate"
 }
