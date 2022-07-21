@@ -1,8 +1,10 @@
 
+import java.util.Objects
 import java.util.stream.Collectors
 
 plugins {
   id "base"
+  id "java"
   id "scala"
   id "application"
 }
@@ -16,6 +18,8 @@ dependencies {
   implementation "edu.berkeley.cs:chisel3_2.13:3.5.3"
   scalaCompilerPlugins "edu.berkeley.cs:chisel3-plugin_2.13.8:3.5.3"
 }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(11)
 
 application {
   mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
@@ -196,7 +200,8 @@ def VK_GLOBAL_OBJS = ["verilated.o"]
 def BUILD_VK_GLOBAL_OBJS = VK_GLOBAL_OBJS.stream()
   .map({"$buildDir/$it"})
   .collect(Collectors.toCollection(ArrayList::new))
-ext.makeJ = project.getGradle().getStartParameter().getMaxWorkerCount()
+if(!hasProperty("makeJ"))
+  ext.makeJ = project.getGradle().getStartParameter().getMaxWorkerCount()
 
 ["DeflateCompressor", "DeflateDecompressor"].forEach { moduleName ->
   tasks.register("verilate${moduleName}", Exec) {
@@ -280,7 +285,22 @@ def testDataDir = "$projectDir/testData"
 tasks.register("runTestDeflate", ParallelTestTask) {
   executable = "$buildDir/VTestDeflate"
   dumps = fileTree("testBenchmarks").filter(File::isFile)
-  reportDir = file("$buildDir/test/deflate-reports")
+  reportDir = file("$buildDir/test/deflate-reports-frag")
   chunkSize = 4096l * 256 * 32
+  if(project.hasProperty("useSlurm"))
+    useSlurm = [null, "", "true", "yes", "on"]
+      .contains(project.property("useSlurm"))
   dependsOn "buildTestDeflate"
+}
+
+tasks.register("reportTestDeflate", SummarizeEachTest) {
+  reportDir = file("$buildDir/test/deflate-reports-frag")
+  summaryDir = file("$buildDir/test/deflate-reports")
+  mustRunAfter "runTestDeflate"
+}
+
+
+// workaround for https://github.com/gradle/gradle/issues/16791
+tasks.withType(JavaExec).configureEach {
+  javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
 }

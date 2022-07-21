@@ -1,5 +1,6 @@
 
 import java.io.File;
+import java.util.Objects;
 import javax.inject.Inject;
 import org.gradle.api.*;
 import org.gradle.api.file.DirectoryProperty;
@@ -12,6 +13,7 @@ import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
+import org.gradle.process.ExecResult;
 import org.gradle.workers.*;
 
 abstract public class ParallelTestTask extends DefaultTask implements Task {
@@ -32,8 +34,6 @@ abstract public class ParallelTestTask extends DefaultTask implements Task {
   abstract Property<Long> getChunkSize();
   @Internal
   abstract Property<Boolean> getUseSlurm();
-  @Internal
-  abstract Property<Boolean> getFailfast();
   
   @TaskAction
   public void submitTests() {
@@ -55,7 +55,6 @@ abstract public class ParallelTestTask extends DefaultTask implements Task {
           params.getDumpLimit().set(getChunkSize());
           params.getReport().set(reportDir.file(dump.getName() + "_" + _seek));
           params.getUseSlurm().set(getUseSlurm());
-          params.getFailfast().set(getFailfast());
         });
       }
     });
@@ -70,7 +69,6 @@ abstract class PTParams implements WorkParameters {
   abstract Property<Long> getDumpLimit();
   abstract RegularFileProperty getReport();
   abstract Property<Boolean> getUseSlurm();
-  abstract Property<Boolean> getFailfast();
 }
 
 abstract class PTAction implements WorkAction<PTParams> {
@@ -84,9 +82,16 @@ abstract class PTAction implements WorkAction<PTParams> {
   @Override
   public void execute() {
     PTParams params = this.getParameters();
-    var res = execOps.exec(e -> {
+    ExecResult res = execOps.exec(e -> {
       if(params.getUseSlurm().getOrElse(false)) {
-        
+        e.executable("srun");
+        e.args("--ntasks", "1");
+        e.args("--time", "12:00:00"); // 12-hour time limit
+        e.args("--job-name",
+          params.getExecutable().map(Objects::toString).getOrElse("") + ":" +
+          params.getDump().map(Objects::toString).getOrElse("") + ":" +
+          params.getDumpSeek().map(Objects::toString).getOrElse(""));
+        e.args(params.getExecutable().get());
       } else {
         e.executable(params.getExecutable().get());
       }
@@ -96,10 +101,13 @@ abstract class PTAction implements WorkAction<PTParams> {
       if(params.getDumpLimit().isPresent())
         e.args("--dump-limit", params.getDumpLimit().get());
       e.args("--report", params.getReport().get());
+      e.setIgnoreExitValue(true);
     });
     
-    if(params.getFailfast().getOrElse(false)) {
-      res.assertNormalExitValue();
+    if(res.getExitValue() != 0) {
+      System.err.println("Test failed: dump = " + params.getDump().get() + " : seek = " +
+        params.getDumpSeek().get() + " : exit = " + (byte)res.getExitValue());
     }
+    res.assertNormalExitValue();
   }
 }

@@ -331,7 +331,7 @@ int main(int argc, const char **argv, char **env) {
   
   cleanup();
   
-  return min(summary.failedPages, 255);
+  return min(summary.failedPages, 127);
 }
 
 static bool doLoad() {
