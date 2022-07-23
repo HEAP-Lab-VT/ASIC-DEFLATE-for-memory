@@ -288,10 +288,13 @@ tasks.register("runTestDeflate", ParallelTestTask) {
   executable = "$buildDir/VTestDeflate"
   dumps = fileTree("testBenchmarks").filter(File::isFile)
   reportDir = file("$buildDir/test/deflate-reports-frag")
-  chunkSize = 4096l * 256 * 32
+  chunkSize = 4096l * 256 * 4
   if(project.hasProperty("useSlurm"))
     useSlurm = [null, "", "true", "yes", "on"]
       .contains(project.property("useSlurm"))
+  if(project.hasProperty("trace"))
+    trace = [null, "", "true", "yes", "on"]
+      .contains(project.property("trace"))
   dependsOn "buildTestDeflate"
 }
 
@@ -305,4 +308,8 @@ tasks.register("reportTestDeflate", SummarizeEachTest) {
 // workaround for https://github.com/gradle/gradle/issues/16791
 tasks.withType(JavaExec).configureEach {
   javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
+}
+
+tasks.register("cleanTest", Delete) {
+  delete("$buildDir/test")
 }

@@ -5,6 +5,7 @@ import javax.inject.Inject;
 import org.gradle.api.*;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.file.FileSystemOperations;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
@@ -34,6 +35,8 @@ abstract public class ParallelTestTask extends DefaultTask implements Task {
   abstract Property<Long> getChunkSize();
   @Internal
   abstract Property<Boolean> getUseSlurm();
+  @Input
+  abstract Property<Boolean> getTrace();
   
   @TaskAction
   public void submitTests() {
@@ -55,6 +58,7 @@ abstract public class ParallelTestTask extends DefaultTask implements Task {
           params.getDumpLimit().set(getChunkSize());
           params.getReport().set(reportDir.file(dump.getName() + "_" + _seek));
           params.getUseSlurm().set(getUseSlurm());
+          params.getTrace().set(getTrace());
         });
       }
     });
@@ -69,14 +73,17 @@ abstract class PTParams implements WorkParameters {
   abstract Property<Long> getDumpLimit();
   abstract RegularFileProperty getReport();
   abstract Property<Boolean> getUseSlurm();
+  abstract Property<Boolean> getTrace();
 }
 
 abstract class PTAction implements WorkAction<PTParams> {
   private final ExecOperations execOps;
+  private final FileSystemOperations fsOps;
   
   @Inject
-  public PTAction(ExecOperations execOps) {
+  public PTAction(ExecOperations execOps, FileSystemOperations fsOps) {
     this.execOps = execOps;
+    this.fsOps = fsOps;
   }
   
   @Override
@@ -101,12 +108,20 @@ abstract class PTAction implements WorkAction<PTParams> {
       if(params.getDumpLimit().isPresent())
         e.args("--dump-limit", params.getDumpLimit().get());
       e.args("--report", params.getReport().get());
+      if(params.getTrace().getOrElse(false)) {
+        e.args("--c-trace", params.getReport().get() + "_c.vcd");
+        e.args("--d-trace", params.getReport().get() + "_d.vcd");
+      }
       e.setIgnoreExitValue(true);
     });
     
     if(res.getExitValue() != 0) {
-      System.err.println("Test failed: dump = " + params.getDump().get() + " : seek = " +
-        params.getDumpSeek().get() + " : exit = " + (byte)res.getExitValue());
+      System.err.println("Test failed: dump = " + params.getDump().get() +
+        " : seek = " + params.getDumpSeek().get() +
+        " : exit = " + (byte)res.getExitValue());
+    } else {
+      fsOps.delete(s -> s.delete(params.getReport().get() + "_c.vcd"));
+      fsOps.delete(s -> s.delete(params.getReport().get() + "_d.vcd"));
     }
     res.assertNormalExitValue();
   }
