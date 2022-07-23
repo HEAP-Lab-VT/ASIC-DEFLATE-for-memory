@@ -232,7 +232,8 @@ if(!hasProperty("makeJ"))
       args("-j${project.property("makeJ")}")
     args("V${moduleName}__ALL.a")
     args(VK_GLOBAL_OBJS)
-    inputs.files("$buildDir/V${moduleName}.mk")
+    // inputs.files("$buildDir/V${moduleName}.mk")
+    inputs.files("$buildDir/V${moduleName}.v") // pseudo-input
     outputs.files("$buildDir/V${moduleName}__ALL.a")
     outputs.files(BUILD_VK_GLOBAL_OBJS)
     dependsOn "verilate${moduleName}"
