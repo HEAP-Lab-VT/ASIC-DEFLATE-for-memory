@@ -35,7 +35,7 @@ tasks.register("genLZCompressor", JavaExec) {
     "--compression", "LZ",
     "--config", "$projectDir/configFiles/lz.csv",
     "--gen-compressor",
-    "--print-config",
+    // "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/LZCompressor.v"
@@ -53,7 +53,7 @@ tasks.register("genLZDecompressor", JavaExec) {
     "--compression", "LZ",
     "--config", "$projectDir/configFiles/lz.csv",
     "--gen-decompressor",
-    "--print-config",
+    // "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/LZDecompressor.v"
@@ -71,8 +71,8 @@ tasks.register("genLZCppConfig", JavaExec) {
     "--compression", "LZ",
     "--config", "$projectDir/configFiles/lz.csv",
     "--gen-cpp-config", "$buildDir/LZParameters.h",
-    "--cpp-config-prefix", "LZ_",
-    "--print-config"
+    "--cpp-config-prefix", "LZ_"
+    // "--print-config"
   ]
   inputs.files("$projectDir/configFiles/lz.csv")
   outputs.files("$buildDir/LZParameters.h")
@@ -86,7 +86,7 @@ tasks.register("genHuffmanCompressor", JavaExec) {
     "--compression", "Huffman",
     "--gen-compressor",
     "--config", "$projectDir/configFiles/huffman.csv",
-    "--print-config",
+    // "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/HuffmanCompressor.v"
@@ -104,7 +104,7 @@ tasks.register("genHuffmanDecompressor", JavaExec) {
     "--compression", "Huffman",
     "--gen-decompressor",
     "--config", "$projectDir/configFiles/huffman.csv",
-    "--print-config",
+    // "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/HuffmanDecompressor.v"
@@ -122,8 +122,8 @@ tasks.register("genHuffmanCppConfig", JavaExec) {
     "--compression", "Huffman",
     "--config", "$projectDir/configFiles/huffman.csv",
     "--gen-cpp-config", "$buildDir/HuffmanParameters.h",
-    "--cpp-config-prefix", "HUFFMAN_",
-    "--print-config"
+    "--cpp-config-prefix", "HUFFMAN_"
+    // "--print-config"
   ]
   inputs.files("$projectDir/configFiles/huffman.csv")
   outputs.files("$buildDir/HuffmanParameters.h")
@@ -137,7 +137,7 @@ tasks.register("genDeflateCompressor", JavaExec) {
     "--compression", "Deflate",
     "--gen-compressor",
     "--config", "$projectDir/configFiles/deflate.csv",
-    "--print-config",
+    // "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/DeflateCompressor.v"
@@ -155,7 +155,7 @@ tasks.register("genDeflateDecompressor", JavaExec) {
     "--compression", "Deflate",
     "--gen-decompressor",
     "--config", "$projectDir/configFiles/deflate.csv",
-    "--print-config",
+    // "--print-config",
     "--",
     "-td", "$buildDir",
     "-o", "$buildDir/DeflateDecompressor.v"
@@ -173,8 +173,8 @@ tasks.register("genDeflateCppConfig", JavaExec) {
     "--compression", "Deflate",
     "--config", "$projectDir/configFiles/deflate.csv",
     "--gen-cpp-config", "$buildDir/DeflateParameters.h",
-    "--cpp-config-prefix", "DEFLATE_",
-    "--print-config"
+    "--cpp-config-prefix", "DEFLATE_"
+    // "--print-config"
   ]
   inputs.files("$projectDir/configFiles/deflate.csv")
   outputs.files("$buildDir/DeflateParameters.h")
@@ -197,6 +197,8 @@ tasks.register("genDeflate") {
 }
 
 def VK_GLOBAL_OBJS = ["verilated.o"]
+if(project.hasProperty("trace"))
+  VK_GLOBAL_OBJS.add("verilated_vcd_c.o")
 def BUILD_VK_GLOBAL_OBJS = VK_GLOBAL_OBJS.stream()
   .map({"$buildDir/$it"})
   .collect(Collectors.toCollection(ArrayList::new))
@@ -207,12 +209,12 @@ if(!hasProperty("makeJ"))
   tasks.register("verilate${moduleName}", Exec) {
     executable = "verilator"
     args("-Wno-WIDTH", "-Mdir", "$buildDir")
-    if(hasProperty("ggdb")) {
+    if(project.hasProperty("ggdb")) {
       args("-CFLAGS", "-ggdb")
     }
-    if(hasProperty("trace")) {
+    if(project.hasProperty("trace")) {
       args("--trace")
-      if(hasProperty("trace-underscore")) {
+      if(project.hasProperty("trace-underscore")) {
         args("--trace-underscore")
       }
     }
@@ -242,10 +244,10 @@ tasks.register("compileTestDeflate", Exec) {
   args("-c")
   args("-I$System.env.VERILATOR_ROOT/include", "-I$buildDir")
   args("-include", "$buildDir/DeflateParameters.h")
-  if(hasProperty("ggdb")) {
+  if(project.hasProperty("ggdb")) {
     args("-ggdb")
   }
-  if(hasProperty("trace")) {
+  if(project.hasProperty("trace")) {
     args("-DTRACE_ENABLE=true")
   }
   args("$projectDir/src/test/cpp/TestDeflate.cpp")
