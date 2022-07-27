@@ -28,8 +28,12 @@ class Counter(params: Parameters) extends Module {
     b.char := i.U
     b
   }))
-  val total = Reg(UInt(params.passOneSize.valBits.W))
-  val updates = Reg(Vec(params.counterCharsIn, new Entry()))
+  val total = RegInit(UInt(params.passOneSize.valBits.W), 0.U)
+  val updates = RegInit(VecInit(Seq.fill(params.counterCharsIn){
+    val u = WireDefault(new Entry(), DontCare)
+    u.freq := 0.U
+    u
+  }))
   
   total := total + (io.in.ready min io.in.valid)
   io.in.ready := params.counterCharsIn.U
@@ -59,10 +63,16 @@ class Counter(params: Parameters) extends Module {
   // update highChars
   highChars.zip(shuffledHighChars).zipWithIndex.foreach{case ((h, sh), i) =>
     val u = PriorityMux(
-      updates.map(u => u.char === sh.char && sh.freq =/= 0.U &&
-        u.freq =/= 0.U).reverse :+ true.B,
-      updates.reverse :+ sh)
-    h.freq := u.freq
+      updates.map(u => u.char === h.char && u.freq =/= 0.U).reverse :+ true.B,
+      updates.reverse :+ h
+    )
+    
+    // Prevent writing to a position that is involved in a promotion or
+    // demotion. This can make the frequency inaccurate, but it should not
+    // deviate too far before it is corrected.
+    when(h.char === sh.char && sh.freq =/= 0.U) {
+      h.freq := u.freq
+    }
   }
   
   

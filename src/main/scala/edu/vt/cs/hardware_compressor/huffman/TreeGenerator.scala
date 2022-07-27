@@ -101,20 +101,29 @@ class TreeGenerator(params: Parameters) extends Module {
     newRoot.freq := least(0).freq + least(1).freq
     roots(least(0).idx) := newRoot
     roots(least(1).idx).freq := 0.U
-    
+  }
+  
+  val least_S2 = Seq.fill(2)(RegInit({
+    val ir = WireDefault(new IndexedRoot(), DontCare)
+    ir.freq := 0.U
+    ir
+  }))
+  least.zip(least_S2).foreach(l => l._2 := l._1)
+  
+  when(least_S2(1).freq =/= 0.U) {
     // update the leaves of the two roots
     leaves.zip(leavesNext).foreach{case (l, n) =>
-      when(l.root === least(0).idx) {
+      when(l.root === least_S2(0).idx) {
         n.code := l.code << 1
         n.codeLength := l.codeLength + 1.U
       }
-      when(l.root === least(1).idx) {
+      when(l.root === least_S2(1).idx) {
         n.code := l.code << 1 | 1.U
         n.codeLength := l.codeLength + 1.U
-        n.root := least(0).idx
+        n.root := least_S2(0).idx
       }
       // depth truncation
-      when(least.map(_.idx === l.root).reduce(_ || _) &&
+      when(least_S2.map(_.idx === l.root).reduce(_ || _) &&
         l.codeLength === params.maxCodeLength.U
       ) {
         when((l.code(params.maxCodeLength - 1) === false.B ||
@@ -123,14 +132,13 @@ class TreeGenerator(params: Parameters) extends Module {
         ) {
           n.code := DontCare
           n.codeLength := 0.U
-          n.root := least(1).idx
+          n.root := least_S2(1).idx
         } otherwise {
           n.codeLength := params.maxCodeLength.U
         }
       }
     }
   }
-  
   
   // output
   (io.result.codes lazyZip leavesNext lazyZip io.counterResult.highChars)
@@ -141,7 +149,7 @@ class TreeGenerator(params: Parameters) extends Module {
   }
   io.result.escapeCode := leavesNext.last.code
   io.result.escapeCodeLength := leavesNext.last.codeLength
-  io.finished := PopCount(rootsInit.map(_.freq =/= 0.U)) <= 2.U
+  io.finished := PopCount(rootsInit.map(_.freq =/= 0.U)) === 1.U
   // io.finished := leavesNext.map(_.root == leavesNext.head.root)
   //   .reduce(_ && _)
 }

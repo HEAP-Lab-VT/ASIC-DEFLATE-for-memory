@@ -132,7 +132,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
     val dataBeginWrap = WireDefault(Bool(), false.B)
     val dataEndWrap = WireDefault(Bool(), false.B)
     when(dataBeginWrap =/= dataEndWrap){dataPointerInverted := dataEndWrap}
-    when(!dataComplete) {
+    when(!dataComplete && active) {
       // fetch remaining input data
       for(i <- 0 until params.compressorCharsIn) {
         when(i.U < io.in.ready) {
@@ -168,7 +168,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
       }
       val difference = dataEnd - dataBegin
       encoder.io.in.valid := Mux(dataPointerInverted,
-        params.passOneSize.U - difference,
+        params.passOneSize.U + difference, // WARNING: int overflow
         difference
       ) min params.counterCharsIn.U
       encoder.io.in.last :=
