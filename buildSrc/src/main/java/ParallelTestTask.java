@@ -11,6 +11,7 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.process.ExecOperations;
@@ -35,8 +36,10 @@ abstract public class ParallelTestTask extends DefaultTask implements Task {
   abstract Property<Long> getChunkSize();
   @Internal
   abstract Property<Boolean> getUseSlurm();
-  @Input
+  @Input @Optional
   abstract Property<Boolean> getTrace();
+  @Internal
+  abstract Property<Long> getSlurmJobId();
   
   @TaskAction
   public void submitTests() {
@@ -59,6 +62,7 @@ abstract public class ParallelTestTask extends DefaultTask implements Task {
           params.getReport().set(reportDir.file(dump.getName() + "_" + _seek));
           params.getUseSlurm().set(getUseSlurm());
           params.getTrace().set(getTrace());
+          params.getSlurmJobId().set(getSlurmJobId());
         });
       }
     });
@@ -74,6 +78,7 @@ abstract class PTParams implements WorkParameters {
   abstract RegularFileProperty getReport();
   abstract Property<Boolean> getUseSlurm();
   abstract Property<Boolean> getTrace();
+  abstract Property<Long> getSlurmJobId();
 }
 
 abstract class PTAction implements WorkAction<PTParams> {
@@ -89,15 +94,25 @@ abstract class PTAction implements WorkAction<PTParams> {
   @Override
   public void execute() {
     PTParams params = this.getParameters();
+    if(params.getUseSlurm().getOrElse(false)) {
+      try {
+        Thread.sleep(
+          java.util.concurrent.ThreadLocalRandom.current().nextInt() % 60000);
+      } catch(InterruptedException ex) {
+        throw new RuntimeException(ex);
+      }
+    }
     ExecResult res = execOps.exec(e -> {
       if(params.getUseSlurm().getOrElse(false)) {
         e.executable("srun");
         e.args("--ntasks", "1");
-        e.args("--time", "12:00:00"); // 12-hour time limit
-        e.args("--job-name",
-          params.getExecutable().map(Objects::toString).getOrElse("") + ":" +
-          params.getDump().map(Objects::toString).getOrElse("") + ":" +
-          params.getDumpSeek().map(Objects::toString).getOrElse(""));
+        if(params.getSlurmJobId().isPresent()) {
+          e.args("--jobid", params.getSlurmJobId().get().toString());
+        } else {
+          e.args("--time", "12:00:00"); // 12-hour time limit
+          e.args("--job-name", "ASIC DEFLATE test");
+        }
+        e.args("--quiet");
         e.args(params.getExecutable().get());
       } else {
         e.executable(params.getExecutable().get());
@@ -120,8 +135,10 @@ abstract class PTAction implements WorkAction<PTParams> {
         " : seek = " + params.getDumpSeek().get() +
         " : exit = " + (byte)res.getExitValue());
     } else {
-      fsOps.delete(s -> s.delete(params.getReport().get() + "_c.vcd"));
-      fsOps.delete(s -> s.delete(params.getReport().get() + "_d.vcd"));
+      if(params.getTrace().getOrElse(false)) {
+        fsOps.delete(s -> s.delete(params.getReport().get() + "_c.vcd"));
+        fsOps.delete(s -> s.delete(params.getReport().get() + "_d.vcd"));
+      }
     }
     res.assertNormalExitValue();
   }

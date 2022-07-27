@@ -202,6 +202,7 @@ if(project.hasProperty("trace"))
 def BUILD_VK_GLOBAL_OBJS = VK_GLOBAL_OBJS.stream()
   .map({"$buildDir/$it"})
   .collect(Collectors.toCollection(ArrayList::new))
+def verilatorDir = "$buildDir/verilator"
 if(!hasProperty("makeJ"))
   ext.makeJ = project.getGradle().getStartParameter().getMaxWorkerCount()
 
@@ -222,7 +223,34 @@ if(!hasProperty("makeJ"))
     inputs.files("$buildDir/${moduleName}.v")
     outputs.files("$buildDir/V${moduleName}.mk")
     outputs.files("$buildDir/V${moduleName}.h")
+    // outputs.files(project.fileTree("$verilatorDir") {include(
+    //   // see https://verilator.org/guide/latest/files.html
+    //   "V${moduleName}.cmake",
+    //   "V${moduleName}.mk",
+    //   "V${moduleName}_classes.mk",
+    //   "V${moduleName}_hier.mk",
+    //   "V${moduleName}_hierMkArgs.f",
+    //   "V${moduleName}_hierCMakeArgs.f",
+    //   "V${moduleName}.h",
+    //   "V${moduleName}.cpp",
+    //   "V${moduleName}___024root.h",
+    //   "V${moduleName}___024root.cpp",
+    //   "V${moduleName}___024root*.cpp",
+    //   "V${moduleName}__Dpi.h",
+    //   "V${moduleName}__Dpi.cpp",
+    //   "V${moduleName}__Inlines.h",
+    //   "V${moduleName}__Syms.H",
+    //   "V${moduleName}__Syms.cpp",
+    //   "V${moduleName}*.h",
+    //   "V${moduleName}*.cpp",
+    //   "V${moduleName}__ver.d",
+    //   "V${moduleName}__verFiles.dat"
+    // )})
     dependsOn "gen${moduleName}"
+    
+    // doFirst {
+    //   project.mkdir("$verilatorDir")
+    // }
   }
   tasks.register("makeV${moduleName}", Exec) {
     executable = "make"
@@ -232,6 +260,10 @@ if(!hasProperty("makeJ"))
       args("-j${project.property("makeJ")}")
     args("V${moduleName}__ALL.a")
     args(VK_GLOBAL_OBJS)
+    if(project.hasProperty("makeUseSlurm")) {
+      args("SHELL=srun")
+      args(".SHELLFLAGS= --ntasks 1 --time 01:00:00 --quiet --job-name make bash -c")
+    }
     // inputs.files("$buildDir/V${moduleName}.mk")
     inputs.files("$buildDir/V${moduleName}.v") // pseudo-input
     outputs.files("$buildDir/V${moduleName}__ALL.a")
@@ -243,7 +275,10 @@ if(!hasProperty("makeJ"))
 tasks.register("compileTestDeflate", Exec) {
   executable = "g++"
   args("-c")
-  args("-I$System.env.VERILATOR_ROOT/include", "-I$buildDir")
+  args("-I${
+    System.getenv()
+      .getOrDefault("VERILATOR_ROOT", "/usr/local/share/verilator")
+    }/include", "-I$buildDir")
   args("-include", "$buildDir/DeflateParameters.h")
   if(project.hasProperty("ggdb")) {
     args("-ggdb")
@@ -289,10 +324,22 @@ tasks.register("runTestDeflate", ParallelTestTask) {
   executable = "$buildDir/VTestDeflate"
   dumps = fileTree("testBenchmarks").filter(File::isFile)
   reportDir = file("$buildDir/test/deflate-reports-frag")
-  chunkSize = 4096l * 256 * 4
-  if(project.hasProperty("useSlurm"))
+  // chunkSize = 4096l * 256 * 4
+  chunkSize = 4096l * 100
+  if(project.hasProperty("useSlurm")) {
     useSlurm = [null, "", "true", "yes", "on"]
       .contains(project.property("useSlurm"))
+    if(project.hasProperty("slurmJobId")) {
+      slurmJobId = Long.parseLong(project.property("slurmJobId"))
+      
+      doLast {
+        project.exec(s -> {
+          s.setExecutable("scancel");
+          s.args(project.property("slurmJobId"))
+        });
+      }
+    }
+  }
   if(project.hasProperty("trace"))
     trace = [null, "", "true", "yes", "on"]
       .contains(project.property("trace"))

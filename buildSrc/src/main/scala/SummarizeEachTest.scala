@@ -18,9 +18,13 @@ abstract class SummarizeEachTest extends DefaultTask {
   
   @TaskAction
   def doSummarize: Unit = {
+    getProject().delete(getSummaryDir)
+    getProject().mkdir(getSummaryDir)
     // TODO: issue warning when File.listFiles returs null
     getReportDir.getAsFile.get.listFiles(_.isDirectory).foreach { bench =>
-      val benchSummary = bench.listFiles.map { reportFile =>
+      val benchSummary = bench.listFiles
+      .filter(!_.getName().endsWith(".vcd"))
+      .map { reportFile =>
         Using(Source.fromFile(reportFile)) { source => Some(source.getLines())
           .map(_.dropWhile(_ != "***** SUMMARY *****").splitAt(1))
           .flatMap(s =>
@@ -78,7 +82,8 @@ abstract class SummarizeEachTest extends DefaultTask {
         }
         .get
         .map{l => Summary(
-          dumps = l("dumps").getOrElse(""),
+          dumps = l("dumps").map(_.split("\\s*,\\s*").toSet)
+            .getOrElse(Set.empty),
           totalSize = l("total (bytes)").map(_.toLong).getOrElse(0),
           totalPages = l("total (pages)").map(_.toInt).getOrElse(0),
           nonzeroSize = l("non-zero (bytes)").map(_.toLong).getOrElse(0),
@@ -93,7 +98,7 @@ abstract class SummarizeEachTest extends DefaultTask {
         )}
       }
       .flatten
-      .reduce(_ + _)
+      .fold(Summary.empty)(_ + _)
       
       Using(
         new PrintWriter(getSummaryDir.file(bench.getName).get.getAsFile)
@@ -105,7 +110,7 @@ abstract class SummarizeEachTest extends DefaultTask {
 }
 
 private case class Summary(
-  dumps: String,
+  dumps: Set[String],
   totalSize: Long,
   totalPages: Int, 
   nonzeroSize: Long,
@@ -119,8 +124,7 @@ private case class Summary(
   decompressorStalls: Long
 ) {
   def +(that: Summary): Summary = Summary(
-    // TODO: Prevent duplicate dump names from being listed.
-    dumps = this.dumps + " " + that.dumps,
+    dumps = this.dumps ++ that.dumps,
     totalSize = this.totalSize + that.totalSize,
     totalPages = this.totalPages + that.totalPages,
     nonzeroSize = this.nonzeroSize + that.nonzeroSize,
@@ -136,14 +140,15 @@ private case class Summary(
   
   def print(sink: PrintWriter): Unit = {
     sink.println("***** SUMMARY *****")
-    sink.println(s"dumps: ${this.dumps}")
+    sink.println(s"dumps: ${this.dumps.mkString(",")}")
     sink.println(s"total (bytes): ${this.totalSize}")
     sink.println(s"total (pages): ${this.totalPages}")
     sink.println(s"non-zero (bytes): ${this.nonzeroSize}")
     sink.println(s"non-zero (pages): ${this.nonzeroPages}")
     sink.println(s"passed (pages): ${this.passedPages}")
     sink.println(s"failed (pages): ${this.failedPages}")
-    sink.println(s"pass rate: ${this.passedPages.doubleValue / this.nonzeroPages}")
+    sink.println(s"pass rate: " +
+      s"${this.passedPages.doubleValue / this.nonzeroPages}")
     sink.println(s"compressed (bits): ${this.compressedSize}")
     sink.println(s"compression ratio: " +
       s"${this.nonzeroSize.doubleValue / this.compressedSize * 8}")
@@ -155,4 +160,6 @@ private case class Summary(
       s"${this.nonzeroSize.doubleValue / this.decompressorCycles}")
   }
 }
-private object EmptySummary extends Summary("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+private object Summary {
+  object empty extends Summary(Set.empty, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+}
