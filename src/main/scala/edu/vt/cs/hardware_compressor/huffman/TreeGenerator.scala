@@ -23,7 +23,7 @@ class TreeGenerator(params: Parameters) extends Module {
     val root = UInt(params.codeCount.idxBits.W)
   }
   class IndexedRoot extends Root {
-    val idx = UInt(params.codeCount.valBits.W)
+    val idx = UInt(params.codeCount.idxBits.W)
   }
   
   val leaves = RegInit(VecInit((0 until params.codeCount).map{i =>
@@ -85,7 +85,6 @@ class TreeGenerator(params: Parameters) extends Module {
       )
     }).toSeq
   }
-  .take(20)
   .find(_.length == 1)
   .get.head
   // correct subtraction by 1 from before
