@@ -119,9 +119,19 @@ class HuffmanCompressor(params: Parameters) extends Module {
   data = RegEnable(data, transfer) // TODO: parameterize the size of this
   dataLength = RegEnable(dataLength, transfer)
   dataComplete = RegEnable(dataComplete, transfer)
+  val treeGeneratorClock = Wire(Clock())
+  val treeGeneratorSafe = Wire(Bool());
+  {
+    val cl = Reg(Bool())
+    cl := !cl
+    treeGeneratorClock := cl.asClock
+    treeGeneratorSafe := !cl
+  }
+  val treeGeneratorReset = transfer || reset.asBool || RegNext(transfer, true.B)
   withReset(transfer || reset.asBool) {
     
-    val treeGenerator = Module(new TreeGenerator(params))
+    val treeGenerator = withClockAndReset(treeGeneratorClock,treeGeneratorReset)
+      {Module(new TreeGenerator(params))}
     treeGenerator.io.counterResult := counterResult
     val treeGeneratorResult = RegNext(treeGenerator.io.result)
     val treeGeneratorFinished = RegNext(treeGenerator.io.finished, false.B)
