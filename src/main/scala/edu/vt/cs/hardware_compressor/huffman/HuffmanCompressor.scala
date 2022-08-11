@@ -211,7 +211,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   nextStage()
   active := DontCare
   finished := DontCare
-  transfer := io.out.last && io.out.valid <= io.out.ready && io.out.restart
+  transfer := io.out.restart // && io.out.last && io.out.valid <= io.out.ready
 }
 
 object HuffmanCompressor extends App {
