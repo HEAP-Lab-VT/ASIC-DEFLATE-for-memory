@@ -1,0 +1,363 @@
+
+import java.util.Objects
+import java.util.stream.Collectors
+
+plugins {
+  id "base"
+  id "java"
+  id "scala"
+  id "application"
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation "org.scala-lang:scala-library:2.13.6"
+  implementation "edu.berkeley.cs:chisel3_2.13:3.5.3"
+  scalaCompilerPlugins "edu.berkeley.cs:chisel3-plugin_2.13.8:3.5.3"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(11)
+
+application {
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  applicationDefaultJvmArgs = ["-Xmx12g"]
+}
+
+tasks.register("genLZCompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate LZ compressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "LZ",
+    "--config", "$projectDir/configFiles/lz.csv",
+    "--gen-compressor",
+    // "--print-config",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/LZCompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/lz.csv")
+  outputs.files("$buildDir/LZCompressor.v")
+}
+tasks.register("genLZDecompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate LZ decompressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "LZ",
+    "--config", "$projectDir/configFiles/lz.csv",
+    "--gen-decompressor",
+    // "--print-config",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/LZDecompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/lz.csv")
+  outputs.files("$buildDir/LZDecompressor.v")
+}
+tasks.register("genLZCppConfig", JavaExec) {
+  group = "Execution"
+  description = "Generate LZ C++ config"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "LZ",
+    "--config", "$projectDir/configFiles/lz.csv",
+    "--gen-cpp-config", "$buildDir/LZParameters.h",
+    "--cpp-config-prefix", "LZ_"
+    // "--print-config"
+  ]
+  inputs.files("$projectDir/configFiles/lz.csv")
+  outputs.files("$buildDir/LZParameters.h")
+}
+tasks.register("genHuffmanCompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Huffman compressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "Huffman",
+    "--gen-compressor",
+    "--config", "$projectDir/configFiles/huffman.csv",
+    // "--print-config",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/HuffmanCompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/huffman.csv")
+  outputs.files("$buildDir/HuffmanCompressor.v")
+}
+tasks.register("genHuffmanDecompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Huffman decompressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "Huffman",
+    "--gen-decompressor",
+    "--config", "$projectDir/configFiles/huffman.csv",
+    // "--print-config",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/HuffmanDecompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/huffman.csv")
+  outputs.files("$buildDir/HuffmanDecompressor.v")
+}
+tasks.register("genHuffmanCppConfig", JavaExec) {
+  group = "Execution"
+  description = "Generate Huffman C++ config"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "Huffman",
+    "--config", "$projectDir/configFiles/huffman.csv",
+    "--gen-cpp-config", "$buildDir/HuffmanParameters.h",
+    "--cpp-config-prefix", "HUFFMAN_"
+    // "--print-config"
+  ]
+  inputs.files("$projectDir/configFiles/huffman.csv")
+  outputs.files("$buildDir/HuffmanParameters.h")
+}
+tasks.register("genDeflateCompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Deflate compressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "Deflate",
+    "--gen-compressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    // "--print-config",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/DeflateCompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/deflate.csv")
+  outputs.files("$buildDir/DeflateCompressor.v")
+}
+tasks.register("genDeflateDecompressor", JavaExec) {
+  group = "Execution"
+  description = "Generate Deflate decompressor Verilog"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "Deflate",
+    "--gen-decompressor",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    // "--print-config",
+    "--",
+    "-td", "$buildDir",
+    "-o", "$buildDir/DeflateDecompressor.v"
+  ]
+  jvmArgs = ["-Xmx12g"]
+  inputs.files("$projectDir/configFiles/deflate.csv")
+  outputs.files("$buildDir/DeflateDecompressor.v")
+}
+tasks.register("genDeflateCppConfig", JavaExec) {
+  group = "Execution"
+  description = "Generate Deflate C++ config"
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = "edu.vt.cs.hardware_compressor.GenVerilog"
+  args = [
+    "--compression", "Deflate",
+    "--config", "$projectDir/configFiles/deflate.csv",
+    "--gen-cpp-config", "$buildDir/DeflateParameters.h",
+    "--cpp-config-prefix", "DEFLATE_"
+    // "--print-config"
+  ]
+  inputs.files("$projectDir/configFiles/deflate.csv")
+  outputs.files("$buildDir/DeflateParameters.h")
+}
+
+tasks.register("genLZ") {
+  dependsOn "genLZCompressor"
+  dependsOn "genLZDecompressor"
+  dependsOn "genLZCppConfig"
+}
+tasks.register("genHuffman") {
+  dependsOn "genHuffmanCompressor"
+  dependsOn "genHuffmanDecompressor"
+  dependsOn "genHuffmanCppConfig"
+}
+tasks.register("genDeflate") {
+  dependsOn "genDeflateCompressor"
+  dependsOn "genDeflateDecompressor"
+  dependsOn "genDeflateCppConfig"
+}
+
+def VK_GLOBAL_OBJS = ["verilated.o"]
+if(project.hasProperty("trace"))
+  VK_GLOBAL_OBJS.add("verilated_vcd_c.o")
+def BUILD_VK_GLOBAL_OBJS = VK_GLOBAL_OBJS.stream()
+  .map({"$buildDir/$it"})
+  .collect(Collectors.toCollection(ArrayList::new))
+def verilatorDir = "$buildDir/verilator"
+if(!hasProperty("makeJ"))
+  ext.makeJ = project.getGradle().getStartParameter().getMaxWorkerCount()
+
+["DeflateCompressor", "DeflateDecompressor"].forEach { moduleName ->
+  tasks.register("verilate${moduleName}", Exec) {
+    executable = "verilator"
+    args("-Wno-WIDTH", "-Mdir", "$buildDir")
+    if(project.hasProperty("ggdb")) {
+      args("-CFLAGS", "-ggdb")
+    }
+    if(project.hasProperty("trace")) {
+      args("--trace")
+      if(project.hasProperty("trace-underscore")) {
+        args("--trace-underscore")
+      }
+    }
+    args("-cc", "$buildDir/${moduleName}.v")
+    inputs.files("$buildDir/${moduleName}.v")
+    outputs.files("$buildDir/V${moduleName}.mk")
+    outputs.files("$buildDir/V${moduleName}.h")
+    // outputs.files(project.fileTree("$verilatorDir") {include(
+    //   // see https://verilator.org/guide/latest/files.html
+    //   "V${moduleName}.cmake",
+    //   "V${moduleName}.mk",
+    //   "V${moduleName}_classes.mk",
+    //   "V${moduleName}_hier.mk",
+    //   "V${moduleName}_hierMkArgs.f",
+    //   "V${moduleName}_hierCMakeArgs.f",
+    //   "V${moduleName}.h",
+    //   "V${moduleName}.cpp",
+    //   "V${moduleName}___024root.h",
+    //   "V${moduleName}___024root.cpp",
+    //   "V${moduleName}___024root*.cpp",
+    //   "V${moduleName}__Dpi.h",
+    //   "V${moduleName}__Dpi.cpp",
+    //   "V${moduleName}__Inlines.h",
+    //   "V${moduleName}__Syms.H",
+    //   "V${moduleName}__Syms.cpp",
+    //   "V${moduleName}*.h",
+    //   "V${moduleName}*.cpp",
+    //   "V${moduleName}__ver.d",
+    //   "V${moduleName}__verFiles.dat"
+    // )})
+    dependsOn "gen${moduleName}"
+    
+    // doFirst {
+    //   project.mkdir("$verilatorDir")
+    // }
+  }
+  tasks.register("makeV${moduleName}", Exec) {
+    executable = "make"
+    args("-C", "$buildDir", "-f", "V${moduleName}.mk")
+    args("-s") // silent mode
+    if(project.hasProperty("makeJ"))
+      args("-j${project.property("makeJ")}")
+    args("V${moduleName}__ALL.a")
+    args(VK_GLOBAL_OBJS)
+    if(project.hasProperty("makeUseSlurm")) {
+      args("SHELL=srun")
+      args(".SHELLFLAGS= --ntasks 1 --time 01:00:00 --quiet --job-name make bash -c")
+    }
+    // inputs.files("$buildDir/V${moduleName}.mk")
+    inputs.files("$buildDir/V${moduleName}.v") // pseudo-input
+    outputs.files("$buildDir/V${moduleName}__ALL.a")
+    outputs.files(BUILD_VK_GLOBAL_OBJS)
+    dependsOn "verilate${moduleName}"
+  }
+}
+
+tasks.register("compileTestDeflate", Exec) {
+  executable = "g++"
+  args("-c")
+  args("-I${
+    System.getenv()
+      .getOrDefault("VERILATOR_ROOT", "/usr/local/share/verilator")
+    }/include", "-I$buildDir")
+  args("-include", "$buildDir/DeflateParameters.h")
+  if(project.hasProperty("ggdb")) {
+    args("-ggdb")
+  }
+  if(project.hasProperty("trace")) {
+    args("-DTRACE_ENABLE=true")
+  }
+  args("$projectDir/src/test/cpp/TestDeflate.cpp")
+  args("-o", "$buildDir/TestDeflate.o")
+  inputs.files("$projectDir/src/test/cpp/TestDeflate.cpp")
+  inputs.files("$buildDir/DeflateParameters.h")
+  inputs.files("$buildDir/VDeflateCompressor.h",
+    "$buildDir/VDeflateDecompressor.h")
+  outputs.files("$buildDir/TestDeflate.o")
+  dependsOn "makeVDeflateCompressor", "makeVDeflateDecompressor"
+  dependsOn "genDeflateCppConfig"
+}
+
+tasks.register("linkTestDeflate", Exec) {
+  executable = "g++"
+  args("$buildDir/TestDeflate.o")
+  args("$buildDir/VDeflateCompressor__ALL.a",
+    "$buildDir/VDeflateDecompressor__ALL.a")
+  args BUILD_VK_GLOBAL_OBJS
+  args("-o", "$buildDir/VTestDeflate")
+  inputs.files("$buildDir/TestDeflate.o")
+  inputs.files("$buildDir/VDeflateCompressor__ALL.a",
+    "$buildDir/VDeflateDecompressor__ALL.a")
+  inputs.files(BUILD_VK_GLOBAL_OBJS)
+  outputs.files("$buildDir/VTestDeflate")
+  dependsOn "compileTestDeflate"
+  dependsOn "makeVDeflateCompressor", "makeVDeflateDecompressor"
+}
+
+tasks.register("buildTestDeflate") {
+  dependsOn "linkTestDeflate"
+}
+
+
+def testDataDir = "$projectDir/testData"
+
+tasks.register("runTestDeflate", ParallelTestTask) {
+  executable = "$buildDir/VTestDeflate"
+  dumps = fileTree("testBenchmarks").filter(File::isFile)
+  reportDir = file("$buildDir/test/deflate-reports-frag")
+  // chunkSize = 4096l * 256 * 4
+  chunkSize = 4096l * 100
+  if(project.hasProperty("useSlurm")) {
+    useSlurm = [null, "", "true", "yes", "on"]
+      .contains(project.property("useSlurm"))
+    if(project.hasProperty("slurmJobId")) {
+      slurmJobId = Long.parseLong(project.property("slurmJobId"))
+      
+      doLast {
+        project.exec(s -> {
+          s.setExecutable("scancel");
+          s.args(project.property("slurmJobId"))
+        });
+      }
+    }
+  }
+  if(project.hasProperty("trace"))
+    trace = [null, "", "true", "yes", "on"]
+      .contains(project.property("trace"))
+  dependsOn "buildTestDeflate"
+}
+
+tasks.register("reportTestDeflate", SummarizeEachTest) {
+  reportDir = file("$buildDir/test/deflate-reports-frag")
+  summaryDir = file("$buildDir/test/deflate-reports")
+  mustRunAfter "runTestDeflate"
+}
+
+
+// workaround for https://github.com/gradle/gradle/issues/16791
+tasks.withType(JavaExec).configureEach {
+  javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
+}
+
+tasks.register("cleanTest", Delete) {
+  delete("$buildDir/test")
+}

@@ -1,0 +1,10 @@
+
+
+$(test)/test-deflate-report.txt: $(patsubst %, $(test)/test-deflate-report.txt_%, $(notdir $(BENCHMARKS)))
+	sbt $(_SBTFLAGS) 'Test / runMain edu.vt.cs.hardware_compressor.Summarize $@ $(patsubst %, $(test)/test-deflate-report.txt_%, $(notdir $(BENCHMARKS)))'
+
+$(patsubst %, $(test)/test-deflate-report.d_%, $(notdir $(BENCHMARKS))): $(test)/test-deflate-report.d_%:
+	@echo '$(patsubst $(test)/test-deflate-report.d_%, $(test)/test-deflate-report.txt_%, $@) : $(filter %/$*, $(BENCHMARKS))' > $@
+include $(patsubst %, $(test)/test-deflate-report.d_%, $(notdir $(BENCHMARKS)))
+$(patsubst %, $(test)/test-deflate-report.txt_%, $(notdir $(BENCHMARKS))): $(test)/test-deflate-report.txt_%: $(build)/VDeflateTest
+	$(build)/VDeflateTest $(patsubst %, --dump %, $(filter %/$*, $(BENCHMARKS))) --report $@

@@ -1,6 +1,7 @@
 package edu.vt.cs.hardware_compressor.util
 
 import chisel3._
+import chisel3.experimental.dataview._
 import chisel3.util._
 import edu.vt.cs.hardware_compressor.util.WidthOps._
 
@@ -11,20 +12,20 @@ import edu.vt.cs.hardware_compressor.util.WidthOps._
  * 
  * A DecoupledStream has two parts: a producer and a consumer. The producer
  * is effectively "the output" of a stream of data, and the consumer is the
- * receiver of the data. The producer uses the DecoupledStream as is, and the
+ * receiver of that data. The producer uses the DecoupledStream as is, and the
  * consumer uses the DecoupledStream flipped. The number of data elements that
  * are passed through the interface in a cycle is the minimum of the ready and
  * valid signals. The bits signal carries the data elements, and at least as
  * many elements must be valid that are specified by the valid signal.
  *
- * The finished signal is asserted by the producer only if there are no more
- * data elements beyond the currently valid elements. A producer is technically
+ * The 'last' signal is asserted by the producer only if there are no more data
+ * elements beyond the currently valid elements. A producer is technically
  * allowed to wait to assert this signal until all data is passed through;
  * however, this behavour could cause deadlock if the consumer accepts data in
  * chunks, so producers are encouraged to assert the signal as soon as possible.
  * 
  * There are two types of producers and consumers: 'push' and 'pull'. Sometimes,
- * a push producer is called a 'compatable' producer and a pull consuer is
+ * a push producer is called a 'compatable' producer and a pull consumer is
  * called a 'compatable' consumer.
  * - A pull producer is wired such that the valid (or bits) signal is dependent
  *   on the ready signal. Effectively, this requires the consumer to "pull" data
@@ -52,15 +53,45 @@ class DecoupledStream[T <: Data](count: Int, gen: T)
   val valid = Output(UInt(log2Ceil(count + 1).W))
   val data = Output(Vec(count, gen))
   def bits = data // alias legacy name
-  val finished = Output(Bool())
-  
-  override def cloneType: this.type =
-    new DecoupledStream(count, gen).asInstanceOf[this.type]
+  val last = Output(Bool())
+  def finished = last // alias legacy name
 }
 
 object DecoupledStream {
-  def apply[T <: Data](count: Int = 0, gen: T = new Bundle {}):
+  def apply[T <: Data](count: Int = 0, gen: T = new Bundle{}):
     DecoupledStream[T] = new DecoupledStream(count, gen)
+}
+
+
+/**
+ * A DecoupledStream which allows a new stream to be started after a stream has
+ * finished.
+ * 
+ * This is accomplished by adding a `restart` Bool signal from consumer to
+ * producer. When `restart` is asserted, `last` is asserted, and `ready` is
+ * greater than or equal to `valid`, then the consumer will be ready for the
+ * next stream on the next cycle and the next cycle will start a new stream.
+ * Behavior is implementation-defined if `restart` is asserted when `last` is
+ * deasserted or `ready` is less than `valid`.
+ * 
+ * If the producer is not yet ready to produce the next stream when a restart
+ * occures, then it may assert `last := false.B` and `valid := 0.U` until it is
+ * ready to produce. To avoid terminating the new stream prematurely, the
+ * producer should take care to deassert `last` on the cycle following a
+ * `restart` assertion (unless of course the stream is so short that it should
+ * be terminated at that point).
+ */
+class RestartableDecoupledStream[T <: Data](count: Int, gen: T)
+    extends DecoupledStream[T](count: Int, gen: T) {
+  val restart = Input(Bool())
+  
+  def viewAsDecoupledStream: DecoupledStream[T] =
+    this.viewAsSupertype(new DecoupledStream(count, gen))
+}
+
+object RestartableDecoupledStream {
+  def apply[T <: Data](count: Int = 0, gen: T = new Bundle{}):
+    RestartableDecoupledStream[T] = new RestartableDecoupledStream(count, gen)
 }
 
 
@@ -73,11 +104,11 @@ object DecoupledStream {
  * 
  * This module may also be used to convert between DecoupledStream interfaces of
  * different sizes. This behavour can be particularly useful when a consumer
- * accepts chuncked or lookahead data since this module will act as a buffer to
+ * accepts chunked or lookahead data since this module will act as a buffer to
  * facilitate such a consumer
  */
 class UniversalConnector[T <: Data](inSize: Int, outSize: Int, gen: T)
-    extends StreamBuffer[T](inSize, outSize, outSize, gen, false) {}
+    extends StreamBuffer[T](inSize, outSize, outSize, gen, false, true) {}
 
 object UniversalConnector {
   def apply[T <: Data](
@@ -89,93 +120,111 @@ object UniversalConnector {
 }
 
 
-class StreamBundle[I <: Data, O <: Data](inC: Int, inGen: I, outC: Int, outGen: O) extends Bundle {
-  val in = Flipped(DecoupledStream(inC, inGen))
-  val out = DecoupledStream(outC, outGen)
-  
-  override def cloneType: this.type =
-    new StreamBundle(inC, inGen, outC, outGen).asInstanceOf[this.type]
+class StreamBundle[I <: Data, O <: Data](inSize: Int, inGen: I, outSize: Int,
+    outGen: O) extends Bundle {
+  val in = Flipped(DecoupledStream(inSize, inGen))
+  val out = DecoupledStream(outSize, outGen)
 }
 
 
 class StreamBuffer[T <: Data](inSize: Int, outSize: Int, bufSize: Int, gen: T,
-    delay: Boolean) extends Module {
-  val io = IO(new StreamBundle(inSize, gen, outSize, gen))
+    delayForward: Boolean = false, delayBackward: Boolean = false)
+    extends Module {
+  val io = IO(new Bundle{
+    val in = Flipped(DecoupledStream(inSize, gen))
+    val out = DecoupledStream(outSize, gen)
+  })
   
-  val buffer = Reg(Vec(bufSize, gen))
-  val bufferLength = RegInit(0.U(bufSize.valBits.W))
+  val tee = Module(new StreamTee[T](inSize, Seq(outSize), bufSize, gen,
+    delayForward, delayBackward))
   
-  for(i <- 0 until bufSize)
-    if(delay)
-      buffer(i) := buffer(i.U + io.out.ready)
-    else when(i.U +& io.out.ready < bufferLength) {
-      buffer(i) := buffer(i.U + io.out.ready)
-    } otherwise {
-      buffer(i) := io.in.bits(i.U + io.out.ready - bufferLength)
-    }
-  
-  bufferLength := Mux(bufferLength +& io.in.valid > io.out.ready,
-    (bufferLength +& io.in.valid - io.out.ready) min bufSize.U, 0.U)
-  
-  for(i <- 0 until outSize)
-    io.out.bits(i) := (if(delay) buffer(i) else
-      Mux(i.U < bufferLength, buffer(i), io.in.bits(i.U - bufferLength)))
-  
-  val outUnbound = if(delay) bufferLength else (bufferLength +& io.in.valid)
-  io.out.valid := outUnbound min outSize.U
-  io.in.ready := (bufSize.U - bufferLength) min inSize.U
-  io.out.finished := io.in.finished && outUnbound <= outSize.U
+  io.in <> tee.io.in
+  io.out <> tee.io.out(0)
 }
 
 
-class StreamTee[T <: Data](gen: T, inSize: Int, bufSize: Int,
-    outSizes: Seq[Int], delay: Boolean = false) extends Module {
+class StreamTee[T <: Data](inSize: Int, outSizes: Seq[Int], bufSize: Int,
+    gen: T, delayForward: Boolean = false, delayBackward: Boolean = false)
+    extends Module {
   val io = IO(new Bundle{
     val in = Flipped(DecoupledStream(inSize, gen))
     val out = MixedVec(outSizes.map(s => DecoupledStream(s, gen)))
   })
   
+  if(outSizes.isEmpty) throw new IllegalArgumentException("no outputs")
+  val singleOut = outSizes.length == 1
+  
   val buffer = Reg(Vec(bufSize, gen))
   val bufferLength = RegInit(0.U(bufSize.valBits.W))
   val offsets = Seq.fill(outSizes.length)(RegInit(0.U(bufSize.valBits.W)))
+  val last = RegInit(Bool(), false.B)
+  
+  val offReady =
+    io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
+  val validLength =
+    if(delayBackward)
+      (bufferLength +& io.in.valid) min bufSize.U
+    else
+      bufferLength +& io.in.valid
   
   // This is the amount that the buffer shifts in a cycle
   // NOTE: progression width assumes at least one offset must be zero
   // TODO: use a treeified min-reduction
-  val progression = Wire(UInt(
-    (((if(delay) 0 else inSize) + bufSize) min outSizes.max).valBits.W))
-  progression := (if(delay) bufferLength else (bufferLength +& io.in.valid)) min
-    io.out.zip(offsets).map(o => o._1.ready +& o._2).reduce(_ min _)
+  val maxProgression =
+    ((if(delayForward) 0 else inSize) + bufSize) min outSizes.max
+  val progression = Wire(UInt(maxProgression.valBits.W))
+  progression := offReady min (if(delayForward) bufferLength else validLength)
   
-  for(i <- 0 until bufSize)
-    if(delay)
-      buffer(i) := buffer(i.U + progression)
-    else when(i.U +& progression < bufferLength) {
-      buffer(i) := buffer(i.U + progression)
-    } otherwise {
-      buffer(i) := io.in.bits(i.U + progression - bufferLength)
+  buffer
+    .tails
+    .map(_.take(maxProgression + 1))
+    .map(_.padTo(maxProgression + 1, DontCare))
+    .map(v => VecInit(v)(progression))
+    .zip(buffer.iterator)
+    .foreach{case (h, b) => b := h}
+  
+  for(i <- 0 until inSize)
+    when((delayForward.B || i.U +& bufferLength >= progression) &&
+        i.U +& bufferLength - progression < bufSize.U) {
+      buffer(i.U + bufferLength - progression) := io.in.bits(i)
     }
   
-  bufferLength := Mux(bufferLength +& io.in.valid > progression,
-    (bufferLength +& io.in.valid - progression) min bufSize.U, 0.U)
+  bufferLength := Mux(delayForward.B || validLength >= progression,
+    if(delayBackward)
+      validLength - progression // validLength is already min-ed
+    else
+      (validLength - progression) min bufSize.U,
+    0.U)
   
-  io.out.zip(outSizes).zip(offsets).foreach{case ((out, siz), off) =>
-    val forward = bufferLength - off;
+  (io.out zip outSizes zip offsets).zipWithIndex
+      .foreach{case (((out, siz), off), i) =>
+    val adjBufferLen = bufferLength - off
+    val adjValidLen = validLength - off
     
     for(i <- 0 until siz)
-      out.bits(i) := (if(delay) buffer(i.U + off) else
-        Mux(i.U < forward, buffer(i.U + off),
-          io.in.bits(i.U - forward)))
+      out.bits(i) := Mux(i.U < adjBufferLen, buffer(i.U + off),
+        if(delayForward) DontCare else io.in.bits(i.U - adjBufferLen))
     
-    val outUnbound = if(delay) forward else (forward +& io.in.valid)
-    when(outUnbound <= siz.U) {
-      out.valid := outUnbound
-      out.finished := io.in.finished
+    if(!singleOut) // offset stays zero with only one output
+    off := ((off +& out.ready) min validLength) - progression
+    
+    val valid = if(delayForward) adjBufferLen else adjValidLen
+    when(valid <= siz.U) {
+      out.valid := valid
+      out.last := (if(delayForward) last else io.in.last)
     } otherwise {
       out.valid := siz.U
-      out.finished := false.B
+      out.last := false.B
     }
+    
+    // suggest names for some wires
+    adjBufferLen.suggestName(s"adjBufferLen_$i")
+    adjValidLen.suggestName(s"adjValidLen_$i")
+    valid.suggestName(s"valid_$i")  
   }
   
-  io.in.ready := (bufSize.U - bufferLength) min inSize.U
+  val readyUnlimit = bufSize.U - bufferLength +&
+    (if(delayBackward) 0.U else offReady)
+  io.in.ready := inSize.U min readyUnlimit
+  last := io.in.last && io.in.valid <= readyUnlimit
 }
