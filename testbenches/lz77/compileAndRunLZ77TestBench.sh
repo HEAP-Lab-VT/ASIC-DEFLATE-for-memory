@@ -1,1 +1,0 @@
-cd ../../; ./scripts/lz77CompressorDecompressor.sh && cd testbenches/lz77/ && time iverilog -s lz77CompressorDecompressorTestbench  -o testbench.vvp lz77CompressorDecompressorTestbench.sv ../../lz77CompressorDecompressor.v ../../wrappers/lz77CompressorDecompressorWrapper.v -g2005-sv && time vvp testbench.vvp -fst

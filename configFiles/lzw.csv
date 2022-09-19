@@ -1,5 +1,0 @@
-characterBits, 8
-maxCharacterSequence, 16
-dictionaryItemsMax, 768
-debugStatistics, true
-debugStatisticsSequenceLengthBits, 14
