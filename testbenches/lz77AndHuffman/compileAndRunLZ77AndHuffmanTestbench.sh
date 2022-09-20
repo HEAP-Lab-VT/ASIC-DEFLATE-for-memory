@@ -1,1 +1,0 @@
-cd ../../; ./scripts/lz77AndHuffman.sh && cd testbenches/lz77AndHuffman/ && time iverilog -s lz77AndHuffmanTestbench  -o testbench.vvp lz77AndHuffmanTestbench.sv ../../lz77AndHuffman.v ../../wrappers/lz77AndHuffmanWrapper.v -g2005-sv && time vvp testbench.vvp -fst

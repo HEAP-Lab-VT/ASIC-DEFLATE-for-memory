@@ -181,16 +181,22 @@ tasks.register("genDeflateCppConfig", JavaExec) {
 }
 
 tasks.register("genLZ") {
+  group = "Execution"
+  description = "Generate LZ Verilog and config"
   dependsOn "genLZCompressor"
   dependsOn "genLZDecompressor"
   dependsOn "genLZCppConfig"
 }
 tasks.register("genHuffman") {
+  group = "Execution"
+  description = "Generate Huffman Verilog and config"
   dependsOn "genHuffmanCompressor"
   dependsOn "genHuffmanDecompressor"
   dependsOn "genHuffmanCppConfig"
 }
 tasks.register("genDeflate") {
+  group = "Execution"
+  description = "Generate Deflate Verilog and config"
   dependsOn "genDeflateCompressor"
   dependsOn "genDeflateDecompressor"
   dependsOn "genDeflateCppConfig"
@@ -314,6 +320,8 @@ tasks.register("linkTestDeflate", Exec) {
 }
 
 tasks.register("buildTestDeflate") {
+  group = "Verification"
+  description = "Build test executable for Deflate"
   dependsOn "linkTestDeflate"
 }
 
@@ -321,6 +329,8 @@ tasks.register("buildTestDeflate") {
 def testDataDir = "$projectDir/testData"
 
 tasks.register("runTestDeflate", ParallelTestTask) {
+  group = "Verification"
+  description = "Run Deflate test"
   executable = "$buildDir/VTestDeflate"
   dumps = fileTree("testBenchmarks").filter(File::isFile)
   reportDir = file("$buildDir/test/deflate-reports-frag")
@@ -347,6 +357,8 @@ tasks.register("runTestDeflate", ParallelTestTask) {
 }
 
 tasks.register("reportTestDeflate", SummarizeEachTest) {
+  group = "Verification"
+  description = "Report the results of the previous Deflate test"
   reportDir = file("$buildDir/test/deflate-reports-frag")
   summaryDir = file("$buildDir/test/deflate-reports")
   mustRunAfter "runTestDeflate"
@@ -359,5 +371,7 @@ tasks.withType(JavaExec).configureEach {
 }
 
 tasks.register("cleanTest", Delete) {
+  group = "Verification"
+  description = "Delete test executables and results"
   delete("$buildDir/test")
 }

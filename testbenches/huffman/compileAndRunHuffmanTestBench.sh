@@ -1,1 +1,0 @@
-cd ../..; ./scripts/huffmanCompressorDecompressor.sh && cd testbenches && time iverilog -s huffmanTestbench -o testbench.vvp huffmanTestbench.sv ../../wrappers/huffmanCompressorDecompressorWrapper.v ../../huffmanCompressorDecompressor.v -g2005-sv && time vvp testbench.vvp -fst
