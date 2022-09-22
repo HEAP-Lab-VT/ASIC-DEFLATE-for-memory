@@ -51,12 +51,12 @@ extension.
 ## Testing
 
 Before running tests, put at least one benchmark file in the `testBenchmarks`
-directory. To appropriately measure performance for memory compression, we
-recommend using memory dumps from a variety of programs with a substantial
-memory footprint. The files will automatically be split into 4KiB pages, and
-pages of all zeros will be dropped. Performance results such as compression
-ratio and throughput will vary depending on the benchmarks used. If the
-directory is empty, no tests will be run.
+directory. Any file will do, but to appropriately measure performance for memory
+compression, we recommend using memory dumps from a variety of programs with a
+substantial memory footprint. The files will automatically be split into 4KiB
+pages, and pages of all zeros will be dropped. Performance results such as
+compression ratio and throughput will vary depending on the benchmarks used. If
+the directory is empty, no tests will be run.
 
 Note: Currently, LZ and Huffman may not be tested individually with Gradle
 tasks.
