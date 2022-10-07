@@ -8,6 +8,9 @@ Note: We call it "Deflate" only because it uses a serial progression of LZ and
 Huffman, which is the core concept of Deflate. However, our design is not
 [RFC 1951](https://datatracker.ietf.org/doc/html/rfc1951) compliant.
 
+## Publication
+Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls, Esha Choukse, Kirk W. Cameron, Ali R. Butt, Xun Jian. "Translation-optimized Memory Compression for Capacity." In *Proceedings of the 55th Annual IEEE/ACM International Symposium on Microarchitecture, October 2022.*
+
 ## Dependencies
 - Java 8 or later
 - [Gradle](https://gradle.org/install/) 7.5 (optional, may use wrapper script)
