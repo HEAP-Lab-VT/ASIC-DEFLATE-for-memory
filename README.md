@@ -109,6 +109,11 @@ remove build and test artifacts
 gradle clean
 ```
 
+Generate Verilog for Deflate compressor and decompressor with Gradle wrapper:
+```
+./gradlew genDeflate
+```
+
 ## Customizing Parameters
 
 Configuration files may be found in the `configFiles` directory, and these may
