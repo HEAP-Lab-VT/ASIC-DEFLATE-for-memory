@@ -77,6 +77,38 @@ directory with one file per benchmark.
 By default, testing will run in parallel on all CPU cores. This may be changed
 with the `--max-workers <num threads>` command line option.
 
+## Examples
+
+Generate Verilog for LZ decompressor:
+```
+gradle genLZDecompressor
+```
+
+Generate Verilog for both LZ modules (compressor and decompressor):
+```
+gradle genLZ
+```
+
+Generate Verilog for Deflate compressor and decompressor:
+```
+gradle genDeflate
+```
+
+Run correctness testing on Deflate
+```
+gradle runTestDeflate
+```
+
+Summarize Deflate test results into a single file
+```
+gradle reportTestDeflate
+```
+
+remove build and test artifacts
+```
+gradle clean
+```
+
 ## Customizing Parameters
 
 Configuration files may be found in the `configFiles` directory, and these may
