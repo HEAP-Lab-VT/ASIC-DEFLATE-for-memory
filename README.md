@@ -53,7 +53,9 @@ extension.
 
 ## Ubuntu 22.04 workflow
 `sudo apt install default-jdk g++ verilator make`
+
 `git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
+
 `./gradlew <taskname>` or `./gradlew genDeflate`
 
 ## Testing
