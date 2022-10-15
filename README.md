@@ -23,9 +23,9 @@ Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls, Es
 
 ## A brief note on using Gradle
 
-Gradle may be run by executing `gradle <task name>...` on the command line
+Gradle may be run by executing `gradle <task name>` on the command line
 when in the project directory. If the correct version of Gradle is not installed
-on the system, use `./gradlew` or `./gradlew.bat` (Windows) instead of `gradle`.
+on the system, use `./gradlew <task name>` or `./gradlew.bat <task name>` (Windows).
 A list of all available tasks can be listed by running `gradle tasks`.
 
 Gradle resolves task dependencies automatically, so you don't need to manually
@@ -50,6 +50,11 @@ Use the following Gradle tasks for generating Verilog for the design:
 
 Generated Verilog will appear in the `build` directory with the `.v` file
 extension.
+
+## Ubuntu 22.04 workflow
+`sudo apt install default-jdk g++ verilator make`
+`git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
+`./gradlew <taskname>` or `./gradlew genDeflate`
 
 ## Testing
 
