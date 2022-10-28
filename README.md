@@ -68,6 +68,8 @@ pages, and pages of all zeros will be dropped. Performance results such as
 compression ratio and throughput will vary depending on the benchmarks used. If
 the directory is empty, no tests will be run.
 
+You may download some memory dumps from here: https://www.dropbox.com/s/x8sxf1gt208sqkh/testBenchmarks.tar.xz?dl=0
+
 Note: Currently, LZ and Huffman may not be tested individually with Gradle
 tasks.
 
