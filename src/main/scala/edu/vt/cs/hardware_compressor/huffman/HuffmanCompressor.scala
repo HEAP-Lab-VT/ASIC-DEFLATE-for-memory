@@ -58,6 +58,16 @@ class HuffmanCompressor(params: Parameters) extends Module {
   }
   
   
+  // ACCUMULATE-REPLAY
+  val accRep = Module(new AccumulateReplay(params))
+  val counterInReady = Wire(UInt(params.counterCharsIn.valBits.W))
+  accRep.io.in.data := io.in.data
+  accRep.io.in.valid := io.in.valid min counterInReady
+  accRep.io.in.last := io.in.last && io.in.valid === counterInReady
+  io.in.ready := counterInReady min accRep.io.in.ready
+  io.in.restart := accRep.io.in.restart
+  
+  
   // BEGIN PIPELINE
   active = true.B
   finished = io.in.last && io.in.valid <= io.in.ready
@@ -67,58 +77,29 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // STAGE 1: Counter
   nextStage(true.B)
   var counterResult = Wire(new CounterResult(params))
-  var data = Wire(Vec(params.passOneSize, UInt(params.characterBits.W)))
-  var dataLength = Wire(UInt(params.passOneSize.valBits.W))
-  var dataComplete = Wire(Bool())
-  io.in.restart := transfer
   withReset(transfer || reset.asBool) {
-    
-    // fetch input data
-    val dataReg = Reg(chiselTypeOf(data))
-    val dataLengthReg = RegInit(chiselTypeOf(dataLength), 0.U)
-    val dataCompleteReg = RegInit(chiselTypeOf(dataComplete), false.B)
-    data := dataReg
-    dataLength := dataLengthReg
-    dataComplete := dataCompleteReg
-    for(i <- 0 until params.compressorCharsIn) {
-      when(i.U < io.in.ready) {
-        dataReg(dataLengthReg + i.U) := io.in.data(i)
-      }
-    }
-    dataLengthReg := dataLengthReg + (io.in.valid min io.in.ready)
-    when(io.in.last && io.in.valid <= io.in.ready) {
-      dataCompleteReg := true.B
-    }
-    io.in.ready := (params.passOneSize.U - dataLengthReg) min
-      params.compressorCharsIn.U
-    
-    // count input data
     val counter = Module(new Counter(params))
+    counter.io.in.data := io.in.data
+    counter.io.in.valid := io.in.valid min accRep.io.in.ready
+    counter.io.in.last := io.in.last && io.in.valid === accRep.io.in.ready
     
-    val dataIndex = RegInit(UInt(params.passOneSize.valBits.W), 0.U)
-    dataIndex := dataIndex + (counter.io.in.valid min counter.io.in.ready)
-    for(i <- 0 until params.counterCharsIn) {
-      counter.io.in.data(i) := dataReg(dataIndex + i.U)
-    }
-    counter.io.in.valid := (dataLengthReg - dataIndex) min
-      params.counterCharsIn.U
-    counter.io.in.last :=
-      (dataCompleteReg &&
-        dataLengthReg - dataIndex <= params.counterCharsIn.U) ||
-      (dataLengthReg >= params.passOneSize.U &&
-        dataIndex >= ((params.passOneSize - params.counterCharsIn) max 0).U)
-    
+    counterInReady := counter.io.in.ready
     counterResult := counter.io.result
     finished := counter.io.finished
+    
+    val inputRestarted = RegInit(Bool(), false.B)
+    inputRestarted := inputRestarted || io.in.restart
+    when(inputRestarted) {
+      counter.io.in.valid := 0.U
+      counter.io.in.last := true.B;
+      counterInReady := 0.U
+    }
   }
   
   
   // STAGE 2: tree generation + encoding
   nextStage()
   counterResult = RegEnable(counterResult, transfer)
-  data = RegEnable(data, transfer) // TODO: parameterize the size of this
-  dataLength = RegEnable(dataLength, transfer)
-  dataComplete = RegEnable(dataComplete, transfer)
   val treeGeneratorClock = Wire(Clock())
   val treeGeneratorSafe = Wire(Bool());
   {
