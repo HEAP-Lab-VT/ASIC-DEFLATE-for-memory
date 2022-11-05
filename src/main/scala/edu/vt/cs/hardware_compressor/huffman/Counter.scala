@@ -35,10 +35,10 @@ class Counter(params: Parameters) extends Module {
     u
   }))
   
-  total := total + (io.in.ready min io.in.valid)
+  total := (total +& io.in.valid) min params.passOneSize.U
   io.in.ready := params.counterCharsIn.U
   for(i <- 0 until params.counterCharsIn) {
-    when(i.U < io.in.valid) {
+    when(i.U < io.in.valid && total < ((params.passOneSize - i) max 0).U) {
       val char = io.in.data(i)
       val newFreq = frequencies(char).freq +
         PopCount(io.in.data.map(_ === char).take(i)) + 1.U
@@ -110,7 +110,8 @@ class Counter(params: Parameters) extends Module {
     // allocation of escape character in the huffman tree.
     1.U
   )
-  io.finished := io.in.last && io.in.valid === 0.U &&
+  io.finished := (io.in.last && io.in.valid === 0.U ||
+    total === params.passOneSize.U) &&
     promotionChar === frequencies.length.U &&
     demotionIdx === (highChars.length - 1).U
 }

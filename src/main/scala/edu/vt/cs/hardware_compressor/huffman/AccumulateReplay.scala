@@ -49,7 +49,7 @@ class AccumulateReplay(params: Parameters) extends Module {
   io.out.data := outbuf
   io.out.valid := outbufLen
   io.out.last := isMarked && head === mark
-  outbufLen := (unconsumed +& (cap - head)(11,0)) min 8.Us
+  outbufLen := (unconsumed +& (cap - head)(11,0)) min 8.U
   when(io.out.restart) {
     isMarked := false.B
     head := mark // for good measure

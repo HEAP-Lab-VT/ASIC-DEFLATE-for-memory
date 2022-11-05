@@ -22,13 +22,13 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   // DECLARE PIPELINE INFRASTRUCTURE
   var stageId: Int = 0
-  var active: Bool = null
+  var active: Bool = WireDefault(Bool(), DontCare)
   var activePrev: Bool = null
   var activeNext: Bool = Wire(Bool())
-  var finished: Bool = null
+  var finished: Bool = WireDefault(Bool(), DontCare)
   var finishedPrev: Bool = null
   var finishedNext: Bool = Wire(Bool())
-  var transfer: Bool = null
+  var transfer: Bool = WireDefault(Bool(), DontCare)
   var transferPrev: Bool = null
   var transferNext: Bool = Wire(Bool())
   def nextStage(activeInit: Bool = false.B): Unit = {
@@ -60,30 +60,36 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   // ACCUMULATE-REPLAY
   val accRep = Module(new AccumulateReplay(params))
-  val counterInReady = Wire(UInt(params.counterCharsIn.valBits.W))
+  val counterReady = Wire(UInt(params.counterCharsIn.valBits.W))
   accRep.io.in.data := io.in.data
-  accRep.io.in.valid := io.in.valid min counterInReady
-  accRep.io.in.last := io.in.last && io.in.valid === counterInReady
-  io.in.ready := counterInReady min accRep.io.in.ready
+  accRep.io.in.valid := io.in.valid min counterReady
+  accRep.io.in.last := io.in.last && io.in.valid === counterReady
+  io.in.ready := counterReady min accRep.io.in.ready
   io.in.restart := accRep.io.in.restart
   
   
   // BEGIN PIPELINE
-  active = true.B
-  finished = io.in.last && io.in.valid <= io.in.ready
-  transfer = WireDefault(Bool(), DontCare)
+  active := true.B
+  finished := io.in.last && io.in.valid <= io.in.ready
   
   
   // STAGE 1: Counter
   nextStage(true.B)
+  io.in.restart := transfer
   var counterResult = Wire(new CounterResult(params))
   withReset(transfer || reset.asBool) {
     val counter = Module(new Counter(params))
-    counter.io.in.data := io.in.data
-    counter.io.in.valid := io.in.valid min accRep.io.in.ready
-    counter.io.in.last := io.in.last && io.in.valid === accRep.io.in.ready
+    val inbuf = Reg(Vec(params.compressorCharsIn, UInt(params.characterBits.W)))
+    val inbufLen = RegInit(UInt(params.compressorCharsIn.valBits.W), 0.U)
+    inbuf := io.in.data
+    inbufLen := io.in.valid min accRep.io.in.ready
+    counter.io.in.data := inbuf
+    counter.io.in.valid := inbufLen
+    counter.io.in.last := io.in.last && io.in.valid === 0.U
     
-    counterInReady := counter.io.in.ready
+    counterReady := params.compressorCharsIn.U -
+      Mux(counter.io.in.ready < inbufLen && active,
+        inbufLen - counter.io.in.ready, 0.U)
     counterResult := counter.io.result
     finished := counter.io.finished
     
@@ -92,7 +98,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
     when(inputRestarted) {
       counter.io.in.valid := 0.U
       counter.io.in.last := true.B;
-      counterInReady := 0.U
+      counterReady := 0.U
     }
   }
   

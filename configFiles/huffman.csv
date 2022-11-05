@@ -6,6 +6,6 @@ compressorCharsIn,8
 compressorBitsOut,32
 counterCharsIn,8
 encoderParallelism,8
-passOneSize,4096
+passOneSize,4095
 decompressorLineBits,32
 decompressorCharsOut,8
