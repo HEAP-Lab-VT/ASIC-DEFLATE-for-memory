@@ -22,13 +22,13 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   // DECLARE PIPELINE INFRASTRUCTURE
   var stageId: Int = 0
-  var active: Bool = WireDefault(Bool(), DontCare)
+  var active: Bool = Wire(Bool())
   var activePrev: Bool = null
   var activeNext: Bool = Wire(Bool())
-  var finished: Bool = WireDefault(Bool(), DontCare)
+  var finished: Bool = Wire(Bool())
   var finishedPrev: Bool = null
   var finishedNext: Bool = Wire(Bool())
-  var transfer: Bool = WireDefault(Bool(), DontCare)
+  var transfer: Bool = Wire(Bool())
   var transferPrev: Bool = null
   var transferNext: Bool = Wire(Bool())
   def nextStage(activeInit: Bool = false.B): Unit = {
@@ -71,6 +71,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   // BEGIN PIPELINE
   active := true.B
   finished := io.in.last && io.in.valid <= io.in.ready
+  transfer := DontCare
   
   
   // STAGE 1: Counter
@@ -104,7 +105,9 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   
   // STAGE 2: tree generation + encoding
+  // TODO: split tree generation and encoding into seperate stages
   nextStage()
+  accRep.io.out.restart := transfer && RegEnable(true.B, false.B, transfer)
   counterResult = RegEnable(counterResult, transfer)
   val treeGeneratorClock = Wire(Clock())
   val treeGeneratorSafe = Wire(Bool());
@@ -123,63 +126,18 @@ class HuffmanCompressor(params: Parameters) extends Module {
     val treeGeneratorResult = RegNext(treeGenerator.io.result)
     val treeGeneratorFinished = RegNext(treeGenerator.io.finished, false.B)
     
-    val dataBegin = RegInit(UInt(params.passOneSize.idxBits.W), 0.U)
-    val dataEnd = dataLength
-    val dataPointerInverted = RegInit(Bool(), false.B)
-    val dataBeginWrap = WireDefault(Bool(), false.B)
-    val dataEndWrap = WireDefault(Bool(), false.B)
-    when(dataBeginWrap =/= dataEndWrap){dataPointerInverted := dataEndWrap}
-    when(!dataComplete && active) {
-      // fetch remaining input data
-      for(i <- 0 until params.compressorCharsIn) {
-        when(i.U < io.in.ready) {
-          data((dataEnd + i.U) % params.passOneSize.U) := io.in.data(i)
-        }
-      }
-      
-      val dataEndNextNoWrap = dataEnd +& (io.in.valid min io.in.ready)
-      dataEndWrap := dataEndNextNoWrap >= params.passOneSize.U
-      dataEnd := dataEndNextNoWrap - Mux(dataEndWrap, params.passOneSize.U, 0.U)
-      
-      val difference = dataEnd - dataBegin
-      io.in.ready := Mux(dataPointerInverted,
-        -difference,
-        params.passOneSize.U - difference
-      ) min params.compressorCharsIn.U
-      
-      when(io.in.last && io.in.valid <= io.in.ready){dataComplete := true.B}
-    }
-    
     when(treeGeneratorFinished) {
       val encoder =
         withReset(!treeGeneratorFinished || transfer || reset.asBool) {
           Module(new Encoder(params))
         }
       
-      val dataBeginNext = dataBegin +&
-        (encoder.io.in.valid min encoder.io.in.ready)
-      dataBegin := dataBeginNext - Mux(dataBeginWrap, params.passOneSize.U, 0.U)
-      dataBeginWrap := dataBeginNext >= params.passOneSize.U
-      for(i <- 0 until params.counterCharsIn) {
-        encoder.io.in.data(i) := data(dataBegin + i.U)
-      }
-      val difference = dataEnd - dataBegin
-      encoder.io.in.valid := Mux(dataPointerInverted,
-        params.passOneSize.U + difference, // WARNING: int overflow
-        difference
-      ) min params.counterCharsIn.U
-      encoder.io.in.last :=
-        (dataComplete && dataEnd - dataBegin <= params.encoderParallelism.U) ||
-        (dataEnd >= params.passOneSize.U && dataBegin >=
-          ((params.passOneSize - params.encoderParallelism) max 0).U)
-      
+      encoder.io.in <> accRep.io.out.viewAsDecoupledStream
       encoder.io.treeGeneratorResult := treeGeneratorResult
-      io.out.data <> encoder.io.out.data
-      io.out.valid <> encoder.io.out.valid
-      io.out.ready <> encoder.io.out.ready
-      io.out.last <> encoder.io.out.last
+      io.out.viewAsDecoupledStream <> encoder.io.out
       finished := encoder.io.finished
     } otherwise {
+      accRep.io.out.ready := 0.U
       io.out.data := DontCare
       io.out.valid := 0.U
       io.out.last := false.B
@@ -188,6 +146,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   }
   // make sure outputs have a reasonable default when stage 2 is inactive
   when(!active) {
+    accRep.io.out.ready := 0.U
     io.out.data := DontCare
     io.out.valid := 0.U
     io.out.last := false.B
