@@ -29,9 +29,9 @@ class AccumulateReplay(params: Parameters) extends Module {
   val unconsumed = Mux(io.out.ready < outbufLen, outbufLen - io.out.ready, 0.U)
   for(i <- 0 until 8) {
     val j = (i.U - head)(2,0)
-    val m = mem(((head + i.U) & 0xff8.U) + i.U)
+    val m = mem(((head + 7.U - i.U) & 0xff8.U) + i.U)
     val b = outbuf((j +& unconsumed) % 8.U)
-    val s = outbuf(j)
+    val s = outbuf((j +& outbufLen) % 8.U)
     val o = j +& outbufLen < 8.U +& io.out.ready
     b := Mux(o, m, s)
   }
@@ -39,7 +39,7 @@ class AccumulateReplay(params: Parameters) extends Module {
   
   // store to memory
   for(i <- 0 until 8) {
-    val a = ((tail + i.U) & 0xff8.U) + i.U
+    val a = ((tail + 7.U - i.U) & 0xff8.U) + i.U
     when((tail >= head) ^ (a >= tail) ^ (a >= head)) {
       mem(a) := inbuf((i.U - tail)(2,0))
     }
