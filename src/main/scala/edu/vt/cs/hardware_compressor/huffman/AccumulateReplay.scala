@@ -56,7 +56,7 @@ class AccumulateReplay(params: Parameters) extends Module {
     outbufLen := 0.U // for good measure
   }
   
-  io.in.ready := (head - tail - 1.U)(11,0) min 8.U
+  io.in.ready := (head - tail - inbufLen - 1.U)(11,0) min 8.U
   io.in.restart := false.B
   inbuf := io.in.data
   inbufLen := io.in.valid min io.in.ready
