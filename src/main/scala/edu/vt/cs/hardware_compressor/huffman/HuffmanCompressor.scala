@@ -58,26 +58,48 @@ class HuffmanCompressor(params: Parameters) extends Module {
   }
   
   
+  // input restarting
+  val accRepInRestart = Wire(Bool())
+  val counterInRestart = Wire(Bool())
+  val accRepRestartDelay = RegEnable(true.B, false.B, accRepInRestart)
+  val counterRestartDelay = RegEnable(true.B, false.B, counterInRestart)
+  when(io.in.restart) {
+    accRepRestartDelay := false.B
+    counterRestartDelay := false.B
+  }
+  io.in.restart :=
+    (accRepInRestart || accRepRestartDelay) &&
+    (counterInRestart || counterRestartDelay)
+  
+  
   // ACCUMULATE-REPLAY
   val accRep = Module(new AccumulateReplay(params))
   val counterReady = Wire(UInt(params.counterCharsIn.valBits.W))
   accRep.io.in.data := io.in.data
   accRep.io.in.valid := io.in.valid min counterReady
-  accRep.io.in.last := io.in.last && io.in.valid === counterReady
+  accRep.io.in.last := io.in.last && io.in.valid <= counterReady
   io.in.ready := counterReady min accRep.io.in.ready
-  io.in.restart := accRep.io.in.restart
+  accRepInRestart := accRep.io.in.restart
+  when(accRepRestartDelay) {
+    accRep.io.in.valid := 0.U
+    accRep.io.in.last := false.B
+    io.in.ready := 0.U
+  }
   
   
   // BEGIN PIPELINE
   active := true.B
   finished := io.in.last && io.in.valid <= io.in.ready
   transfer := DontCare
+  when(counterRestartDelay) {
+    finished := false.B
+  }
   
   
   // STAGE 1: Counter
   nextStage(true.B)
-  io.in.restart := transfer
   var counterResult = Wire(new CounterResult(params))
+  counterInRestart := transfer
   withReset(transfer || reset.asBool) {
     val counter = Module(new Counter(params))
     val inbuf = Reg(Vec(params.compressorCharsIn, UInt(params.characterBits.W)))
@@ -87,19 +109,19 @@ class HuffmanCompressor(params: Parameters) extends Module {
     counter.io.in.data := inbuf
     counter.io.in.valid := inbufLen
     counter.io.in.last := io.in.last && io.in.valid === 0.U
+    when(counterRestartDelay) {
+      inbufLen := 0.U
+      counter.io.in.last := false.B
+    }
     
     counterReady := params.compressorCharsIn.U -
-      Mux(counter.io.in.ready < inbufLen && active,
+      Mux(counter.io.in.ready < inbufLen,
         inbufLen - counter.io.in.ready, 0.U)
     counterResult := counter.io.result
     finished := counter.io.finished
     
-    val inputRestarted = RegInit(Bool(), false.B)
-    inputRestarted := inputRestarted || io.in.restart
-    when(inputRestarted) {
-      counter.io.in.valid := 0.U
-      counter.io.in.last := true.B;
-      counterReady := 0.U
+    when(!active) {
+      counterReady := params.compressorCharsIn.U
     }
   }
   
