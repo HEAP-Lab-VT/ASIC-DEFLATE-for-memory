@@ -115,6 +115,9 @@ struct Options {
   const char *cTrace;
   const char *dTrace;
   const char *debugJob;
+  const char *debugRDump;
+  const char *debugCDump;
+  const char *debugDDump;
   long int dumpSeek;
   long int dumpLimit;
 };
@@ -186,6 +189,9 @@ int main(int argc, const char **argv, char **env) {
   options.cTrace = "-";
   options.dTrace = "-";
   options.debugJob = "-1";
+  options.debugRDump = "-";
+  options.debugCDump = "-";
+  options.debugDDump = "-";
   for(int i = 1; i < argc; i++) {
     if(!strcmp(argv[i], "--dump")) {
       ++i;
@@ -221,6 +227,21 @@ int main(int argc, const char **argv, char **env) {
       ++i;
       assert(i < argc);
       options.debugJob = argv[i];
+    }
+    else if(!strcmp(argv[i], "--debug-r-dump")) {
+      ++i;
+      assert(i < argc);
+      options.debugRDump = argv[i];
+    }
+    else if(!strcmp(argv[i], "--debug-c-dump")) {
+      ++i;
+      assert(i < argc);
+      options.debugCDump = argv[i];
+    }
+    else if(!strcmp(argv[i], "--debug-d-dump")) {
+      ++i;
+      assert(i < argc);
+      options.debugDDump = argv[i];
     }
   }
   debugJobId = atoi(options.debugJob);
@@ -646,30 +667,51 @@ static bool doFinalize() {
   fprintf(reportfile, "\n");
   
   if(job->id == debugJobId) {
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "====================\n");
-    fprintf(reportfile, "| BEGIN DEBUG DUMP |\n");
-    fprintf(reportfile, "====================\n");
-    fprintf(reportfile, "job ID: %d\n", job->id);
-    fprintf(reportfile, "raw: (length = %lu)\n", job->rawLen);
-    for(size_t i = 0; i < job->rawLen; i +=
-      fwrite(job->raw + i, 1, job->rawLen - i, reportfile));
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "compressed: (length = %lu)\n", job->compressedLen);
-    for(size_t i = 0; i * 8 < job->compressedLen; i += 8 *
-      fwrite(job->compressed + i, 1, (job->compressedLen+7)/8 - i, reportfile));
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "decompressed: (length = %lu)\n", job->decompressedLen);
-    for(size_t i = 0; i < job->decompressedLen; i +=
-      fwrite(job->decompressed + i, 1, job->decompressedLen - i, reportfile));
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "\n");
-    fprintf(reportfile, "====================\n");
-    fprintf(reportfile, "|  END DEBUG DUMP  |\n");
-    fprintf(reportfile, "====================\n");
-    fprintf(reportfile, "\n");
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "====================\n");
+    // fprintf(reportfile, "| BEGIN DEBUG DUMP |\n");
+    // fprintf(reportfile, "====================\n");
+    // fprintf(reportfile, "job ID: %d\n", job->id);
+    // fprintf(reportfile, "raw: (length = %lu)\n", job->rawLen);
+    // for(size_t i = 0; i < job->rawLen; i +=
+    //   fwrite(job->raw + i, 1, job->rawLen - i, reportfile));
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "compressed: (length = %lu)\n", job->compressedLen);
+    // for(size_t i = 0; i * 8 < job->compressedLen; i += 8 *
+    //   fwrite(job->compressed + i, 1, (job->compressedLen+7)/8 - i, reportfile));
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "decompressed: (length = %lu)\n", job->decompressedLen);
+    // for(size_t i = 0; i < job->decompressedLen; i +=
+    //   fwrite(job->decompressed + i, 1, job->decompressedLen - i, reportfile));
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "\n");
+    // fprintf(reportfile, "====================\n");
+    // fprintf(reportfile, "|  END DEBUG DUMP  |\n");
+    // fprintf(reportfile, "====================\n");
+    // fprintf(reportfile, "\n");
+    
+    if(strcmp(options.debugRDump, "-")) {
+      FILE *drd = fopen(options.debugRDump, "wb");
+      for(size_t i = 0; i < job->rawLen; i +=
+        fwrite(job->raw + i, 1, job->rawLen - i, drd));
+      fclose(drd);
+    }
+    
+    if(strcmp(options.debugCDump, "-")) {
+      FILE *dcd = fopen(options.debugCDump, "wb");
+      for(size_t i = 0; i * 8 < job->compressedLen; i += 8 *
+        fwrite(job->compressed + i, 1, (job->compressedLen+7)/8 - i, dcd));
+      fclose(dcd);
+    }
+    
+    if(strcmp(options.debugDDump, "-")) {
+      FILE *ddd = fopen(options.debugDDump, "wb");
+      for(size_t i = 0; i < job->decompressedLen; i +=
+        fwrite(job->decompressed + i, 1, job->decompressedLen - i, ddd));
+      fclose(ddd);
+    }
   }
   
   job->stage = 0;
