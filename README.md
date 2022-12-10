@@ -60,7 +60,7 @@ extension.
 
 `git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
 
-`./gradlew <taskname>` or `./gradlew genDeflate`
+`./gradlew genDeflate runTestDeflate reportTestDeflate`
 
 ## Testing
 
