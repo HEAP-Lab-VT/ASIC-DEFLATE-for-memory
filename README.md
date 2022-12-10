@@ -55,13 +55,6 @@ Use the following Gradle tasks for generating Verilog for the design:
 Generated Verilog will appear in the `build` directory with the `.v` file
 extension.
 
-## Ubuntu 22.04 workflow
-`sudo apt install default-jdk g++ verilator make`
-
-`git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
-
-`./gradlew genDeflate runTestDeflate reportTestDeflate`
-
 ## Testing
 
 Before running tests, put at least one benchmark file in the `testBenchmarks`
@@ -91,7 +84,14 @@ directory with one file per benchmark.
 By default, testing will run in parallel on all CPU cores. This may be changed
 with the `--max-workers <num threads>` command line option.
 
-## Examples
+## Ubuntu 22.04 workflow
+`sudo apt install default-jdk g++ verilator make`
+
+`git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
+
+`./gradlew genDeflate runTestDeflate reportTestDeflate`
+
+## Gradle Task Examples
 
 Generate Verilog for LZ decompressor:
 ```
