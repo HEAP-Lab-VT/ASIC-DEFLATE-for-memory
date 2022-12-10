@@ -132,23 +132,29 @@ class HuffmanCompressor(params: Parameters) extends Module {
   accRep.io.out.restart := transfer && RegEnable(true.B, false.B, transfer)
   counterResult = RegEnable(counterResult, transfer)
   val treeGeneratorClock = Wire(Clock())
-  val treeGeneratorSafe = Wire(Bool());
+  val treeGeneratorSafe = Wire(Bool())
+  val treeGeneratorReset = Wire(Bool());
   {
-    val cl = Reg(Bool())
-    cl := !cl
-    treeGeneratorClock := cl.asClock
-    treeGeneratorSafe := !cl
+    val div2 = Reg(Bool())
+    div2 := !div2
+    val cl = ClockDerive(clock, div2, "posedge")
+    treeGeneratorClock := cl
+    treeGeneratorSafe := !cl.asBool
+    treeGeneratorReset := transfer || reset.asBool || RegNext(transfer, true.B)
   }
-  val treeGeneratorReset = transfer || reset.asBool || RegNext(transfer, true.B)
   withReset(transfer || reset.asBool) {
     
-    val treeGenerator = withClockAndReset(treeGeneratorClock,treeGeneratorReset)
-      {Module(new TreeGenerator(params))}
-    treeGenerator.io.counterResult := counterResult
-    val treeGeneratorResult = RegNext(treeGenerator.io.result)
-    val treeGeneratorFinished = RegNext(treeGenerator.io.finished, false.B)
+    val treeGeneratorResult = Wire(new TreeGeneratorResult(params))
+    val treeGeneratorFinished = Wire(Bool())
+    withClockAndReset(treeGeneratorClock,treeGeneratorReset) {
+      val treeGenerator = Module(new TreeGenerator(params))
+      treeGenerator.io.counterResult := counterResult
+      treeGeneratorResult := RegNext(treeGenerator.io.result)
+      treeGeneratorFinished := RegNext(treeGenerator.io.finished, false.B)
+    }
     
-    when(treeGeneratorFinished) {
+    // TG reset may lag behind others, so don't use TG results during this time.
+    when(treeGeneratorFinished && RegNext(true.B, false.B)) { 
       val encoder =
         withReset(!treeGeneratorFinished || transfer || reset.asBool) {
           Module(new Encoder(params))
