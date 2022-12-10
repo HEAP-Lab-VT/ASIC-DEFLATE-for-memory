@@ -26,11 +26,10 @@ International Symposium on Microarchitecture, October 2022.*
 
 ## A brief note on using Gradle
 
-Gradle may be run by executing `gradle <task name>` on the command line
-when in the project directory. If the correct version of Gradle is not installed
-on the system, use `./gradlew <task name>` or `./gradlew.bat <task name>`
-(Windows). A list of all available tasks can be listed by running
-`gradle tasks`.
+Gradle may be run by executing `gradle <task name>` on the command line when in
+the project directory. If the correct version of Gradle is not installed on the
+system, use `./gradlew <task name>` or `./gradlew.bat <task name>` (Windows). A
+list of all available tasks can be listed by running `gradle tasks`.
 
 Gradle resolves task dependencies automatically, so you don't need to manually
 run dependencies. For example, if you run the `runTestDeflate` task, Gradle will
