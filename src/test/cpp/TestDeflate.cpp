@@ -33,19 +33,19 @@
 #endif
 #if TRACE_ENABLE
   #include "verilated_vcd_c.h"
-  #define COMPRESSOR_TRACE() do \
+  #define COMPRESSOR_TRACE(t) do \
     if(compressorTraceEnable) { \
       compressorTrace->dump(compressorContext->time()); \
-      compressorContext->timeInc(1); \
+      compressorContext->timeInc(t); \
     } while(false)
-  #define DECOMPRESSOR_TRACE() do \
+  #define DECOMPRESSOR_TRACE(t) do \
     if(decompressorTraceEnable) { \
       decompressorTrace->dump(decompressorContext->time()); \
-      decompressorContext->timeInc(1); \
+      decompressorContext->timeInc(t); \
     } while(false)
 #else
-  #define COMPRESSOR_TRACE() do {} while(false)
-  #define DECOMPRESSOR_TRACE() do {} while(false)
+  #define COMPRESSOR_TRACE(t) do {} while(false)
+  #define DECOMPRESSOR_TRACE(t) do {} while(false)
 #endif
 
 
@@ -169,16 +169,23 @@ static void cleanup() {
   #if TRACE_ENABLE
   if(compressorTraceEnable) {
     compressorTrace->close();
-    delete compressorContext;
   }
   if(decompressorTraceEnable) {
     decompressorTrace->close();
-    delete decompressorContext;
   }
   #endif
   
   delete compressor;
   delete decompressor;
+  
+  #if TRACE_ENABLE
+  if(compressorTraceEnable) {
+    delete compressorContext;
+  }
+  if(decompressorTraceEnable) {
+    delete decompressorContext;
+  }
+  #endif
 }
 
 int main(int argc, const char **argv, char **env) {
@@ -313,17 +320,19 @@ int main(int argc, const char **argv, char **env) {
   compressor->reset = 1;
   compressor->clock = 0;
   compressor->eval();
-  COMPRESSOR_TRACE();
+  COMPRESSOR_TRACE(400);
   compressor->clock = 1;
   compressor->eval();
+  COMPRESSOR_TRACE(50);
   compressor->reset = 0;
   
   decompressor->reset = 1;
   decompressor->clock = 0;
   decompressor->eval();
-  DECOMPRESSOR_TRACE();
+  DECOMPRESSOR_TRACE(400);
   decompressor->clock = 1;
   decompressor->eval();
+  DECOMPRESSOR_TRACE(50);
   decompressor->reset = 0;
   
   quit = false;
@@ -450,6 +459,7 @@ static bool doCompressor() {
     
     // update outputs based on new inputs
     compressor->eval();
+    COMPRESSOR_TRACE(50);
     
     idle++;
     
@@ -473,6 +483,7 @@ static bool doCompressor() {
     compressor->io_out_restart = compressor->io_out_last &&
       compressor->io_out_ready >= compressor->io_out_valid;
     compressor->eval();
+    COMPRESSOR_TRACE(50);
     
     for(int i = jobIdxOut;;i = ++i % JOB_QUEUE_SIZE) {
       jobs[i].compressorCycles++;
@@ -496,16 +507,17 @@ static bool doCompressor() {
     
     // make ure everything is still up to date
     compressor->eval();
-    COMPRESSOR_TRACE();
+    COMPRESSOR_TRACE(50);
     
     // prepare for rising edge
     compressor->clock = 0;
     compressor->eval();
-    COMPRESSOR_TRACE();
+    COMPRESSOR_TRACE(200);
     
     // update module registers with rising edge
     compressor->clock = 1;
     compressor->eval();
+    COMPRESSOR_TRACE(50);
     
     if(TIMEOUT)
       cleanup();
@@ -562,6 +574,7 @@ static bool doDecompressor() {
     
     // update outputs based on new inputs
     decompressor->eval();
+    DECOMPRESSOR_TRACE(50);
     
     idle++;
     
@@ -583,6 +596,7 @@ static bool doDecompressor() {
     decompressor->io_out_restart = decompressor->io_out_last &&
       decompressor->io_out_ready >= decompressor->io_out_valid;
     decompressor->eval();
+    DECOMPRESSOR_TRACE(50);
     
     
     for(int i = jobIdxOut;;i = ++i % JOB_QUEUE_SIZE) {
@@ -605,16 +619,18 @@ static bool doDecompressor() {
     }
     
     
-    DECOMPRESSOR_TRACE();
+    decompressor->eval();
+    DECOMPRESSOR_TRACE(50);
     
     // prepare for rising edge
     decompressor->clock = 0;
     decompressor->eval();
-    DECOMPRESSOR_TRACE();
+    DECOMPRESSOR_TRACE(200);
     
     // update module registers with rising edge
     decompressor->clock = 1;
     decompressor->eval();
+    DECOMPRESSOR_TRACE(50);
     
     if(TIMEOUT)
       cleanup();
