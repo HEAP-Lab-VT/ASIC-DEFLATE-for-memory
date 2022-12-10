@@ -158,10 +158,3 @@ report_power
 
 Other modules, e.g. the Huffman decompressor, may be synthesized in a similar
 manner.
-
-<!--
-Due to resource limitations, we are not able to synthesize some of the larger
-modules, so we estimate results by individually synthesizing smaller chunks. We
-do this for the Deflate compressor, Deflate decompressor, and Huffman
-compressor modules.
--->
