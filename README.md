@@ -9,7 +9,10 @@ Huffman, which is the core concept of Deflate. However, our design is not
 [RFC 1951](https://datatracker.ietf.org/doc/html/rfc1951) compliant.
 
 ## Publication
-Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls, Esha Choukse, Kirk W. Cameron, Ali R. Butt, Xun Jian. "Translation-optimized Memory Compression for Capacity." In *Proceedings of the 55th Annual IEEE/ACM International Symposium on Microarchitecture, October 2022.*
+Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls,
+Esha Choukse, Kirk W. Cameron, Ali R. Butt, Xun Jian. "Translation-optimized
+Memory Compression for Capacity." In *Proceedings of the 55th Annual IEEE/ACM
+International Symposium on Microarchitecture, October 2022.*
 
 ## Dependencies
 - Java 8 or later
@@ -25,8 +28,9 @@ Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls, Es
 
 Gradle may be run by executing `gradle <task name>` on the command line
 when in the project directory. If the correct version of Gradle is not installed
-on the system, use `./gradlew <task name>` or `./gradlew.bat <task name>` (Windows).
-A list of all available tasks can be listed by running `gradle tasks`.
+on the system, use `./gradlew <task name>` or `./gradlew.bat <task name>`
+(Windows). A list of all available tasks can be listed by running
+`gradle tasks`.
 
 Gradle resolves task dependencies automatically, so you don't need to manually
 run dependencies. For example, if you run the `runTestDeflate` task, Gradle will
@@ -68,7 +72,8 @@ pages, and pages of all zeros will be dropped. Performance results such as
 compression ratio and throughput will vary depending on the benchmarks used. If
 the directory is empty, no tests will be run.
 
-You may download some memory dumps from here: https://www.dropbox.com/s/x8sxf1gt208sqkh/testBenchmarks.tar.xz?dl=0
+You may download some memory dumps from
+[here](https://www.dropbox.com/s/x8sxf1gt208sqkh/testBenchmarks.tar.xz?dl=0).
 
 Note: Currently, LZ and Huffman may not be tested individually with Gradle
 tasks.
