@@ -85,11 +85,17 @@ By default, testing will run in parallel on all CPU cores. This may be changed
 with the `--max-workers <num threads>` command line option.
 
 ## Ubuntu 22.04 workflow
-`sudo apt install default-jdk g++ verilator make`
+`sudo apt install default-jdk g++ verilator make wget tar`
 
 `git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
 
-`./gradlew genDeflate runTestDeflate reportTestDeflate`
+`./gradlew genDeflate`
+
+`wget https://www.dropbox.com/s/x8sxf1gt208sqkh/testBenchmarks.tar.xz`
+
+`tar -xJf testBenchmarks.tar.xz`
+
+`./gradlew runTestDeflate reportTestDeflate`
 
 ## Gradle Task Examples
 
