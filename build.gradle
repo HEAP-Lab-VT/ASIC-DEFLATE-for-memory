@@ -333,6 +333,7 @@ tasks.register("runTestDeflate", ParallelTestTask) {
   description = "Run Deflate test"
   executable = "$buildDir/VTestDeflate"
   dumps = fileTree("testBenchmarks").filter(File::isFile)
+  // Gradle ignores the .gitignore file by default
   reportDir = file("$buildDir/test/deflate-reports-frag")
   // chunkSize = 4096l * 256 * 4
   chunkSize = 4096l * 100
