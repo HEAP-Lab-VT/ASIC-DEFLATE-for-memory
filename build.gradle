@@ -271,7 +271,7 @@ if(!hasProperty("makeJ"))
       args(".SHELLFLAGS= --ntasks 1 --time 01:00:00 --quiet --job-name make bash -c")
     }
     // inputs.files("$buildDir/V${moduleName}.mk")
-    inputs.files("$buildDir/V${moduleName}.v") // pseudo-input
+    inputs.files("$buildDir/${moduleName}.v") // pseudo-input
     outputs.files("$buildDir/V${moduleName}__ALL.a")
     outputs.files(BUILD_VK_GLOBAL_OBJS)
     dependsOn "verilate${moduleName}"

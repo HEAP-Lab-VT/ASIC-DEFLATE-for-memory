@@ -22,13 +22,13 @@ class HuffmanCompressor(params: Parameters) extends Module {
   
   // DECLARE PIPELINE INFRASTRUCTURE
   var stageId: Int = 0
-  var active: Bool = null
+  var active: Bool = Wire(Bool())
   var activePrev: Bool = null
   var activeNext: Bool = Wire(Bool())
-  var finished: Bool = null
+  var finished: Bool = Wire(Bool())
   var finishedPrev: Bool = null
   var finishedNext: Bool = Wire(Bool())
-  var transfer: Bool = null
+  var transfer: Bool = Wire(Bool())
   var transferPrev: Bool = null
   var transferNext: Bool = Wire(Bool())
   def nextStage(activeInit: Bool = false.B): Unit = {
@@ -58,141 +58,114 @@ class HuffmanCompressor(params: Parameters) extends Module {
   }
   
   
+  // input restarting
+  val accRepInRestart = Wire(Bool())
+  val counterInRestart = Wire(Bool())
+  val accRepRestartDelay = RegEnable(true.B, false.B, accRepInRestart)
+  val counterRestartDelay = RegEnable(true.B, false.B, counterInRestart)
+  when(io.in.restart) {
+    accRepRestartDelay := false.B
+    counterRestartDelay := false.B
+  }
+  io.in.restart :=
+    (accRepInRestart || accRepRestartDelay) &&
+    (counterInRestart || counterRestartDelay)
+  
+  
+  // ACCUMULATE-REPLAY
+  val accRep = Module(new AccumulateReplay(params))
+  val counterReady = Wire(UInt(params.counterCharsIn.valBits.W))
+  accRep.io.in.data := io.in.data
+  accRep.io.in.valid := io.in.valid min counterReady
+  accRep.io.in.last := io.in.last && io.in.valid <= counterReady
+  io.in.ready := counterReady min accRep.io.in.ready
+  accRepInRestart := accRep.io.in.restart
+  when(accRepRestartDelay) {
+    accRep.io.in.valid := 0.U
+    accRep.io.in.last := false.B
+    io.in.ready := 0.U
+  }
+  
+  
   // BEGIN PIPELINE
-  active = true.B
-  finished = io.in.last && io.in.valid <= io.in.ready
-  transfer = WireDefault(Bool(), DontCare)
+  active := true.B
+  finished := io.in.last && io.in.valid <= io.in.ready
+  transfer := DontCare
+  when(counterRestartDelay) {
+    finished := false.B
+  }
   
   
   // STAGE 1: Counter
   nextStage(true.B)
   var counterResult = Wire(new CounterResult(params))
-  var data = Wire(Vec(params.passOneSize, UInt(params.characterBits.W)))
-  var dataLength = Wire(UInt(params.passOneSize.valBits.W))
-  var dataComplete = Wire(Bool())
-  io.in.restart := transfer
+  counterInRestart := transfer
   withReset(transfer || reset.asBool) {
-    
-    // fetch input data
-    val dataReg = Reg(chiselTypeOf(data))
-    val dataLengthReg = RegInit(chiselTypeOf(dataLength), 0.U)
-    val dataCompleteReg = RegInit(chiselTypeOf(dataComplete), false.B)
-    data := dataReg
-    dataLength := dataLengthReg
-    dataComplete := dataCompleteReg
-    for(i <- 0 until params.compressorCharsIn) {
-      when(i.U < io.in.ready) {
-        dataReg(dataLengthReg + i.U) := io.in.data(i)
-      }
-    }
-    dataLengthReg := dataLengthReg + (io.in.valid min io.in.ready)
-    when(io.in.last && io.in.valid <= io.in.ready) {
-      dataCompleteReg := true.B
-    }
-    io.in.ready := (params.passOneSize.U - dataLengthReg) min
-      params.compressorCharsIn.U
-    
-    // count input data
     val counter = Module(new Counter(params))
-    
-    val dataIndex = RegInit(UInt(params.passOneSize.valBits.W), 0.U)
-    dataIndex := dataIndex + (counter.io.in.valid min counter.io.in.ready)
-    for(i <- 0 until params.counterCharsIn) {
-      counter.io.in.data(i) := dataReg(dataIndex + i.U)
+    val inbuf = Reg(Vec(params.compressorCharsIn, UInt(params.characterBits.W)))
+    val inbufLen = RegInit(UInt(params.compressorCharsIn.valBits.W), 0.U)
+    inbuf := io.in.data
+    inbufLen := io.in.valid min accRep.io.in.ready
+    counter.io.in.data := inbuf
+    counter.io.in.valid := inbufLen
+    counter.io.in.last := io.in.last && io.in.valid === 0.U
+    when(counterRestartDelay) {
+      inbufLen := 0.U
+      counter.io.in.last := false.B
     }
-    counter.io.in.valid := (dataLengthReg - dataIndex) min
-      params.counterCharsIn.U
-    counter.io.in.last :=
-      (dataCompleteReg &&
-        dataLengthReg - dataIndex <= params.counterCharsIn.U) ||
-      (dataLengthReg >= params.passOneSize.U &&
-        dataIndex >= ((params.passOneSize - params.counterCharsIn) max 0).U)
     
+    counterReady := params.compressorCharsIn.U -
+      Mux(counter.io.in.ready < inbufLen,
+        inbufLen - counter.io.in.ready, 0.U)
     counterResult := counter.io.result
     finished := counter.io.finished
+    
+    when(!active) {
+      counterReady := params.compressorCharsIn.U
+    }
   }
   
   
   // STAGE 2: tree generation + encoding
+  // TODO: split tree generation and encoding into seperate stages
   nextStage()
+  accRep.io.out.restart := transfer && RegEnable(true.B, false.B, transfer)
   counterResult = RegEnable(counterResult, transfer)
-  data = RegEnable(data, transfer) // TODO: parameterize the size of this
-  dataLength = RegEnable(dataLength, transfer)
-  dataComplete = RegEnable(dataComplete, transfer)
   val treeGeneratorClock = Wire(Clock())
-  val treeGeneratorSafe = Wire(Bool());
+  val treeGeneratorSafe = Wire(Bool())
+  val treeGeneratorReset = Wire(Bool());
   {
-    val cl = Reg(Bool())
-    cl := !cl
-    treeGeneratorClock := cl.asClock
-    treeGeneratorSafe := !cl
+    val div2 = Reg(Bool())
+    div2 := !div2
+    val cl = ClockDerive(clock, div2, "posedge")
+    treeGeneratorClock := cl
+    treeGeneratorSafe := !cl.asBool
+    treeGeneratorReset := transfer || reset.asBool || RegNext(transfer, true.B)
   }
-  val treeGeneratorReset = transfer || reset.asBool || RegNext(transfer, true.B)
   withReset(transfer || reset.asBool) {
     
-    val treeGenerator = withClockAndReset(treeGeneratorClock,treeGeneratorReset)
-      {Module(new TreeGenerator(params))}
-    treeGenerator.io.counterResult := counterResult
-    val treeGeneratorResult = RegNext(treeGenerator.io.result)
-    val treeGeneratorFinished = RegNext(treeGenerator.io.finished, false.B)
-    
-    val dataBegin = RegInit(UInt(params.passOneSize.idxBits.W), 0.U)
-    val dataEnd = dataLength
-    val dataPointerInverted = RegInit(Bool(), false.B)
-    val dataBeginWrap = WireDefault(Bool(), false.B)
-    val dataEndWrap = WireDefault(Bool(), false.B)
-    when(dataBeginWrap =/= dataEndWrap){dataPointerInverted := dataEndWrap}
-    when(!dataComplete && active) {
-      // fetch remaining input data
-      for(i <- 0 until params.compressorCharsIn) {
-        when(i.U < io.in.ready) {
-          data((dataEnd + i.U) % params.passOneSize.U) := io.in.data(i)
-        }
-      }
-      
-      val dataEndNextNoWrap = dataEnd +& (io.in.valid min io.in.ready)
-      dataEndWrap := dataEndNextNoWrap >= params.passOneSize.U
-      dataEnd := dataEndNextNoWrap - Mux(dataEndWrap, params.passOneSize.U, 0.U)
-      
-      val difference = dataEnd - dataBegin
-      io.in.ready := Mux(dataPointerInverted,
-        -difference,
-        params.passOneSize.U - difference
-      ) min params.compressorCharsIn.U
-      
-      when(io.in.last && io.in.valid <= io.in.ready){dataComplete := true.B}
+    val treeGeneratorResult = Wire(new TreeGeneratorResult(params))
+    val treeGeneratorFinished = Wire(Bool())
+    withClockAndReset(treeGeneratorClock,treeGeneratorReset) {
+      val treeGenerator = Module(new TreeGenerator(params))
+      treeGenerator.io.counterResult := counterResult
+      treeGeneratorResult := RegNext(treeGenerator.io.result)
+      treeGeneratorFinished := RegNext(treeGenerator.io.finished, false.B)
     }
     
-    when(treeGeneratorFinished) {
+    // TG reset may lag behind others, so don't use TG results during this time.
+    when(treeGeneratorFinished && RegNext(true.B, false.B)) { 
       val encoder =
         withReset(!treeGeneratorFinished || transfer || reset.asBool) {
           Module(new Encoder(params))
         }
       
-      val dataBeginNext = dataBegin +&
-        (encoder.io.in.valid min encoder.io.in.ready)
-      dataBegin := dataBeginNext - Mux(dataBeginWrap, params.passOneSize.U, 0.U)
-      dataBeginWrap := dataBeginNext >= params.passOneSize.U
-      for(i <- 0 until params.counterCharsIn) {
-        encoder.io.in.data(i) := data(dataBegin + i.U)
-      }
-      val difference = dataEnd - dataBegin
-      encoder.io.in.valid := Mux(dataPointerInverted,
-        params.passOneSize.U + difference, // WARNING: int overflow
-        difference
-      ) min params.counterCharsIn.U
-      encoder.io.in.last :=
-        (dataComplete && dataEnd - dataBegin <= params.encoderParallelism.U) ||
-        (dataEnd >= params.passOneSize.U && dataBegin >=
-          ((params.passOneSize - params.encoderParallelism) max 0).U)
-      
+      encoder.io.in <> accRep.io.out.viewAsDecoupledStream
       encoder.io.treeGeneratorResult := treeGeneratorResult
-      io.out.data <> encoder.io.out.data
-      io.out.valid <> encoder.io.out.valid
-      io.out.ready <> encoder.io.out.ready
-      io.out.last <> encoder.io.out.last
+      io.out.viewAsDecoupledStream <> encoder.io.out
       finished := encoder.io.finished
     } otherwise {
+      accRep.io.out.ready := 0.U
       io.out.data := DontCare
       io.out.valid := 0.U
       io.out.last := false.B
@@ -201,6 +174,7 @@ class HuffmanCompressor(params: Parameters) extends Module {
   }
   // make sure outputs have a reasonable default when stage 2 is inactive
   when(!active) {
+    accRep.io.out.ready := 0.U
     io.out.data := DontCare
     io.out.valid := 0.U
     io.out.last := false.B
