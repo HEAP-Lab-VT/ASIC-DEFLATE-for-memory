@@ -15,9 +15,9 @@ class Parameters(
   maxCodeLengthParam: Int,
   compressorCharsInParam: Int,
   compressorBitsOutParam: Int,
-  counterCharsInParam: Int,
   encoderParallelismParam: Int,
   passOneSizeParam: Int,
+  accRepBufferSizeParam: Int,
   decompressorLineBitsParam: Int,
   decompressorCharsOutParam: Int
 ) {
@@ -51,12 +51,14 @@ class Parameters(
   val compressorBitsOut = compressorBitsOutParam
   
   // bus width of the character frequency counter i.e. the first pass
-  val counterCharsIn = counterCharsInParam
+  val counterCharsIn = compressorCharsInParam
   
   val encoderParallelism = encoderParallelismParam
   
   // limit on the number of characters to count during the first pass
   val passOneSize = passOneSizeParam
+  
+  val accRepBufferSize = accRepBufferSizeParam
   
   
   //============================================================================
@@ -75,6 +77,31 @@ class Parameters(
   
   
   //============================================================================
+  // ASSERTIONS
+  //----------------------------------------------------------------------------
+  
+  if(passOneSize + 1 > accRepBufferSize)
+    // accumulate-replay and the counter will deadlock
+    throw new IllegalArgumentException(s"passOneSize (${passOneSize}) is too " +
+      s"large for the specified accRepBufferSize (${accRepBufferSize}).")
+  
+  if(!accRepBufferSize.isPow2)
+    // accumulate replay logic assumes it is a power of 2
+    throw new IllegalArgumentException(s"accRepBufferSize " +
+      s"(${accRepBufferSize}) is not a power of 2.")
+  
+  if(!counterCharsIn.isPow2)
+    // accumulate replay logic assumes it is a power of 2
+    throw new IllegalArgumentException(s"counterCharsIn " +
+      s"(${counterCharsIn}) is not a power of 2.")
+  
+  if(!encoderParallelism.isPow2)
+    // accumulate replay logic assumes it is a power of 2
+    throw new IllegalArgumentException(s"accRepBufferSize " +
+      s"(${encoderParallelism}) is not a power of 2.")
+  
+  
+  //============================================================================
   // PRINTING
   //----------------------------------------------------------------------------
   
@@ -89,6 +116,7 @@ class Parameters(
     "counterCharsIn" -> counterCharsIn,
     "encoderParallelism" -> encoderParallelism,
     "passOneSize" -> passOneSize,
+    "accRepBufferSize" -> accRepBufferSize,
     "decompressorLineBits" -> decompressorLineBits,
     "decompressorLookahead" -> decompressorLookahead,
     "decompressorBitsIn" -> decompressorBitsIn,
@@ -127,9 +155,9 @@ object Parameters {
     maxCodeLength: Int,
     compressorCharsIn: Int,
     compressorBitsOut: Int,
-    counterCharsIn: Int,
     encoderParallelism: Int,
     passOneSize: Int,
+    accRepBufferSize: Int,
     decompressorLineBits: Int,
     decompressorCharsOut: Int
   ): Parameters =
@@ -140,9 +168,9 @@ object Parameters {
       maxCodeLengthParam = maxCodeLength,
       compressorCharsInParam = compressorCharsIn,
       compressorBitsOutParam = compressorBitsOut,
-      counterCharsInParam = counterCharsIn,
       encoderParallelismParam = encoderParallelism,
       passOneSizeParam = passOneSize,
+      accRepBufferSizeParam = accRepBufferSize,
       decompressorLineBitsParam = decompressorLineBits,
       decompressorCharsOutParam = decompressorCharsOut
     )
@@ -170,9 +198,9 @@ object Parameters {
       maxCodeLengthParam = map("maxCodeLength").toInt,
       compressorCharsInParam = map("compressorCharsIn").toInt,
       compressorBitsOutParam = map("compressorBitsOut").toInt,
-      counterCharsInParam = map("counterCharsIn").toInt,
       encoderParallelismParam = map("encoderParallelism").toInt,
       passOneSizeParam = map("passOneSize").toInt,
+      accRepBufferSizeParam = map("accRepBufferSize").toInt,
       decompressorLineBitsParam = map("decompressorLineBits").toInt,
       decompressorCharsOutParam = map("decompressorCharsOut").toInt
     )
