@@ -9,10 +9,13 @@ Huffman, which is the core concept of Deflate. However, our design is not
 [RFC 1951](https://datatracker.ietf.org/doc/html/rfc1951) compliant.
 
 ## Publication
+Please cite the following conference paper when using this code for your own paper
+
 Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls,
 Esha Choukse, Kirk W. Cameron, Ali R. Butt, Xun Jian. "Translation-optimized
 Memory Compression for Capacity." In *Proceedings of the 55th Annual IEEE/ACM
 International Symposium on Microarchitecture, October 2022.*
+doi: 10.1109/MICRO56248.2022.00073
 
 ## Dependencies
 - Java 8 or later
@@ -133,7 +136,7 @@ Generate Verilog for Deflate compressor and decompressor with Gradle wrapper:
 ./gradlew genDeflate
 ```
 
-## Customizing Parameters
+## Customizing Hardware Parameters
 
 Configuration files may be found in the `configFiles` directory, and these may
 be modified per your specific needs. Changing parameters can drastically affect
