@@ -86,18 +86,32 @@ directory with one file per benchmark.
 By default, testing will run in parallel on all CPU cores. This may be changed
 with the `--max-workers <num threads>` command line option.
 
-## Ubuntu 22.04 workflow
-`sudo apt install default-jdk g++ verilator make wget tar`
+## Example Ubuntu 22.04 workflow
+```
+# install dependencies
+sudo apt install default-jdk g++ verilator make wget tar
 
-`git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
+# clone the repository
+git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory
 
-`./gradlew genDeflate`
+# cd into the project directory
+cd ASIC-DEFLATE-for-memory
 
-`wget https://www.dropbox.com/s/x8sxf1gt208sqkh/testBenchmarks.tar.xz`
+# generate Verilog for the Deflate module
+./gradlew genDeflate
 
-`tar -xJf testBenchmarks.tar.xz`
+# download some benchmark files
+wget https://www.dropbox.com/s/x8sxf1gt208sqkh/testBenchmarks.tar.xz
 
-`./gradlew runTestDeflate reportTestDeflate`
+# extract the benchmark files
+tar -xJf testBenchmarks.tar.xz
+
+# test the Deflate module on the benchmarks
+./gradlew runTestDeflate reportTestDeflate
+
+# print the test results to the console
+cat build/test/deflate-reports/*
+```
 
 ## Gradle Task Examples
 
