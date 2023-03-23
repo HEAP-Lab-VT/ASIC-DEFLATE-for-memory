@@ -83,7 +83,7 @@ directory with one file per benchmark.
 By default, testing will run in parallel on all CPU cores. This may be changed
 with the `--max-workers <num threads>` command line option.
 
-## Ubuntu 22.04 workflow
+## Ubuntu 20.04 workflow
 `sudo apt install default-jdk g++ verilator make wget tar`
 
 `git clone https://github.com/HEAP-Lab-VT/ASIC-DEFLATE-for-memory`
