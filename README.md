@@ -12,7 +12,7 @@ Huffman, which is the core concept of Deflate. However, our design is not
 Gagandeep Panwar, Muhammad Laghari, David Bears, Yuqing Liu, Chandler Jearls,
 Esha Choukse, Kirk W. Cameron, Ali R. Butt, Xun Jian. "Translation-optimized
 Memory Compression for Capacity." In *Proceedings of the 55th Annual IEEE/ACM
-International Symposium on Microarchitecture, October 2022.*
+International Symposium on Microarchitecture, October 2022.* https://doi.org/10.1109/MICRO56248.2022.00073
 
 ## Dependencies
 - Java 8 or later
