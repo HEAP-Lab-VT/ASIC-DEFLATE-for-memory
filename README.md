@@ -14,6 +14,20 @@ Esha Choukse, Kirk W. Cameron, Ali R. Butt, Xun Jian. "Translation-optimized
 Memory Compression for Capacity." In *Proceedings of the 55th Annual IEEE/ACM
 International Symposium on Microarchitecture, October 2022.* https://doi.org/10.1109/MICRO56248.2022.00073
 
+```
+@INPROCEEDINGS{micro22_tmcc,
+  author={Panwar, Gagandeep and Laghari, Muhammad and Bears, David and Liu, Yuqing and Jearls, Chandler and Choukse, Esha and Cameron, Kirk W. and Butt, Ali R. and Jian, Xun},
+  booktitle={2022 55th IEEE/ACM International Symposium on Microarchitecture (MICRO)}, 
+  title={Translation-optimized Memory Compression for Capacity}, 
+  year={2022},
+  volume={},
+  number={},
+  pages={992-1011},
+  keywords={Industries;Art;Microarchitecture;Prefetching;Memory management;Random access memory;Hardware;memory;hardware memory compression;address translation;memory subsystem;compression ASIC},
+  doi={10.1109/MICRO56248.2022.00073}
+}
+```
+
 ## Dependencies
 - Java 8 or later
 - [Gradle](https://gradle.org/install/) 7.5 (optional, may use wrapper script)
